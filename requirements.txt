@@ -1,3 +1,4 @@
-flet
+flet==0.24.1
 requests
 beautifulsoup4
+plyer
