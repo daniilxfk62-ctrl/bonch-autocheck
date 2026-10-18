@@ -186,16 +186,22 @@ jobs:
                       nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
                   } catch (Exception ignored) {}
 
-                  String tgToken = prefs.getString("tg_token", "").trim();
-                  String tgChat = prefs.getString("tg_chat", "").trim();
+                  final String tgToken = prefs.getString("tg_token", "").trim();
+                  final String tgChat = prefs.getString("tg_chat", "").trim();
+                  final String finalTitle = title;
+                  final String finalMsg = message;
+
                   if (!tgToken.isEmpty() && !tgChat.isEmpty()) {
-                      new Thread(() -> {
-                          try {
-                              String url = "https://api.telegram.org/bot" + tgToken + "/sendMessage";
-                              String body = "chat_id=" + URLEncoder.encode(tgChat, "UTF-8")
-                                  + "&text=" + URLEncoder.encode(title + "\n" + message, "UTF-8");
-                              httpRequest("POST", url, body);
-                          } catch (Exception ignored) {}
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              try {
+                                  String url = "https://api.telegram.org/bot" + tgToken + "/sendMessage";
+                                  String body = "chat_id=" + URLEncoder.encode(tgChat, "UTF-8")
+                                      + "&text=" + URLEncoder.encode(finalTitle + "\n" + finalMsg, "UTF-8");
+                                  httpRequest("POST", url, body);
+                              } catch (Exception ignored) {}
+                          }
                       }).start();
                   }
               }
@@ -402,16 +408,19 @@ jobs:
                   }
 
                   @JavascriptInterface
-                  public void checkNow(String login, String password, String tgToken, String tgChat) {
+                  public void checkNow(final String login, final String password, final String tgToken, final String tgChat) {
                       savePrefs(login, password, "1", "full_lesson", tgToken, tgChat);
-                      new Thread(() -> {
-                          addLog("Разовая проверка расписания...");
-                          pollScheduleAndCheckIn(login.trim(), password.trim());
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              addLog("Разовая проверка расписания...");
+                              pollScheduleAndCheckIn(login.trim(), password.trim());
+                          }
                       }).start();
                   }
 
                   @JavascriptInterface
-                  public void toggleWorker(String login, String password, String intervalStr, String mode, String tgToken, String tgChat) {
+                  public void toggleWorker(final String login, final String password, final String intervalStr, final String mode, final String tgToken, final String tgChat) {
                       if (active) {
                           active = false;
                           statusText = "Остановлено";
@@ -431,28 +440,31 @@ jobs:
                       if (wakeLock != null && !wakeLock.isHeld()) wakeLock.acquire();
 
                       final double intervalMin = Double.parseDouble(intervalStr);
-                      workerThread = new Thread(() -> {
-                          if (!authenticate(login.trim(), password.trim())) {
-                              active = false;
-                              statusText = "Ошибка авторизации";
-                              return;
-                          }
-                          while (active) {
-                              String win = getLessonWindowInfo(mode);
-                              if (win != null) {
-                                  statusText = "Активно • " + win;
-                                  pollScheduleAndCheckIn(login.trim(), password.trim());
-                                  try {
-                                      Thread.sleep(Math.max(15000L, (long) (intervalMin * 60000L)));
-                                  } catch (InterruptedException e) {
-                                      break;
-                                  }
-                              } else {
-                                  statusText = "Ждем пару (старт за 10 мин до звонка)";
-                                  try {
-                                      Thread.sleep(25000L);
-                                  } catch (InterruptedException e) {
-                                      break;
+                      workerThread = new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (!authenticate(login.trim(), password.trim())) {
+                                  active = false;
+                                  statusText = "Ошибка авторизации";
+                                  return;
+                              }
+                              while (active) {
+                                  String win = getLessonWindowInfo(mode);
+                                  if (win != null) {
+                                      statusText = "Активно • " + win;
+                                      pollScheduleAndCheckIn(login.trim(), password.trim());
+                                      try {
+                                          Thread.sleep(Math.max(15000L, (long) (intervalMin * 60000L)));
+                                      } catch (InterruptedException e) {
+                                          break;
+                                      }
+                                  } else {
+                                      statusText = "Ждем пару (старт за 10 мин до звонка)";
+                                      try {
+                                          Thread.sleep(25000L);
+                                      } catch (InterruptedException e) {
+                                          break;
+                                      }
                                   }
                               }
                           }
