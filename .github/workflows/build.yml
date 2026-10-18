@@ -9,51 +9,571 @@ jobs:
   build-apk:
     runs-on: ubuntu-22.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Set up Flutter 3.22.3
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: "3.22.3"
-          channel: "stable"
-
-      - name: Accept Android Licenses and Install Linux dependencies
+      - name: Compile Native Android APK directly via Android SDK
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev
-          yes | flutter doctor --android-licenses
+          set -e
+          SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          ANDROID_JAR=$(ls -d "$SDK_DIR"/platforms/android-* | sort -V | tail -n 1)/android.jar
+          BUILD_TOOLS=$(ls -d "$SDK_DIR"/build-tools/* | sort -V | tail -n 1)
+          echo "Using ANDROID_JAR: $ANDROID_JAR"
+          echo "Using BUILD_TOOLS: $BUILD_TOOLS"
 
-      - name: Prepare clean requirements.txt
-        run: |
-          cat << 'EOF' > requirements.txt
-          flet==0.24.1
-          requests
-          beautifulsoup4
+          mkdir -p src/ru/sut/bonch res/values build/gen build/obj build/apk
+
+          cat << 'EOF' > res/values/strings.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <resources>
+              <string name="app_name">Bonch AutoCheck</string>
+          </resources>
           EOF
 
-      - name: Install Flet and dependencies
-        run: |
-          pip install --upgrade pip
-          pip install "flet==0.24.1" requests beautifulsoup4
+          cat << 'EOF' > AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="ru.sut.bonch"
+              android:versionCode="1"
+              android:versionName="1.0">
 
-      - name: Build APK
-        run: |
-          flet build apk --project "BonchAutoCheck" --description "Auto check-in for lk.sut.ru" --verbose
+              <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+              <application
+                  android:label="@string/app_name"
+                  android:usesCleartextTraffic="true"
+                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > src/ru/sut/bonch/MainActivity.java
+          package ru.sut.bonch;
+
+          import android.app.Activity;
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.content.Context;
+          import android.content.SharedPreferences;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.PowerManager;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.net.CookieHandler;
+          import java.net.CookieManager;
+          import java.net.CookiePolicy;
+          import java.net.HttpURLConnection;
+          import java.net.URL;
+          import java.net.URLEncoder;
+          import java.nio.charset.Charset;
+          import java.text.SimpleDateFormat;
+          import java.util.ArrayList;
+          import java.util.Arrays;
+          import java.util.Calendar;
+          import java.util.Date;
+          import java.util.HashSet;
+          import java.util.List;
+          import java.util.Locale;
+          import java.util.Set;
+          import java.util.regex.Matcher;
+          import java.util.regex.Pattern;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          public class MainActivity extends Activity {
+              private static final String BASE_URL = "https://lk.sut.ru/cabinet";
+              private static final String LOGIN_PAGE_URL = BASE_URL + "/?login=yes";
+              private static final String AUTH_URL = BASE_URL + "/lib/autentificationok.php";
+              private static final String INI_URL = BASE_URL + "/ini.php";
+              private static final String SCHEDULE_URL = BASE_URL + "/project/cabinet/forms/raspisanie.php";
+
+              private static final String[] BELL_SCHEDULE = {
+                  "09:00", "10:30", "10:45", "13:00", "14:45", "16:30", "18:15", "20:00"
+              };
+
+              private WebView webView;
+              private SharedPreferences prefs;
+              private PowerManager.WakeLock wakeLock;
+
+              private volatile boolean active = false;
+              private volatile String statusText = "Отключено";
+              private final List<String> logs = new ArrayList<>();
+              private final Set<String> markedToday = new HashSet<>();
+              private final Set<String> parsedTimes = new HashSet<>();
+              private JSONArray lastLessonsJson = new JSONArray();
+              private Thread workerThread;
+              private boolean isAuthenticated = false;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  CookieManager cm = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+                  CookieHandler.setDefault(cm);
+
+                  prefs = getSharedPreferences("bonch_prefs", Context.MODE_PRIVATE);
+                  PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                  if (pm != null) {
+                      wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BonchAutoCheck::Lock");
+                  }
+
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      try {
+                          requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
+                      } catch (Exception ignored) {}
+                  }
+
+                  webView = new WebView(this);
+                  WebSettings ws = webView.getSettings();
+                  ws.setJavaScriptEnabled(true);
+                  ws.setDomStorageEnabled(true);
+                  webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
+                  setContentView(webView);
+
+                  webView.loadDataWithBaseURL("https://lk.sut.ru", buildHtml(), "text/html", "UTF-8", null);
+                  addLog("Приложение готово. Нажмите «ВКЛЮЧИТЬ» или «Проверить сейчас».");
+              }
+
+              private synchronized void addLog(String msg) {
+                  String stamp = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                  logs.add("[" + stamp + "] " + msg);
+                  if (logs.size() > 80) {
+                      logs.remove(0);
+                  }
+              }
+
+              private void sendSystemNotification(String title, String message) {
+                  try {
+                      NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm == null) return;
+                      Notification.Builder builder;
+                      if (Build.VERSION.SDK_INT >= 26) {
+                          String channelId = "bonch_checkin_channel";
+                          NotificationChannel channel = new NotificationChannel(
+                              channelId,
+                              "Автоотметка СПбГУТ",
+                              NotificationManager.IMPORTANCE_HIGH
+                          );
+                          nm.createNotificationChannel(channel);
+                          builder = new Notification.Builder(this, channelId);
+                      } else {
+                          builder = new Notification.Builder(this);
+                      }
+                      builder.setContentTitle(title)
+                             .setContentText(message)
+                             .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+                             .setAutoCancel(true);
+                      nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
+                  } catch (Exception ignored) {}
+
+                  String tgToken = prefs.getString("tg_token", "").trim();
+                  String tgChat = prefs.getString("tg_chat", "").trim();
+                  if (!tgToken.isEmpty() && !tgChat.isEmpty()) {
+                      new Thread(() -> {
+                          try {
+                              String url = "https://api.telegram.org/bot" + tgToken + "/sendMessage";
+                              String body = "chat_id=" + URLEncoder.encode(tgChat, "UTF-8")
+                                  + "&text=" + URLEncoder.encode(title + "\n" + message, "UTF-8");
+                              httpRequest("POST", url, body);
+                          } catch (Exception ignored) {}
+                      }).start();
+                  }
+              }
+
+              private String httpRequest(String method, String urlStr, String postBody) throws Exception {
+                  URL url = new URL(urlStr);
+                  HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                  conn.setRequestMethod(method);
+                  conn.setConnectTimeout(15000);
+                  conn.setReadTimeout(15000);
+                  conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/128.0.0.0 Mobile Safari/537.36");
+                  conn.setRequestProperty("Referer", LOGIN_PAGE_URL);
+                  conn.setRequestProperty("Origin", "https://lk.sut.ru");
+                  conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");
+
+                  if ("POST".equals(method)) {
+                      conn.setDoOutput(true);
+                      conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+                      byte[] out = (postBody != null ? postBody : "").getBytes("UTF-8");
+                      try (OutputStream os = conn.getOutputStream()) {
+                          os.write(out);
+                      }
+                  }
+
+                  InputStream is = conn.getResponseCode() >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                  if (is == null) return "";
+                  ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                  byte[] buf = new byte[4096];
+                  int n;
+                  while ((n = is.read(buf)) != -1) {
+                      baos.write(buf, 0, n);
+                  }
+                  byte[] bytes = baos.toByteArray();
+                  String utf8 = new String(bytes, Charset.forName("UTF-8"));
+                  String lower = utf8.toLowerCase(Locale.ROOT);
+                  if (lower.contains("расписание") || lower.contains("занят") || lower.contains("присутств") || lower.contains("начать") || utf8.trim().equals("1")) {
+                      return utf8;
+                  }
+                  String cp1251 = new String(bytes, Charset.forName("windows-1251"));
+                  if (cp1251.toLowerCase(Locale.ROOT).contains("расписание") || cp1251.toLowerCase(Locale.ROOT).contains("занят")) {
+                      return cp1251;
+                  }
+                  return utf8;
+              }
+
+              private boolean authenticate(String login, String password) {
+                  try {
+                      httpRequest("GET", LOGIN_PAGE_URL, null);
+                      String data = "users=" + URLEncoder.encode(login, "UTF-8")
+                                  + "&parole=" + URLEncoder.encode(password, "UTF-8");
+                      String resp = httpRequest("POST", AUTH_URL + "?" + data, data);
+                      if (resp.trim().equals("1") || resp.contains("1")) {
+                          httpRequest("GET", INI_URL, null);
+                          httpRequest("GET", LOGIN_PAGE_URL, null);
+                          isAuthenticated = true;
+                          addLog("Успешный вход в ЛК СПбГУТ (" + login + ")");
+                          return true;
+                      }
+                      isAuthenticated = false;
+                      addLog("Неверный логин или пароль от lk.sut.ru");
+                      return false;
+                  } catch (Exception e) {
+                      isAuthenticated = false;
+                      addLog("Ошибка сети: " + e.getMessage());
+                      return false;
+                  }
+              }
+
+              private void pollScheduleAndCheckIn(String login, String password) {
+                  if (!isAuthenticated && !authenticate(login, password)) {
+                      statusText = "Ошибка входа в ЛК";
+                      return;
+                  }
+                  try {
+                      String html = httpRequest("POST", SCHEDULE_URL, "");
+                      if (html.trim().length() < 50 || html.toLowerCase(Locale.ROOT).contains("autentification") || !html.toLowerCase(Locale.ROOT).contains("<table")) {
+                          if (!authenticate(login, password)) return;
+                          html = httpRequest("POST", SCHEDULE_URL, "");
+                      }
+
+                      Pattern trPattern = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                      Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*(?:[01]?\\d|2[0-3])[:.][0-5]\\d");
+                      Pattern zanPattern = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
+
+                      Matcher trMatcher = trPattern.matcher(html);
+                      JSONArray lessonsArr = new JSONArray();
+                      List<String> newlyChecked = new ArrayList<>();
+
+                      while (trMatcher.find()) {
+                          String trHtml = trMatcher.group(1);
+                          String rowText = trHtml.replaceAll("<[^>]+>", " ")
+                                                 .replaceAll("&nbsp;", " ")
+                                                 .replaceAll("\\s+", " ")
+                                                 .trim();
+                          if (rowText.isEmpty()) continue;
+
+                          Matcher tm = timePattern.matcher(rowText);
+                          String timeRange = "";
+                          String startTime = "";
+                          if (tm.find()) {
+                              timeRange = tm.group(0);
+                              int hh = Integer.parseInt(tm.group(1));
+                              startTime = String.format(Locale.US, "%02d:%s", hh, tm.group(2));
+                              synchronized (parsedTimes) {
+                                  parsedTimes.add(startTime);
+                              }
+                          }
+
+                          Matcher zm = zanPattern.matcher(trHtml);
+                          String raspId = null;
+                          String weekId = null;
+                          if (zm.find()) {
+                              raspId = zm.group(1);
+                              weekId = zm.group(2);
+                          }
+
+                          String lowerRow = rowText.toLowerCase(Locale.ROOT);
+                          boolean already = lowerRow.contains("вы присутствуете")
+                                         || lowerRow.contains("отмечен")
+                                         || lowerRow.contains("присутствует");
+
+                          if (already && raspId != null) {
+                              markedToday.add(raspId);
+                          }
+
+                          if (raspId != null && weekId != null && !already && !markedToday.contains(raspId)) {
+                              String payload = "open=1&rasp=" + raspId + "&week=" + weekId;
+                              httpRequest("POST", SCHEDULE_URL + "?" + payload, payload);
+                              markedToday.add(raspId);
+                              already = true;
+                              String cleanSubj = rowText.length() > 75 ? rowText.substring(0, 75) : rowText;
+                              newlyChecked.add(cleanSubj);
+                          }
+
+                          if (!timeRange.isEmpty() || raspId != null || already) {
+                              JSONObject item = new JSONObject();
+                              item.put("time", timeRange.isEmpty() ? "Занятие" : timeRange);
+                              item.put("subject", rowText.length() > 85 ? rowText.substring(0, 85) : rowText);
+                              item.put("checked", already || (raspId != null && markedToday.contains(raspId)));
+                              lessonsArr.put(item);
+                          }
+                      }
+
+                      lastLessonsJson = lessonsArr;
+
+                      if (!newlyChecked.isEmpty()) {
+                          String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                          for (String s : newlyChecked) {
+                              String title = "✅ Отметился на паре в " + nowStr + "!";
+                              addLog(title + " (" + s + ")");
+                              sendSystemNotification(title, s);
+                          }
+                      } else {
+                          addLog("Проверено: новых кнопок «Начать занятие» пока нет (строк: " + lessonsArr.length() + ").");
+                      }
+                  } catch (Exception e) {
+                      addLog("Ошибка опроса расписания: " + e.getMessage());
+                  }
+              }
+
+              private String getLessonWindowInfo(String mode) {
+                  if ("always".equals(mode)) return "Постоянный режим 24/7";
+                  int windowMin = "first_30".equals(mode) ? 30 : 95;
+                  Set<String> allTimes = new HashSet<>(Arrays.asList(BELL_SCHEDULE));
+                  synchronized (parsedTimes) {
+                      allTimes.addAll(parsedTimes);
+                  }
+                  Calendar now = Calendar.getInstance();
+                  long nowMillis = now.getTimeInMillis();
+                  for (String t : allTimes) {
+                      try {
+                          String[] parts = t.replace(".", ":").split(":");
+                          Calendar start = (Calendar) now.clone();
+                          start.set(Calendar.HOUR_OF_DAY, Integer.parseInt(parts[0]));
+                          start.set(Calendar.MINUTE, Integer.parseInt(parts[1]));
+                          start.set(Calendar.SECOND, 0);
+                          double diffMin = (nowMillis - start.getTimeInMillis()) / 60000.0;
+                          if (diffMin >= -10.0 && diffMin <= windowMin) {
+                              if (diffMin < 0) {
+                                  return "Пара в " + t + " (до начала " + Math.abs((int) diffMin) + " мин)";
+                              }
+                              return "Пара " + t + " (идет " + (int) diffMin + " мин)";
+                          }
+                      } catch (Exception ignored) {}
+                  }
+                  return null;
+              }
+
+              public class WebBridge {
+                  @JavascriptInterface
+                  public String getState() {
+                      try {
+                          JSONObject obj = new JSONObject();
+                          obj.put("active", active);
+                          obj.put("status", statusText);
+                          synchronized (MainActivity.this) {
+                              obj.put("logs", new JSONArray(logs));
+                          }
+                          obj.put("lessons", lastLessonsJson);
+                          return obj.toString();
+                      } catch (Exception e) {
+                          return "{}";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public void checkNow(String login, String password, String tgToken, String tgChat) {
+                      savePrefs(login, password, "1", "full_lesson", tgToken, tgChat);
+                      new Thread(() -> {
+                          addLog("Разовая проверка расписания...");
+                          pollScheduleAndCheckIn(login.trim(), password.trim());
+                      }).start();
+                  }
+
+                  @JavascriptInterface
+                  public void toggleWorker(String login, String password, String intervalStr, String mode, String tgToken, String tgChat) {
+                      if (active) {
+                          active = false;
+                          statusText = "Остановлено";
+                          if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
+                          if (workerThread != null) workerThread.interrupt();
+                          addLog("Автоотметка остановлена.");
+                          return;
+                      }
+                      if (login.trim().isEmpty() || password.trim().isEmpty()) {
+                          statusText = "Введите логин и пароль от lk.sut.ru!";
+                          addLog(statusText);
+                          return;
+                      }
+                      savePrefs(login, password, intervalStr, mode, tgToken, tgChat);
+                      active = true;
+                      statusText = "Подключение к lk.sut.ru...";
+                      if (wakeLock != null && !wakeLock.isHeld()) wakeLock.acquire();
+
+                      final double intervalMin = Double.parseDouble(intervalStr);
+                      workerThread = new Thread(() -> {
+                          if (!authenticate(login.trim(), password.trim())) {
+                              active = false;
+                              statusText = "Ошибка авторизации";
+                              return;
+                          }
+                          while (active) {
+                              String win = getLessonWindowInfo(mode);
+                              if (win != null) {
+                                  statusText = "Активно • " + win;
+                                  pollScheduleAndCheckIn(login.trim(), password.trim());
+                                  try {
+                                      Thread.sleep(Math.max(15000L, (long) (intervalMin * 60000L)));
+                                  } catch (InterruptedException e) {
+                                      break;
+                                  }
+                              } else {
+                                  statusText = "Ждем пару (старт за 10 мин до звонка)";
+                                  try {
+                                      Thread.sleep(25000L);
+                                  } catch (InterruptedException e) {
+                                      break;
+                                  }
+                              }
+                          }
+                      });
+                      workerThread.start();
+                  }
+              }
+
+              private void savePrefs(String login, String pass, String interval, String mode, String tgToken, String tgChat) {
+                  prefs.edit()
+                       .putString("login", login.trim())
+                       .putString("password", pass.trim())
+                       .putString("interval", interval)
+                       .putString("mode", mode)
+                       .putString("tg_token", tgToken != null ? tgToken.trim() : "")
+                       .putString("tg_chat", tgChat != null ? tgChat.trim() : "")
+                       .apply();
+              }
+
+              private String buildHtml() {
+                  String l = prefs.getString("login", "");
+                  String p = prefs.getString("password", "");
+                  String t = prefs.getString("tg_token", "");
+                  String c = prefs.getString("tg_chat", "");
+                  return "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+                      + "<meta name='viewport' content='width=device-width,initial-scale=1.0,user-scalable=no'>"
+                      + "<style>"
+                      + "body{margin:0;background:#090d16;color:#f8fafc;font-family:sans-serif;padding:14px;}"
+                      + ".card{background:#111827;border:1px solid #1e293b;border-radius:20px;padding:18px;max-width:440px;margin:0 auto;}"
+                      + "input,select{width:100%;box-sizing:border-box;padding:11px;margin:5px 0 10px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:14px;}"
+                      + ".btn{width:100%;padding:14px;border-radius:12px;border:none;background:#2563eb;color:#fff;font-weight:700;font-size:15px;margin-top:6px;}"
+                      + ".btn.on{background:#059669;}"
+                      + ".btn-sec{width:100%;padding:11px;border-radius:12px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-weight:600;font-size:13px;margin-top:8px;}"
+                      + ".item{background:#1e293b;padding:9px;border-radius:10px;margin-bottom:6px;font-size:12px;}"
+                      + ".log{background:#090d16;border:1px solid #1e293b;border-radius:10px;padding:10px;font-family:monospace;font-size:11px;height:140px;overflow-y:auto;white-space:pre-wrap;color:#cbd5e1;}"
+                      + "</style></head><body><div class='card'>"
+                      + "<div style='font-size:18px;font-weight:800;'>Bonch Direct AutoCheck</div>"
+                      + "<div style='font-size:12px;color:#94a3b8;margin-bottom:10px;'>Нативный Android APK • Прямой выход на lk.sut.ru</div>"
+                      + "<input id='login' placeholder='Логин / Email от lk.sut.ru' value=\"" + l + "\">"
+                      + "<input id='password' type='password' placeholder='Пароль от ЛК' value=\"" + p + "\">"
+                      + "<select id='interval'>"
+                      + "<option value='0.5'>Каждые 30 секунд (мгновенно)</option>"
+                      + "<option value='1' selected>Каждую 1 минуту</option>"
+                      + "<option value='5'>Каждые 5 минут</option></select>"
+                      + "<select id='mode'>"
+                      + "<option value='full_lesson' selected>За 10 мин до пары + вся пара (95 мин)</option>"
+                      + "<option value='always'>Постоянно 24/7 (без расписания)</option>"
+                      + "<option value='first_30'>За 10 мин до пары + первые 30 мин</option></select>"
+                      + "<input id='tg_token' placeholder='Telegram Bot Token (по желанию)' value=\"" + t + "\">"
+                      + "<input id='tg_chat' placeholder='Telegram Chat ID (по желанию)' value=\"" + c + "\">"
+                      + "<button id='btn' class='btn' onclick='toggle()'>ВКЛЮЧИТЬ АВТООТМЕТКУ</button>"
+                      + "<button class='btn-sec' onclick='checkNow()'>Проверить расписание и отметиться сейчас</button>"
+                      + "<div id='status' style='margin:10px 0;font-size:13px;font-weight:700;color:#94a3b8;'>Статус: Отключено</div>"
+                      + "<div id='lessons' style='margin-bottom:10px;'></div>"
+                      + "<div id='logs' class='log'>Загрузка...</div>"
+                      + "</div><script>"
+                      + "function val(id){return document.getElementById(id).value;}"
+                      + "function toggle(){AndroidBridge.toggleWorker(val('login'),val('password'),val('interval'),val('mode'),val('tg_token'),val('tg_chat'));poll();}"
+                      + "function checkNow(){AndroidBridge.checkNow(val('login'),val('password'),val('tg_token'),val('tg_chat'));setTimeout(poll,800);}"
+                      + "function poll(){"
+                      + "  try{"
+                      + "    var d=JSON.parse(AndroidBridge.getState());"
+                      + "    var b=document.getElementById('btn');"
+                      + "    var s=document.getElementById('status');"
+                      + "    if(d.active){b.className='btn on';b.innerText='ОСТАНОВИТЬ (РАБОТАЕТ)';s.style.color='#34d399';}"
+                      + "    else{b.className='btn';b.innerText='ВКЛЮЧИТЬ АВТООТМЕТКУ';s.style.color='#94a3b8';}"
+                      + "    s.innerText='Статус: '+(d.status||'Отключено');"
+                      + "    if(d.logs)document.getElementById('logs').innerText=d.logs.join('\\n');"
+                      + "    var h='';"
+                      + "    if(d.lessons){for(var i=0;i<d.lessons.length;i++){"
+                      + "      var x=d.lessons[i];"
+                      + "      var c=x.checked?'#34d399':'#fbbf24';"
+                      + "      var st=x.checked?'✅ Отмечен':'⏳ Ожидание кнопки';"
+                      + "      h+=\"<div class='item'><b style='color:\"+c+\"'>\"+x.time+\" — \"+st+\"</b><br>\"+x.subject+\"</div>\";"
+                      + "    }}"
+                      + "    document.getElementById('lessons').innerHTML=h;"
+                      + "  }catch(e){}"
+                      + "}"
+                      + "setInterval(poll,1500);poll();"
+                      + "</script></body></html>";
+              }
+          }
+          EOF
+
+          "$BUILD_TOOLS/aapt2" compile --dir res -o build/res.zip
+          "$BUILD_TOOLS/aapt2" link -o build/unaligned.apk \
+            -I "$ANDROID_JAR" \
+            --manifest AndroidManifest.xml \
+            --java build/gen \
+            build/res.zip
+
+          javac -encoding UTF-8 -source 8 -target 8 \
+            -bootclasspath "$ANDROID_JAR" \
+            -cp "$ANDROID_JAR" \
+            -d build/obj \
+            build/gen/ru/sut/bonch/R.java \
+            src/ru/sut/bonch/MainActivity.java
+
+          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --output build/ build/obj/ru/sut/bonch/*.class
+
+          zip -uj build/unaligned.apk build/classes.dex
+
+          "$BUILD_TOOLS/zipalign" -f -p 4 build/unaligned.apk build/aligned.apk
+
+          keytool -genkeypair -v \
+            -keystore build/release.keystore \
+            -storepass android -keypass android \
+            -alias bonchkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=BonchAutoCheck,OU=IT,O=SUT,L=SPb,S=SPb,C=RU"
+
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks build/release.keystore \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out build/apk/BonchAutoCheck.apk \
+            build/aligned.apk
+
+          ls -lh build/apk/BonchAutoCheck.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: BonchAutoCheck-APK
-          path: build/apk/*.apk
+          path: build/apk/BonchAutoCheck.apk
