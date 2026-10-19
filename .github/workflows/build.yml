@@ -725,3 +725,312 @@ jobs:
                           // Если это сегодня и пары еще не закончились — показываем сегодня
                           if (g.dateObj.equals(todayStart) && g.hasUnfinishedLessons) {
                               return g;
+                          }
+                          // Если сегодня воскресенье или все пары сегодня уже прошли — берем следующий учебный день
+                          if (g.dateObj.after(todayStart)) {
+                              return g;
+                          }
+                      }
+                  }
+                  // Если все даты в таблице сегодняшние (даже после окончания пар)
+                  for (DayGroup g : groups) {
+                      if (!g.lessons.isEmpty() && g.dateObj != null && !g.dateObj.before(todayStart)) {
+                          return g;
+                      }
+                  }
+                  for (DayGroup g : groups) {
+                      if (!g.lessons.isEmpty()) return g;
+                  }
+                  return groups.get(0);
+              }
+
+              private static class WindowState {
+                  String startTime;
+                  String label;
+              }
+
+              private WindowState getCurrentWindowState(String mode) {
+                  int windowMin = "first_30".equals(mode) ? 30 : 95;
+                  Set<String> allTimes = new HashSet<>(Arrays.asList(BELL_SCHEDULE));
+                  synchronized (parsedTimes) {
+                      allTimes.addAll(parsedTimes);
+                  }
+                  Calendar now = Calendar.getInstance();
+                  long nowMillis = now.getTimeInMillis();
+                  for (String t : allTimes) {
+                      try {
+                          String[] parts = t.replace(".", ":").split(":");
+                          Calendar start = (Calendar) now.clone();
+                          start.set(Calendar.HOUR_OF_DAY, Integer.parseInt(parts[0]));
+                          start.set(Calendar.MINUTE, Integer.parseInt(parts[1]));
+                          start.set(Calendar.SECOND, 0);
+                          double diffMin = (nowMillis - start.getTimeInMillis()) / 60000.0;
+                          if (diffMin >= -10.0 && diffMin <= windowMin) {
+                              WindowState ws = new WindowState();
+                              ws.startTime = String.format(Locale.US, "%02d:%02d", Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
+                              ws.label = diffMin < 0
+                                  ? ("Пара в " + ws.startTime + " (до начала " + Math.abs((int) diffMin) + " мин)")
+                                  : ("Пара " + ws.startTime + " (идет " + (int) diffMin + " мин)");
+                              return ws;
+                          }
+                      } catch (Exception ignored) {}
+                  }
+                  if ("always".equals(mode)) {
+                      WindowState ws = new WindowState();
+                      ws.startTime = "always_" + new SimpleDateFormat("HH", Locale.US).format(new Date());
+                      ws.label = "Постоянный режим";
+                      return ws;
+                  }
+                  return null;
+              }
+
+              @Override
+              public IBinder onBind(Intent intent) {
+                  return null;
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/ru/sut/bonch/MainActivity.java
+          package ru.sut.bonch;
+
+          import android.app.Activity;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import org.json.JSONArray;
+          import org.json.JSONObject;
+
+          public class MainActivity extends Activity {
+              private WebView webView;
+              private SharedPreferences prefs;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  prefs = getSharedPreferences("bonch_prefs", Context.MODE_PRIVATE);
+
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      try {
+                          requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
+                      } catch (Exception ignored) {}
+                  }
+
+                  ensureBackgroundServiceRunning("ensure_running");
+
+                  webView = new WebView(this);
+                  // Очищаем старый кэш WebView, чтобы интерфейс всегда обновлялся до актуальной версии 01.02
+                  webView.clearCache(true);
+                  WebSettings ws = webView.getSettings();
+                  ws.setJavaScriptEnabled(true);
+                  ws.setDomStorageEnabled(true);
+                  ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                  webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
+                  setContentView(webView);
+
+                  webView.loadDataWithBaseURL("https://lk.sut.ru", buildHtml(), "text/html", "UTF-8", null);
+              }
+
+              @Override
+              protected void onPause() {
+                  super.onPause();
+                  if (webView != null) {
+                      webView.evaluateJavascript("if(window.saveCfg){window.saveCfg();}", null);
+                  }
+              }
+
+              private void ensureBackgroundServiceRunning(String action) {
+                  Intent svc = new Intent(MainActivity.this, BonchForegroundService.class);
+                  svc.putExtra("action", action);
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      startForegroundService(svc);
+                  } else {
+                      startService(svc);
+                  }
+              }
+
+              public class WebBridge {
+                  @JavascriptInterface
+                  public String getSavedConfig() {
+                      try {
+                          JSONObject cfg = new JSONObject();
+                          cfg.put("login", prefs.getString("login", ""));
+                          cfg.put("password", prefs.getString("password", ""));
+                          cfg.put("interval", prefs.getString("interval", "1"));
+                          cfg.put("mode", prefs.getString("mode", "full_lesson"));
+                          cfg.put("tg_token", prefs.getString("tg_token", ""));
+                          cfg.put("tg_chat", prefs.getString("tg_chat", ""));
+                          cfg.put("version", BonchForegroundService.APP_VERSION);
+                          return cfg.toString();
+                      } catch (Exception e) {
+                          return "{}";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public String getState() {
+                      try {
+                          JSONObject obj = new JSONObject();
+                          obj.put("status", BonchForegroundService.statusText);
+                          obj.put("dayTitle", BonchForegroundService.nearestDayTitle);
+                          obj.put("version", BonchForegroundService.APP_VERSION);
+                          synchronized (BonchForegroundService.class) {
+                              obj.put("logs", new JSONArray(BonchForegroundService.logs));
+                          }
+                          obj.put("lessons", BonchForegroundService.lastLessonsJson);
+                          return obj.toString();
+                      } catch (Exception e) {
+                          return "{}";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public void saveSettingsOnly(String login, String password, String intervalStr, String mode, String tgToken, String tgChat) {
+                      savePrefs(login, password, intervalStr, mode, tgToken, tgChat);
+                      ensureBackgroundServiceRunning("ensure_running");
+                  }
+
+                  @JavascriptInterface
+                  public void saveAndCheckNow(String login, String password, String intervalStr, String mode, String tgToken, String tgChat) {
+                      savePrefs(login, password, intervalStr, mode, tgToken, tgChat);
+                      ensureBackgroundServiceRunning("check_once");
+                  }
+              }
+
+              private void savePrefs(String login, String pass, String interval, String mode, String tgToken, String tgChat) {
+                  // Используем commit() вместо apply(), чтобы настройки записывались на диск мгновенно
+                  prefs.edit()
+                       .putString("login", login != null ? login.trim() : "")
+                       .putString("password", pass != null ? pass.trim() : "")
+                       .putString("interval", (interval != null && !interval.isEmpty()) ? interval : "1")
+                       .putString("mode", (mode != null && !mode.isEmpty()) ? mode : "full_lesson")
+                       .putString("tg_token", tgToken != null ? tgToken.trim() : "")
+                       .putString("tg_chat", tgChat != null ? tgChat.trim() : "")
+                       .commit();
+              }
+
+              private String buildHtml() {
+                  return "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+                      + "<meta name='viewport' content='width=device-width,initial-scale=1.0,user-scalable=no'>"
+                      + "<style>"
+                      + "body{margin:0;background:#090d16;color:#f8fafc;font-family:sans-serif;padding:14px;}"
+                      + ".card{background:#111827;border:1px solid #1e293b;border-radius:20px;padding:18px;max-width:440px;margin:0 auto;}"
+                      + ".lbl{font-size:11px;color:#94a3b8;margin-top:4px;display:block;}"
+                      + "input,select{width:100%;box-sizing:border-box;padding:11px;margin:4px 0 10px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:14px;}"
+                      + ".btn{width:100%;padding:14px;border-radius:12px;border:none;background:#059669;color:#fff;font-weight:700;font-size:14px;margin-top:6px;}"
+                      + ".day-hdr{font-size:13px;font-weight:700;color:#60a5fa;margin:12px 0 6px;padding:8px 10px;background:#1e293b;border-radius:8px;}"
+                      + ".item{background:#1e293b;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;border-left:4px solid #fbbf24;}"
+                      + ".item.done{border-left-color:#34d399;}"
+                      + ".log{background:#090d16;border:1px solid #1e293b;border-radius:10px;padding:10px;font-family:monospace;font-size:11px;height:125px;overflow-y:auto;white-space:pre-wrap;color:#cbd5e1;}"
+                      + ".sec-badge{font-size:11px;color:#34d399;margin-bottom:10px;font-weight:600;}"
+                      + ".ver-footer{margin-top:14px;padding-top:10px;border-top:1px solid #1e293b;text-align:center;font-size:12px;font-weight:800;color:#60a5fa;letter-spacing:0.5px;}"
+                      + "</style></head><body><div class='card'>"
+                      + "<div style='font-size:18px;font-weight:800;'>Bonch AutoCheck</div>"
+                      + "<div class='sec-badge'>🟢 Фоновый режим всегда включен по умолчанию • HTTPS</div>"
+                      + "<span class='lbl'>Логин / Email от lk.sut.ru</span>"
+                      + "<input id='login' placeholder='student@sut.ru' oninput='saveCfg()' onchange='saveCfg()'>"
+                      + "<span class='lbl'>Пароль от ЛК (защищен локально)</span>"
+                      + "<input id='password' type='password' placeholder='••••••••' oninput='saveCfg()' onchange='saveCfg()'>"
+                      + "<span class='lbl'>Через сколько отправлять запросы</span>"
+                      + "<select id='interval' onchange='saveCfg()'>"
+                      + "<option value='0.5'>Каждые 30 секунд (мгновенно)</option>"
+                      + "<option value='1'>Каждую 1 минуту</option>"
+                      + "<option value='5'>Каждые 5 минут</option></select>"
+                      + "<span class='lbl'>Как долго проверять (после отметки спит до след. пары)</span>"
+                      + "<select id='mode' onchange='saveCfg()'>"
+                      + "<option value='full_lesson'>За 10 мин до пары + вся пара (95 мин)</option>"
+                      + "<option value='first_30'>За 10 мин до пары + первые 30 мин</option>"
+                      + "<option value='always'>Постоянно 24/7</option></select>"
+                      + "<input id='tg_token' placeholder='Telegram Bot Token (необязательно)' oninput='saveCfg()' onchange='saveCfg()'>"
+                      + "<input id='tg_chat' placeholder='Telegram Chat ID (необязательно)' oninput='saveCfg()' onchange='saveCfg()'>"
+                      + "<button class='btn' onclick='checkNow()'>СОХРАНИТЬ И ОБНОВИТЬ ДЕНЬ</button>"
+                      + "<div id='status' style='margin:10px 0;font-size:13px;font-weight:700;color:#34d399;'>Статус: Активно в фоне</div>"
+                      + "<div id='day_title' class='day-hdr'>📅 Ближайший учебный день</div>"
+                      + "<div id='lessons' style='margin-bottom:10px;'></div>"
+                      + "<div id='logs' class='log'>Загрузка...</div>"
+                      + "<div id='ver_box' class='ver-footer'>Версия: 01.02</div>"
+                      + "</div><script>"
+                      + "function val(id){return document.getElementById(id).value;}"
+                      + "function initConfig(){"
+                      + "  try{"
+                      + "    var c=JSON.parse(AndroidBridge.getSavedConfig());"
+                      + "    if(c.login!==undefined)document.getElementById('login').value=c.login;"
+                      + "    if(c.password!==undefined)document.getElementById('password').value=c.password;"
+                      + "    if(c.interval)document.getElementById('interval').value=c.interval;"
+                      + "    if(c.mode)document.getElementById('mode').value=c.mode;"
+                      + "    if(c.tg_token!==undefined)document.getElementById('tg_token').value=c.tg_token;"
+                      + "    if(c.tg_chat!==undefined)document.getElementById('tg_chat').value=c.tg_chat;"
+                      + "  }catch(e){}"
+                      + "}"
+                      + "function saveCfg(){AndroidBridge.saveSettingsOnly(val('login'),val('password'),val('interval'),val('mode'),val('tg_token'),val('tg_chat'));}"
+                      + "function checkNow(){AndroidBridge.saveAndCheckNow(val('login'),val('password'),val('interval'),val('mode'),val('tg_token'),val('tg_chat'));setTimeout(poll,500);}"
+                      + "function poll(){"
+                      + "  try{"
+                      + "    var d=JSON.parse(AndroidBridge.getState());"
+                      + "    document.getElementById('status').innerText='Статус: '+(d.status||'Активно в фоне');"
+                      + "    if(d.dayTitle)document.getElementById('day_title').innerText='📅 Только ближайший день: '+d.dayTitle;"
+                      + "    if(d.logs)document.getElementById('logs').innerText=d.logs.join('\\n');"
+                      + "    var h='';"
+                      + "    if(d.lessons && d.lessons.length){for(var i=0;i<d.lessons.length;i++){"
+                      + "      var x=d.lessons[i];"
+                      + "      var cls=x.checked?'item done':'item';"
+                      + "      var c=x.checked?'#34d399':'#fbbf24';"
+                      + "      var st=x.checked?('✅ Отмечен (время: '+(x.checkTime||'ОК')+')'):'⏳ Ждем кнопку';"
+                      + "      h+=\"<div class='\"+cls+\"'><b style='color:\"+c+\"'>\"+x.time+\" — \"+st+\"</b><br>\"+x.subject+\"</div>\";"
+                      + "    }}else{h=\"<div style='font-size:12px;color:#94a3b8;'>Нажмите «Сохранить и обновить день», чтобы загрузить пары.</div>\";}"
+                      + "    document.getElementById('lessons').innerHTML=h;"
+                      + "  }catch(e){}"
+                      + "}"
+                      + "initConfig();setInterval(poll,1500);poll();"
+                      + "</script></body></html>";
+              }
+          }
+          EOF
+
+          "$BUILD_TOOLS/aapt2" compile --dir res -o build/res.zip
+          "$BUILD_TOOLS/aapt2" link -o build/unaligned.apk \
+            -I "$ANDROID_JAR" \
+            --manifest AndroidManifest.xml \
+            --java build/gen \
+            build/res.zip
+
+          javac -encoding UTF-8 -source 8 -target 8 \
+            -bootclasspath "$ANDROID_JAR" \
+            -cp "$ANDROID_JAR" \
+            -d build/obj \
+            build/gen/ru/sut/bonch/R.java \
+            src/ru/sut/bonch/BootReceiver.java \
+            src/ru/sut/bonch/BonchForegroundService.java \
+            src/ru/sut/bonch/MainActivity.java
+
+          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --output build/ build/obj/ru/sut/bonch/*.class
+
+          zip -uj build/unaligned.apk build/classes.dex
+
+          "$BUILD_TOOLS/zipalign" -f -p 4 build/unaligned.apk build/aligned.apk
+
+          keytool -genkeypair -v \
+            -keystore build/release.keystore \
+            -storepass android -keypass android \
+            -alias bonchkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=BonchAutoCheck,OU=IT,O=SUT,L=SPb,S=SPb,C=RU"
+
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks build/release.keystore \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out build/apk/BonchAutoCheck-01.02.apk \
+            build/aligned.apk
+
+          ls -lh build/apk/BonchAutoCheck-01.02.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BonchAutoCheck-01.02-APK
+          path: build/apk/BonchAutoCheck-01.02.apk
