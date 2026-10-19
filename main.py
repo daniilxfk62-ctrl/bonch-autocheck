@@ -1,38 +1,18 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-BonchPhone Direct — Автоотметка СПбГУТ (lk.sut.ru) НАПРЯМУЮ С ТЕЛЕФОНА БЕЗ ОБЛАКА И БЕЗ ПК
-==========================================================================================
-Работает на 100% локально на самом телефоне через мобильный интернет или Wi-Fi телефона:
-- Никаких внешних серверов и облаков: телефон сам шлет запросы напрямую на https://lk.sut.ru/cabinet/
-- Как запустить на Android за 2 минуты (через бесплатное приложение Pydroid 3 из Google Play или Termux):
-  1. Установите Pydroid 3 на телефон.
-  2. В разделе Pip установите: `requests` и `beautifulsoup4`
-  3. Откройте этот файл `sut_vpn_app.py` и нажмите желтую кнопку Play.
-  4. На экране телефона сразу откроется мобильный интерфейс в стиле VPN (`http://127.0.0.1:8080`):
-     вводите свой логин и пароль от lk.sut.ru, нажимаете большую круглую кнопку «ВКЛЮЧИТЬ» —
-     и телефон сам каждые 5 минут в течение 30 минут от начала пары жмет «Обновить» и «Отметиться»!
-"""
-
-from __future__ import annotations
-
-import argparse
 import datetime as dt
 import json
-import logging
 import re
 import threading
-import webbrowser
+import time
 from dataclasses import dataclass, field
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple
 
+import flet as ft
 import requests
 from bs4 import BeautifulSoup
 
 # =====================================================================
-# ПРЯМЫЕ АДРЕСА ЛК СПбГУТ (lk.sut.ru)
+# АДРЕСА ЛК СПбГУТ (lk.sut.ru)
 # =====================================================================
 BASE_URL = "https://lk.sut.ru/cabinet"
 LOGIN_PAGE_URL = f"{BASE_URL}/?login=yes"
@@ -40,29 +20,20 @@ AUTH_URL = f"{BASE_URL}/lib/autentificationok.php"
 INI_URL = f"{BASE_URL}/ini.php"
 SCHEDULE_URL = f"{BASE_URL}/project/cabinet/forms/raspisanie.php"
 
-CONFIG_FILE = Path.home() / ".bonch_phone_direct.json"
+CONFIG_FILE = Path.home() / ".bonch_flet_config.json"
 
+# Стандартное расписание начала пар в СПбГУТ
 BELL_SCHEDULE = [
-    "09:00",  # 1 пара
-    "10:45",  # 2 пара
-    "13:00",  # 3 пара
-    "14:45",  # 4 пара
-    "16:30",  # 5 пара
-    "18:15",  # 6 пара
+    "09:00",  # 1 пара (09:00 - 10:35)
+    "10:45",  # 2 пара (10:45 - 12:20)
+    "13:00",  # 3 пара (13:00 - 14:35)
+    "14:45",  # 4 пара (14:45 - 16:20)
+    "16:30",  # 5 пара (16:30 - 18:05)
+    "18:15",  # 6 пара (18:15 - 19:50)
     "20:00",  # 7 пара
 ]
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
-logger = logging.getLogger("BonchPhoneDirect")
 
-
-# =====================================================================
-# 1. ПРЯМОЙ HTTP-КЛИЕНТ (С ИНТЕРНЕТА ТЕЛЕФОНА ПРЯМО НА LK.SUT.RU)
-# =====================================================================
 @dataclass
 class LessonItem:
     num: str
@@ -75,8 +46,6 @@ class LessonItem:
 
 
 class SutDirectClient:
-    """Отправляет запросы с телефона напрямую на lk.sut.ru без браузера и без облака."""
-
     def __init__(self, login: str, password: str) -> None:
         self.login = login.strip()
         self.password = password.strip()
@@ -89,12 +58,27 @@ class SutDirectClient:
                 ),
                 "Referer": LOGIN_PAGE_URL,
                 "Origin": "https://lk.sut.ru",
+                "X-Requested-With": "XMLHttpRequest",
             }
         )
         self.is_authenticated = False
 
+    def _decode_response(self, resp: requests.Response) -> str:
+        """Корректное декодирование ответа lk.sut.ru (защита от кракозябр)."""
+        for enc in ("utf-8", "windows-1251", resp.apparent_encoding or "utf-8"):
+            try:
+                text = resp.content.decode(enc)
+                if any(word in text.lower() for word in ("расписание", "занят", "кабинет", "пароль", "присутств", "1")):
+                    return text
+            except Exception:
+                continue
+        return resp.text
+
     def authenticate(self) -> Tuple[bool, str]:
+        if not self.login or not self.password:
+            return False, "Введите логин и пароль"
         try:
+            self.session.cookies.clear()
             self.session.get(LOGIN_PAGE_URL, timeout=15)
             resp = self.session.post(
                 AUTH_URL,
@@ -103,43 +87,59 @@ class SutDirectClient:
                 timeout=15,
             )
             text = resp.text.strip()
-            if text == "1" or "1" in text:
+            if text == "1" or "1" in text[:5]:
+                # Инициализируем PHP-сессию кабинета
                 self.session.get(INI_URL, timeout=15)
+                self.session.get(LOGIN_PAGE_URL, timeout=15)
                 self.is_authenticated = True
-                return True, f"Телефон подключен к ЛК СПбГУТ ({self.login})"
+                return True, f"Успешный вход в ЛК ({self.login})"
 
             self.is_authenticated = False
             return False, "Неверный логин или пароль от lk.sut.ru"
         except Exception as exc:
             self.is_authenticated = False
-            return False, f"Нет ответа от lk.sut.ru (проверьте интернет на телефоне): {exc}"
+            return False, f"Ошибка сети: {exc}"
 
-    def fetch_schedule_and_checkin(self, marked_ids: Set[str]) -> Tuple[List[LessonItem], List[str]]:
+    def fetch_schedule_and_checkin(self, marked_ids: Set[str]) -> Tuple[List[LessonItem], List[str], str]:
         if not self.is_authenticated:
-            ok, _ = self.authenticate()
+            ok, msg = self.authenticate()
             if not ok:
-                return [], []
+                return [], [], msg
 
         newly_checked: List[str] = []
         lessons: List[LessonItem] = []
 
         try:
             resp = self.session.post(SCHEDULE_URL, timeout=15)
-            if "autentification" in resp.text.lower() or 'id="users"' in resp.text:
-                ok, _ = self.authenticate()
-                if not ok:
-                    return [], []
-                resp = self.session.post(SCHEDULE_URL, timeout=15)
+            html = self._decode_response(resp)
 
-            soup = BeautifulSoup(resp.text, "html.parser")
-            open_zan_pattern = re.compile(r"open_zan\s*\(\s*['\"]?(\d+)['\"]?\s*,\s*['\"]?(\d+)['\"]?\s*\)")
+            # Если сессия на сервере истекла, таблица расписания не вернется
+            if len(html.strip()) < 50 or "autentification" in html.lower() or "<table" not in html.lower():
+                ok, msg = self.authenticate()
+                if not ok:
+                    return [], [], msg
+                resp = self.session.post(SCHEDULE_URL, timeout=15)
+                html = self._decode_response(resp)
+
+            soup = BeautifulSoup(html, "html.parser")
+            open_zan_pattern = re.compile(
+                r"open_zan\s*\(\s*['\"]?(\d+)['\"]?\s*,\s*['\"]?(\d+)['\"]?\s*\)"
+            )
 
             for tr in soup.find_all("tr"):
                 row_text = tr.get_text(" ", strip=True)
+                if not row_text:
+                    continue
+
                 time_match = re.search(
-                    r"([01]?\d|2[0-3]):([0-5]\d)\s*[-–—]\s*(?:[01]?\d|2[0-3]):[0-5]\d", row_text
+                    r"([01]?\d|2[0-3]):([0-5]\d)\s*[-–—]\s*(?:[01]?\d|2[0-3]):[0-5]\d",
+                    row_text,
                 )
-                start_time = f"{int(time_match.group(1)):02d}:{time_match.group(2)}" if time_match else ""
+                start_time = (
+                    f"{int(time_match.group(1)):02d}:{time_match.group(2)}"
+                    if time_match
+                    else ""
+                )
 
                 row_html = str(tr)
                 zan_match = open_zan_pattern.search(row_html)
@@ -151,154 +151,342 @@ class SutDirectClient:
                     for phrase in ("вы присутствуете", "отмечен", "присутствует")
                 )
 
+                if already and rasp_id:
+                    marked_ids.add(rasp_id)
+
+                # Если есть активная кнопка open_zan — жмем её и проверяем результат
+                if rasp_id and week_id and not already:
+                    if self.send_open_zan(rasp_id, week_id):
+                        marked_ids.add(rasp_id)
+                        already = True
+                        newly_checked.append(
+                            row_text[:70] if row_text else f"Занятие #{rasp_id}"
+                        )
+
                 if time_match or rasp_id or already:
                     lessons.append(
                         LessonItem(
                             num=str(len(lessons) + 1),
-                            time_range=time_match.group(0) if time_match else "Пара",
+                            time_range=time_match.group(0) if time_match else "Занятие",
                             start_time=start_time or "09:00",
-                            subject=row_text[:90],
+                            subject=row_text[:85],
                             rasp_id=rasp_id,
                             week_id=week_id,
-                            already_checked=already,
+                            already_checked=already or (rasp_id in marked_ids if rasp_id else False),
                         )
                     )
 
-                if rasp_id and week_id and rasp_id not in marked_ids:
-                    if self.send_open_zan(rasp_id, week_id):
-                        marked_ids.add(rasp_id)
-                        newly_checked.append(row_text[:70] if row_text else f"Занятие #{rasp_id}")
-
-            for match in open_zan_pattern.finditer(resp.text):
-                r_id, w_id = match.group(1), match.group(2)
-                if r_id not in marked_ids:
-                    if self.send_open_zan(r_id, w_id):
-                        marked_ids.add(r_id)
-                        newly_checked.append(f"Занятие #{r_id} (неделя {w_id})")
-
-            return lessons, newly_checked
+            return lessons, newly_checked, "ОК"
         except Exception as exc:
-            logger.warning("Ошибка опроса расписания с телефона: %s", exc)
-            return lessons, newly_checked
+            return lessons, newly_checked, f"Ошибка опроса: {exc}"
 
     def send_open_zan(self, rasp_id: str, week_id: str) -> bool:
         try:
             payload = {"open": 1, "rasp": rasp_id, "week": week_id}
             r = self.session.post(SCHEDULE_URL, data=payload, params=payload, timeout=15)
-            return r.status_code == 200
+            if r.status_code != 200:
+                return False
+            # Перепроверяем страницу после нажатия, пропала ли кнопка / появилась ли отметка
+            verify_resp = self.session.post(SCHEDULE_URL, timeout=15)
+            verify_html = self._decode_response(verify_resp).lower()
+            return "присутств" in verify_html or f"open_zan({rasp_id}" not in verify_html
         except Exception:
             return False
 
 
 # =====================================================================
-# 2. ФОНОВЫЙ ПРОЦЕСС НА ТЕЛЕФОНЕ (КАЖДЫЕ 5 МИН В ТЕЧЕНИЕ 30 МИН ОТ НАЧАЛА ПАРЫ)
+# ГРАФИЧЕСКОЕ ПРИЛОЖЕНИЕ НА FLET
 # =====================================================================
-@dataclass
-class PhoneCheckInWorker:
-    login: str
-    password: str
-    interval_minutes: float = 5.0
-    window_minutes: int = 30
-    active: bool = False
-    status_text: str = "Отключено"
-    marked_today: Set[str] = field(default_factory=set)
-    parsed_start_times: Set[str] = field(default_factory=set)
-    logs: List[str] = field(default_factory=list)
-    _thread: Optional[threading.Thread] = field(default=None, repr=False)
-    _stop_event: threading.Event = field(default_factory=threading.Event, repr=False)
+def load_saved_config() -> dict:
+    try:
+        if CONFIG_FILE.exists():
+            return json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
 
-    def add_log(self, text: str) -> None:
+
+def save_config(login: str, password: str, interval: str, mode: str) -> None:
+    try:
+        CONFIG_FILE.write_text(
+            json.dumps(
+                {"login": login, "password": password, "interval": interval, "mode": mode},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def main(page: ft.Page):
+    page.title = "Bonch AutoCheck"
+    page.theme_mode = ft.ThemeMode.DARK
+    page.bgcolor = "#090d16"
+    page.padding = 16
+    page.scroll = ft.ScrollMode.ADAPTIVE
+
+    cfg = load_saved_config()
+
+    login_input = ft.TextField(
+        label="Логин / Email от lk.sut.ru",
+        value=cfg.get("login", ""),
+        border_radius=12,
+        bgcolor="#1e293b",
+    )
+    password_input = ft.TextField(
+        label="Пароль от ЛК",
+        value=cfg.get("password", ""),
+        password=True,
+        can_reveal_password=True,
+        border_radius=12,
+        bgcolor="#1e293b",
+    )
+    interval_dropdown = ft.Dropdown(
+        label="Интервал проверки",
+        value=cfg.get("interval", "1"),
+        border_radius=12,
+        bgcolor="#1e293b",
+        options=[
+            ft.dropdown.Option("0.5", "Каждые 30 секунд"),
+            ft.dropdown.Option("1", "Каждую 1 минуту"),
+            ft.dropdown.Option("5", "Каждые 5 минут"),
+        ],
+    )
+    mode_dropdown = ft.Dropdown(
+        label="Когда проверять",
+        value=cfg.get("mode", "full_lesson"),
+        border_radius=12,
+        bgcolor="#1e293b",
+        options=[
+            ft.dropdown.Option("full_lesson", "Всю пару (95 мин от начала)"),
+            ft.dropdown.Option("always", "Постоянно (без привязки к звонкам)"),
+            ft.dropdown.Option("first_30", "Только первые 30 минут пары"),
+        ],
+    )
+
+    status_text = ft.Text("Статус: Отключено", size=14, weight=ft.FontWeight.BOLD, color="#94a3b8")
+    schedule_column = ft.Column(spacing=6)
+    logs_view = ft.ListView(height=150, spacing=4, auto_scroll=True)
+
+    state = {
+        "active": False,
+        "stop_event": threading.Event(),
+        "marked_today": set(),
+        "parsed_times": set(),
+    }
+
+    def add_log(msg: str):
         stamp = dt.datetime.now().strftime("%H:%M:%S")
-        line = f"[{stamp}] {text}"
-        self.logs.append(line)
-        if len(self.logs) > 80:
-            self.logs = self.logs[-80:]
-        logger.info("%s", text)
+        logs_view.controls.append(
+            ft.Text(f"[{stamp}] {msg}", size=11, font_family="monospace", color="#cbd5e1")
+        )
+        if len(logs_view.controls) > 80:
+            logs_view.controls.pop(0)
+        page.update()
 
-    def is_in_30min_lesson_window(self) -> Optional[Tuple[str, float]]:
+    def update_lessons_ui(lessons: List[LessonItem]):
+        schedule_column.controls.clear()
+        if not lessons:
+            schedule_column.controls.append(
+                ft.Text("Пар с кнопкой отметки пока не найдено.", size=12, color="#94a3b8")
+            )
+        else:
+            for les in lessons:
+                badge = "✅ Отмечен" if les.already_checked else ("⏳ Ждем кнопку" if not les.rasp_id else "🔥 Доступна отметка")
+                color = "#34d399" if les.already_checked else "#fbbf24"
+                schedule_column.controls.append(
+                    ft.Container(
+                        padding=10,
+                        border_radius=10,
+                        bgcolor="#1e293b",
+                        content=ft.Column(
+                            [
+                                ft.Text(f"{les.time_range} — {badge}", size=12, weight=ft.FontWeight.BOLD, color=color),
+                                ft.Text(les.subject, size=11, color="#e2e8f0"),
+                            ],
+                            spacing=2,
+                        ),
+                    )
+                )
+        page.update()
+
+    def is_in_lesson_window(mode: str) -> Optional[str]:
+        if mode == "always":
+            return "Постоянный режим"
+        window_min = 30 if mode == "first_30" else 95
         now = dt.datetime.now()
-        all_times = sorted(set(BELL_SCHEDULE) | self.parsed_start_times)
+        all_times = sorted(set(BELL_SCHEDULE) | state["parsed_times"])
         for t_str in all_times:
-            hh, mm = map(int, t_str.split(":"))
-            start_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
-            diff_min = (now - start_dt).total_seconds() / 60.0
-            if -1.0 <= diff_min <= self.window_minutes:
-                return t_str, diff_min
+            try:
+                hh, mm = map(int, t_str.split(":"))
+                start_dt = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+                diff_min = (now - start_dt).total_seconds() / 60.0
+                if -2.0 <= diff_min <= window_min:
+                    return f"{t_str} (идет {max(0, int(diff_min))} мин)"
+            except Exception:
+                continue
         return None
 
-    def start(self) -> Tuple[bool, str]:
-        if self.active:
-            return True, "Уже работает на телефоне"
-
-        client = SutDirectClient(self.login, self.password)
+    def worker_loop(login: str, password: str, interval_min: float, mode: str):
+        client = SutDirectClient(login, password)
         ok, msg = client.authenticate()
-        self.add_log(msg)
+        add_log(msg)
         if not ok:
-            self.status_text = "Ошибка входа"
-            return False, msg
+            state["active"] = False
+            status_text.value = f"Ошибка: {msg}"
+            status_text.color = "#f87171"
+            toggle_btn.text = "ВКЛЮЧИТЬ АВТООТМЕТКУ"
+            toggle_btn.bgcolor = "#2563eb"
+            page.update()
+            return
 
-        self.active = True
-        self.status_text = "Работает напрямую с телефона"
-        self._stop_event.clear()
-        self._thread = threading.Thread(target=self._run_loop, args=(client,), daemon=True)
-        self._thread.start()
-        return True, msg
-
-    def stop(self) -> None:
-        self.active = False
-        self.status_text = "Отключено"
-        self._stop_event.set()
-        self.add_log("Автоотметка остановлена.")
-
-    def _run_loop(self, client: SutDirectClient) -> None:
         current_day = dt.date.today()
-        self._poll_once(client)
 
-        while not self._stop_event.is_set():
+        while not state["stop_event"].is_set():
             if dt.date.today() != current_day:
                 current_day = dt.date.today()
-                self.marked_today.clear()
+                state["marked_today"].clear()
 
-            win = self.is_in_30min_lesson_window()
-            if win is not None:
-                start_str, elapsed = win
-                self.status_text = f"Пара {start_str}: опрос каждые {self.interval_minutes:g} мин"
-                self.add_log(
-                    f"Окно пары {start_str} ({max(0.0, elapsed):.0f}/{self.window_minutes} мин) — прямой запрос с телефона..."
-                )
-                self._poll_once(client)
-                self._stop_event.wait(timeout=max(15, int(self.interval_minutes * 60)))
+            win_info = is_in_lesson_window(mode)
+            if win_info is not None:
+                status_text.value = f"Активно • {win_info}"
+                status_text.color = "#34d399"
+                page.update()
+
+                lessons, checked, poll_msg = client.fetch_schedule_and_checkin(state["marked_today"])
+                for les in lessons:
+                    if les.start_time:
+                        state["parsed_times"].add(les.start_time)
+
+                update_lessons_ui(lessons)
+
+                if checked:
+                    for item in checked:
+                        add_log(f"✅ ОТМЕЧЕН: {item}")
+                elif poll_msg != "ОК":
+                    add_log(poll_msg)
+                else:
+                    add_log("Проверено: новых кнопок «Отметиться» пока нет.")
+
+                state["stop_event"].wait(timeout=max(15, int(interval_min * 60)))
             else:
-                self.status_text = "Активна (ждем начала следующей пары)"
-                self._stop_event.wait(timeout=30)
+                status_text.value = "Ожидание начала следующей пары..."
+                status_text.color = "#fbbf24"
+                page.update()
+                state["stop_event"].wait(timeout=30)
 
-    def _poll_once(self, client: SutDirectClient) -> None:
-        lessons, checked = client.fetch_schedule_and_checkin(self.marked_today)
-        for les in lessons:
-            if les.start_time:
-                self.parsed_start_times.add(les.start_time)
-        if checked:
-            for title in checked:
-                self.add_log(f"✅ ОТМЕЧЕН НА ПАРЕ: {title}")
-        else:
-            self.add_log("Проверено с телефона: кнопка «Отметиться» еще не появилась.")
+    def on_toggle_click(e):
+        if state["active"]:
+            state["active"] = False
+            state["stop_event"].set()
+            toggle_btn.text = "ВКЛЮЧИТЬ АВТООТМЕТКУ"
+            toggle_btn.bgcolor = "#2563eb"
+            status_text.value = "Статус: Остановлено"
+            status_text.color = "#94a3b8"
+            add_log("Автоотметка остановлена пользователем.")
+            page.update()
+            return
+
+        login = login_input.value.strip()
+        password = password_input.value.strip()
+        interval_str = interval_dropdown.value or "1"
+        mode_str = mode_dropdown.value or "full_lesson"
+
+        if not login or not password:
+            status_text.value = "Заполните логин и пароль!"
+            status_text.color = "#f87171"
+            page.update()
+            return
+
+        save_config(login, password, interval_str, mode_str)
+        state["active"] = True
+        state["stop_event"].clear()
+        toggle_btn.text = "ОСТАНОВИТЬ (РАБОТАЕТ)"
+        toggle_btn.bgcolor = "#059669"
+        status_text.value = "Подключение к lk.sut.ru..."
+        status_text.color = "#34d399"
+        page.update()
+
+        threading.Thread(
+            target=worker_loop,
+            args=(login, password, float(interval_str), mode_str),
+            daemon=True,
+        ).start()
+
+    def on_check_now_click(e):
+        login = login_input.value.strip()
+        password = password_input.value.strip()
+        if not login or not password:
+            add_log("Сначала введите логин и пароль!")
+            return
+        save_config(login, password, interval_dropdown.value or "1", mode_dropdown.value or "full_lesson")
+
+        def single_check():
+            add_log("Разовая проверка расписания и отметки...")
+            client = SutDirectClient(login, password)
+            ok, msg = client.authenticate()
+            add_log(msg)
+            if not ok:
+                return
+            lessons, checked, poll_msg = client.fetch_schedule_and_checkin(state["marked_today"])
+            update_lessons_ui(lessons)
+            if checked:
+                for c in checked:
+                    add_log(f"✅ ОТМЕЧЕН: {c}")
+            else:
+                add_log(f"Проверка завершена ({poll_msg}). Найдено строк: {len(lessons)}")
+
+        threading.Thread(target=single_check, daemon=True).start()
+
+    toggle_btn = ft.ElevatedButton(
+        text="ВКЛЮЧИТЬ АВТООТМЕТКУ",
+        bgcolor="#2563eb",
+        color="#ffffff",
+        height=50,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=14)),
+        on_click=on_toggle_click,
+    )
+
+    check_now_btn = ft.OutlinedButton(
+        text="Проверить расписание сейчас",
+        height=44,
+        style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=14)),
+        on_click=on_check_now_click,
+    )
+
+    page.add(
+        ft.Container(
+            padding=18,
+            border_radius=20,
+            bgcolor="#111827",
+            content=ft.Column(
+                [
+                    ft.Text("Bonch Direct AutoCheck", size=20, weight=ft.FontWeight.BOLD),
+                    ft.Text("Прямая автоотметка на lk.sut.ru", size=12, color="#94a3b8"),
+                    login_input,
+                    password_input,
+                    interval_dropdown,
+                    mode_dropdown,
+                    ft.Column([toggle_btn, check_now_btn], spacing=8, horizontal_alignment=ft.CrossAxisAlignment.STRETCH),
+                    status_text,
+                    ft.Divider(color="#1e293b"),
+                    ft.Text("Текущее расписание:", size=13, weight=ft.FontWeight.BOLD),
+                    schedule_column,
+                    ft.Divider(color="#1e293b"),
+                    ft.Text("Журнал событий:", size=13, weight=ft.FontWeight.BOLD),
+                    ft.Container(
+                        content=logs_view,
+                        bgcolor="#090d16",
+                        padding=10,
+                        border_radius=12,
+                    ),
+                ],
+                spacing=12,
+            ),
+        )
+    )
 
 
-# =====================================================================
-# 3. ЛОКАЛЬНЫЙ МОБИЛЬНЫЙ ИНТЕРФЕЙС НА ТЕЛЕФОНЕ (127.0.0.1 — БЕЗ ОБЛАКА!)
-# =====================================================================
-CURRENT_WORKER: Optional[PhoneCheckInWorker] = None
-
-MOBILE_VPN_HTML = """<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>BonchPhone VPN</title>
-<style>
-  body { margin:0; background:#090d16; color:#f8fafc; font-family:system-ui,-apple-system,sans-serif; display:flex; justify-content:center; padding:18px; }
-  .card { width:100%; max-width:400px; background:#111827; border:1px solid #1e293b; border-radius:24px; padding:22px; box-sizing:border-box; box-shadow:0 16px 40px rgba(0,0,0,0.6); }
-  input, select { width:100%; box-sizing:border-box; padding:12px 14px; margin-top:6px; margin-bottom:12px; border-radius:12px; border:1px solid #334155; background:#1e293b; color:#fff; font-size:14px; }
-  .power-wrap { display:flex; flex-direction:column; align-items:center; margin:18px 0; }
-  .power-btn { width:140px; height:140px; border-radius:999px; border:5px solid #475569; background:#1e293b; color:#fff; font-weight:800; font-size:14px; cursor:pointer; transition:all 0.25s; }
-  .power-btn.on { background:linear-gradient(180deg,#10b981,#059669); border-color:#6ee7b7; color:#052e16; box-shadow:
+if __name__ == "__main__":
+    ft.app(target=main)
