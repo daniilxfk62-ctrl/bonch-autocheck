@@ -1,4 +1,4 @@
-name: Build Bonch APK
+name: Build Bonch APK 01.02
 
 on:
   push:
@@ -15,14 +15,12 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Compile Native Android APK directly via Android SDK
+      - name: Compile Native Android APK v01.02
         run: |
           set -e
           SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           ANDROID_JAR=$(ls -d "$SDK_DIR"/platforms/android-* | sort -V | tail -n 1)/android.jar
           BUILD_TOOLS=$(ls -d "$SDK_DIR"/build-tools/* | sort -V | tail -n 1)
-          echo "Using ANDROID_JAR: $ANDROID_JAR"
-          echo "Using BUILD_TOOLS: $BUILD_TOOLS"
 
           mkdir -p src/ru/sut/bonch res/values build/gen build/obj build/apk
 
@@ -37,18 +35,38 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="ru.sut.bonch"
-              android:versionCode="1"
-              android:versionName="1.0">
+              android:versionCode="102"
+              android:versionName="01.02">
 
               <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
               <uses-permission android:name="android.permission.INTERNET" />
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
               <application
                   android:label="@string/app_name"
-                  android:usesCleartextTraffic="true"
+                  android:allowBackup="false"
+                  android:usesCleartextTraffic="false"
                   android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+
+                  <service
+                      android:name=".BonchForegroundService"
+                      android:enabled="true"
+                      android:exported="false"
+                      android:foregroundServiceType="dataSync" />
+
+                  <receiver
+                      android:name=".BootReceiver"
+                      android:enabled="true"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                      </intent-filter>
+                  </receiver>
+
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
@@ -62,21 +80,50 @@ jobs:
           </manifest>
           EOF
 
-          cat << 'EOF' > src/ru/sut/bonch/MainActivity.java
+          cat << 'EOF' > src/ru/sut/bonch/BootReceiver.java
           package ru.sut.bonch;
 
-          import android.app.Activity;
+          import android.content.BroadcastReceiver;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.content.SharedPreferences;
+          import android.os.Build;
+
+          public class BootReceiver extends BroadcastReceiver {
+              @Override
+              public void onReceive(Context context, Intent intent) {
+                  if (Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())) {
+                      SharedPreferences prefs = context.getSharedPreferences("bonch_prefs", Context.MODE_PRIVATE);
+                      String login = prefs.getString("login", "").trim();
+                      String pass = prefs.getString("password", "").trim();
+                      if (!login.isEmpty() && !pass.isEmpty()) {
+                          Intent svc = new Intent(context, BonchForegroundService.class);
+                          svc.putExtra("action", "ensure_running");
+                          if (Build.VERSION.SDK_INT >= 26) {
+                              context.startForegroundService(svc);
+                          } else {
+                              context.startService(svc);
+                          }
+                      }
+                  }
+              }
+          }
+          EOF
+
+          cat << 'EOF' > src/ru/sut/bonch/BonchForegroundService.java
+          package ru.sut.bonch;
+
           import android.app.Notification;
           import android.app.NotificationChannel;
           import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
           import android.content.Context;
+          import android.content.Intent;
           import android.content.SharedPreferences;
           import android.os.Build;
-          import android.os.Bundle;
+          import android.os.IBinder;
           import android.os.PowerManager;
-          import android.webkit.JavascriptInterface;
-          import android.webkit.WebSettings;
-          import android.webkit.WebView;
           import java.io.ByteArrayOutputStream;
           import java.io.InputStream;
           import java.io.OutputStream;
@@ -92,104 +139,299 @@ jobs:
           import java.util.Arrays;
           import java.util.Calendar;
           import java.util.Date;
+          import java.util.HashMap;
           import java.util.HashSet;
           import java.util.List;
           import java.util.Locale;
+          import java.util.Map;
           import java.util.Set;
           import java.util.regex.Matcher;
           import java.util.regex.Pattern;
           import org.json.JSONArray;
           import org.json.JSONObject;
 
-          public class MainActivity extends Activity {
+          public class BonchForegroundService extends Service {
+              public static final String APP_VERSION = "01.02";
+
               private static final String BASE_URL = "https://lk.sut.ru/cabinet";
               private static final String LOGIN_PAGE_URL = BASE_URL + "/?login=yes";
               private static final String AUTH_URL = BASE_URL + "/lib/autentificationok.php";
               private static final String INI_URL = BASE_URL + "/ini.php";
               private static final String SCHEDULE_URL = BASE_URL + "/project/cabinet/forms/raspisanie.php";
 
+              private static final String CHANNEL_BG = "bonch_bg_channel_0102";
+              private static final String CHANNEL_ALERT = "bonch_alert_channel_0102";
+              private static final int FG_NOTIFICATION_ID = 1002;
+
               private static final String[] BELL_SCHEDULE = {
                   "09:00", "10:30", "10:45", "13:00", "14:45", "16:30", "18:15", "20:00"
               };
 
-              private WebView webView;
-              private SharedPreferences prefs;
-              private PowerManager.WakeLock wakeLock;
+              public static volatile boolean active = false;
+              public static volatile String statusText = "Запуск фоновой службы...";
+              public static volatile String nearestDayTitle = "Загрузка ближайшего дня...";
+              public static final List<String> logs = new ArrayList<>();
+              public static JSONArray lastLessonsJson = new JSONArray();
 
-              private volatile boolean active = false;
-              private volatile String statusText = "Отключено";
-              private final List<String> logs = new ArrayList<>();
-              private final Set<String> markedToday = new HashSet<>();
-              private final Set<String> parsedTimes = new HashSet<>();
-              private JSONArray lastLessonsJson = new JSONArray();
+              // Память отмеченных пар: если время для пары появилось — больше не шлем запросы до следующей пары
+              private static final Set<String> completedWindowsToday = new HashSet<>();
+              private static final Set<String> markedRaspIdsToday = new HashSet<>();
+              private static final Map<String, String> checkInTimeByStart = new HashMap<>();
+              private static final Set<String> parsedTimes = new HashSet<>();
+              private static String currentDayStamp = "";
+
+              private PowerManager.WakeLock wakeLock;
               private Thread workerThread;
-              private boolean isAuthenticated = false;
+              private volatile boolean isAuthenticated = false;
+              private String lastUsedLogin = "";
+              private String lastUsedPass = "";
 
               @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  CookieManager cm = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
-                  CookieHandler.setDefault(cm);
-
-                  prefs = getSharedPreferences("bonch_prefs", Context.MODE_PRIVATE);
+              public void onCreate() {
+                  super.onCreate();
+                  if (CookieHandler.getDefault() == null) {
+                      CookieHandler.setDefault(new CookieManager(null, CookiePolicy.ACCEPT_ALL));
+                  }
                   PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                   if (pm != null) {
-                      wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BonchAutoCheck::Lock");
+                      wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BonchAutoCheck::VpnWakeLock");
                   }
-
-                  if (Build.VERSION.SDK_INT >= 33) {
-                      try {
-                          requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
-                      } catch (Exception ignored) {}
-                  }
-
-                  webView = new WebView(this);
-                  WebSettings ws = webView.getSettings();
-                  ws.setJavaScriptEnabled(true);
-                  ws.setDomStorageEnabled(true);
-                  webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
-                  setContentView(webView);
-
-                  webView.loadDataWithBaseURL("https://lk.sut.ru", buildHtml(), "text/html", "UTF-8", null);
-                  addLog("Приложение готово. Нажмите «ВКЛЮЧИТЬ» или «Проверить сейчас».");
+                  createNotificationChannels();
               }
 
-              private synchronized void addLog(String msg) {
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  startForeground(FG_NOTIFICATION_ID, buildForegroundNotification(statusText));
+
+                  String action = intent != null ? intent.getStringExtra("action") : "ensure_running";
+                  final SharedPreferences prefs = getSharedPreferences("bonch_prefs", Context.MODE_PRIVATE);
+                  final String login = prefs.getString("login", "").trim();
+                  final String pass = prefs.getString("password", "").trim();
+
+                  if (!login.equals(lastUsedLogin) || !pass.equals(lastUsedPass)) {
+                      isAuthenticated = false;
+                      lastUsedLogin = login;
+                      lastUsedPass = pass;
+                  }
+
+                  if (!active || workerThread == null || !workerThread.isAlive()) {
+                      startWorkerLoop();
+                  } else if ("check_once".equals(action)) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (login.isEmpty() || pass.isEmpty()) {
+                                  addLog("Введите логин и пароль от lk.sut.ru!");
+                                  return;
+                              }
+                              addLog("Ручное обновление расписания (v" + APP_VERSION + ")...");
+                              WindowState win = getCurrentWindowState(prefs.getString("mode", "full_lesson"));
+                              pollScheduleAndCheckIn(login, pass, win != null ? win.startTime : null);
+                          }
+                      }).start();
+                  }
+                  return START_STICKY;
+              }
+
+              private void startWorkerLoop() {
+                  active = true;
+                  if (wakeLock != null && !wakeLock.isHeld()) {
+                      wakeLock.acquire();
+                  }
+
+                  workerThread = new Thread(new Runnable() {
+                      @Override
+                      public void run() {
+                          addLog("Служба v" + APP_VERSION + " активна в фоне по умолчанию.");
+                          while (active) {
+                              SharedPreferences prefs = getSharedPreferences("bonch_prefs", Context.MODE_PRIVATE);
+                              String login = prefs.getString("login", "").trim();
+                              String password = prefs.getString("password", "").trim();
+                              String intervalStr = prefs.getString("interval", "1");
+                              String mode = prefs.getString("mode", "full_lesson");
+
+                              if (login.isEmpty() || password.isEmpty()) {
+                                  updateStatus("Введите логин и пароль от lk.sut.ru");
+                                  sleepQuietly(8000L);
+                                  continue;
+                              }
+
+                              double intervalMin = 1.0;
+                              try {
+                                  intervalMin = Double.parseDouble(intervalStr);
+                              } catch (Exception ignored) {}
+
+                              String today = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
+                              if (!today.equals(currentDayStamp)) {
+                                  currentDayStamp = today;
+                                  completedWindowsToday.clear();
+                                  markedRaspIdsToday.clear();
+                                  checkInTimeByStart.clear();
+                              }
+
+                              if (!isAuthenticated) {
+                                  updateStatus("Вход в ЛК СПбГУТ...");
+                                  if (!authenticate(login, password)) {
+                                      updateStatus("Ошибка авторизации (проверьте данные)");
+                                      sleepQuietly(20000L);
+                                      continue;
+                                  }
+                                  WindowState initWin = getCurrentWindowState(mode);
+                                  pollScheduleAndCheckIn(login, password, initWin != null ? initWin.startTime : null);
+                              }
+
+                              WindowState win = getCurrentWindowState(mode);
+
+                              // 1. Если сейчас перерыв или пар нет — спим и не шлем запросы
+                              if (win == null) {
+                                  String nextLesson = findNextUnmarkedLessonTime();
+                                  if (nextLesson != null) {
+                                      updateStatus("В фоне • Ждем пару в " + nextLesson);
+                                  } else {
+                                      updateStatus("В фоне • Пары на сегодня завершены");
+                                  }
+                                  sleepQuietly(30000L);
+                                  continue;
+                              }
+
+                              // 2. ГЛАВНОЕ ПРАВИЛО: Если на текущей паре уже появилась отметка или время — НИЧЕГО НЕ ДЕЛАЕМ до следующей пары!
+                              if (completedWindowsToday.contains(win.startTime)) {
+                                  String tMarked = checkInTimeByStart.get(win.startTime);
+                                  String nextLesson = findNextLessonAfter(win.startTime);
+                                  String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Спим до следующей пары";
+                                  updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
+                                  sleepQuietly(30000L);
+                                  continue;
+                              }
+
+                              // 3. Если пара идет, но отметки еще нет — опрашиваем ЛК
+                              updateStatus("Ловим кнопку • " + win.label);
+                              pollScheduleAndCheckIn(login, password, win.startTime);
+
+                              if (completedWindowsToday.contains(win.startTime)) {
+                                  String tMarked = checkInTimeByStart.get(win.startTime);
+                                  updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • Запросы остановлены до след. пары");
+                                  sleepQuietly(30000L);
+                              } else {
+                                  sleepQuietly(Math.max(15000L, (long) (intervalMin * 60000L)));
+                              }
+                          }
+                      }
+                  });
+                  workerThread.start();
+              }
+
+              private String findNextUnmarkedLessonTime() {
+                  Calendar now = Calendar.getInstance();
+                  int nowMins = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+                  Set<String> times = new HashSet<>(Arrays.asList(BELL_SCHEDULE));
+                  synchronized (parsedTimes) {
+                      times.addAll(parsedTimes);
+                  }
+                  String[] sorted = times.toArray(new String[0]);
+                  Arrays.sort(sorted);
+                  for (String t : sorted) {
+                      if (completedWindowsToday.contains(t)) continue;
+                      try {
+                          String[] p = t.split(":");
+                          int m = Integer.parseInt(p[0]) * 60 + Integer.parseInt(p[1]);
+                          if (m > nowMins - 10) return t;
+                      } catch (Exception ignored) {}
+                  }
+                  return null;
+              }
+
+              private String findNextLessonAfter(String currentStart) {
+                  Set<String> times = new HashSet<>(Arrays.asList(BELL_SCHEDULE));
+                  synchronized (parsedTimes) {
+                      times.addAll(parsedTimes);
+                  }
+                  String[] sorted = times.toArray(new String[0]);
+                  Arrays.sort(sorted);
+                  for (String t : sorted) {
+                      if (t.compareTo(currentStart) > 0) return t;
+                  }
+                  return null;
+              }
+
+              private void sleepQuietly(long ms) {
+                  try {
+                      Thread.sleep(ms);
+                  } catch (InterruptedException ignored) {}
+              }
+
+              private void updateStatus(String newStatus) {
+                  statusText = newStatus;
+                  NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm != null) {
+                      nm.notify(FG_NOTIFICATION_ID, buildForegroundNotification(newStatus));
+                  }
+              }
+
+              public static synchronized void addLog(String msg) {
                   String stamp = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                   logs.add("[" + stamp + "] " + msg);
-                  if (logs.size() > 80) {
+                  if (logs.size() > 90) {
                       logs.remove(0);
                   }
               }
 
-              private void sendSystemNotification(String title, String message) {
-                  try {
+              private void createNotificationChannels() {
+                  if (Build.VERSION.SDK_INT >= 26) {
                       NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                       if (nm == null) return;
-                      Notification.Builder builder;
-                      if (Build.VERSION.SDK_INT >= 26) {
-                          String channelId = "bonch_checkin_channel";
-                          NotificationChannel channel = new NotificationChannel(
-                              channelId,
-                              "Автоотметка СПбГУТ",
-                              NotificationManager.IMPORTANCE_HIGH
-                          );
-                          nm.createNotificationChannel(channel);
-                          builder = new Notification.Builder(this, channelId);
-                      } else {
-                          builder = new Notification.Builder(this);
+                      NotificationChannel bgChannel = new NotificationChannel(
+                          CHANNEL_BG,
+                          "Фоновая служба Bonch AutoCheck v01.02",
+                          NotificationManager.IMPORTANCE_LOW
+                      );
+                      nm.createNotificationChannel(bgChannel);
+
+                      NotificationChannel alertChannel = new NotificationChannel(
+                          CHANNEL_ALERT,
+                          "Уведомления об отметке на паре",
+                          NotificationManager.IMPORTANCE_HIGH
+                      );
+                      nm.createNotificationChannel(alertChannel);
+                  }
+              }
+
+              private Notification buildForegroundNotification(String content) {
+                  Intent notificationIntent = new Intent(this, MainActivity.class);
+                  int flags = Build.VERSION.SDK_INT >= 23 ? PendingIntent.FLAG_IMMUTABLE : 0;
+                  PendingIntent pendingIntent = PendingIntent.getActivity(this, 0, notificationIntent, flags);
+
+                  Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                      ? new Notification.Builder(this, CHANNEL_BG)
+                      : new Notification.Builder(this);
+                  builder.setContentTitle("Bonch AutoCheck v" + APP_VERSION)
+                         .setContentText(content)
+                         .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
+                         .setContentIntent(pendingIntent)
+                         .setOngoing(true);
+                  return builder.build();
+              }
+
+              private void sendCheckInAlertNotification(String title, String message) {
+                  try {
+                      NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm != null) {
+                          Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                              ? new Notification.Builder(this, CHANNEL_ALERT)
+                              : new Notification.Builder(this);
+                          builder.setContentTitle(title)
+                                 .setContentText(message)
+                                 .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+                                 .setAutoCancel(true);
+                          nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
                       }
-                      builder.setContentTitle(title)
-                             .setContentText(message)
-                             .setSmallIcon(android.R.drawable.stat_sys_upload_done)
-                             .setAutoCancel(true);
-                      nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
                   } catch (Exception ignored) {}
 
+                  final SharedPreferences prefs = getSharedPreferences("bonch_prefs", Context.MODE_PRIVATE);
                   final String tgToken = prefs.getString("tg_token", "").trim();
                   final String tgChat = prefs.getString("tg_chat", "").trim();
-                  final String finalTitle = title;
-                  final String finalMsg = message;
+                  final String fTitle = title;
+                  final String fMsg = message;
 
                   if (!tgToken.isEmpty() && !tgChat.isEmpty()) {
                       new Thread(new Runnable() {
@@ -198,7 +440,7 @@ jobs:
                               try {
                                   String url = "https://api.telegram.org/bot" + tgToken + "/sendMessage";
                                   String body = "chat_id=" + URLEncoder.encode(tgChat, "UTF-8")
-                                      + "&text=" + URLEncoder.encode(finalTitle + "\n" + finalMsg, "UTF-8");
+                                      + "&text=" + URLEncoder.encode(fTitle + "\n" + fMsg, "UTF-8");
                                   httpRequest("POST", url, body);
                               } catch (Exception ignored) {}
                           }
@@ -237,7 +479,7 @@ jobs:
                   byte[] bytes = baos.toByteArray();
                   String utf8 = new String(bytes, Charset.forName("UTF-8"));
                   String lower = utf8.toLowerCase(Locale.ROOT);
-                  if (lower.contains("расписание") || lower.contains("занят") || lower.contains("присутств") || lower.contains("начать") || utf8.trim().equals("1")) {
+                  if (lower.contains("расписание") || lower.contains("занят") || lower.contains("присутств") || lower.contains("понедельник") || lower.contains("вторник") || utf8.trim().equals("1")) {
                       return utf8;
                   }
                   String cp1251 = new String(bytes, Charset.forName("windows-1251"));
@@ -247,7 +489,7 @@ jobs:
                   return utf8;
               }
 
-              private boolean authenticate(String login, String password) {
+              private synchronized boolean authenticate(String login, String password) {
                   try {
                       httpRequest("GET", LOGIN_PAGE_URL, null);
                       String data = "users=" + URLEncoder.encode(login, "UTF-8")
@@ -257,7 +499,7 @@ jobs:
                           httpRequest("GET", INI_URL, null);
                           httpRequest("GET", LOGIN_PAGE_URL, null);
                           isAuthenticated = true;
-                          addLog("Успешный вход в ЛК СПбГУТ (" + login + ")");
+                          addLog("Вход в ЛК выполнен (" + login + ")");
                           return true;
                       }
                       isAuthenticated = false;
@@ -270,9 +512,29 @@ jobs:
                   }
               }
 
-              private void pollScheduleAndCheckIn(String login, String password) {
+              private boolean sendAndVerifyOpenZan(String raspId, String weekId) {
+                  try {
+                      String payload = "open=1&rasp=" + raspId + "&week=" + weekId;
+                      httpRequest("POST", SCHEDULE_URL + "?" + payload, payload);
+                      String verifyHtml = httpRequest("POST", SCHEDULE_URL, "").toLowerCase(Locale.ROOT);
+                      return verifyHtml.contains("присутств")
+                          || verifyHtml.contains("отмечен")
+                          || verifyHtml.contains("занятие началось")
+                          || !verifyHtml.contains("open_zan(" + raspId);
+                  } catch (Exception e) {
+                      return false;
+                  }
+              }
+
+              private static class DayGroup {
+                  String header;
+                  Date dateObj;
+                  List<JSONObject> lessons = new ArrayList<>();
+                  boolean hasUnfinishedLessons = false;
+              }
+
+              private synchronized void pollScheduleAndCheckIn(String login, String password, String currentWindowStart) {
                   if (!isAuthenticated && !authenticate(login, password)) {
-                      statusText = "Ошибка входа в ЛК";
                       return;
                   }
                   try {
@@ -283,12 +545,20 @@ jobs:
                       }
 
                       Pattern trPattern = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                      Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*(?:[01]?\\d|2[0-3])[:.][0-5]\\d");
+                      Pattern dayHeaderPattern = Pattern.compile("(Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье)[\\s\\S]*?(\\d{2}\\.\\d{2}\\.\\d{4})?", Pattern.CASE_INSENSITIVE);
+                      Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)");
                       Pattern zanPattern = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
+                      // В ЛК СПбГУТ после начала/отметки в ячейке появляется текст "занятие началось ЧЧ:ММ"
+                      Pattern startedPattern = Pattern.compile("занятие\\s+началось\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
 
                       Matcher trMatcher = trPattern.matcher(html);
-                      JSONArray lessonsArr = new JSONArray();
+                      List<DayGroup> dayGroups = new ArrayList<>();
+                      DayGroup currentGroup = null;
+                      SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy", Locale.US);
                       List<String> newlyChecked = new ArrayList<>();
+
+                      Calendar nowCal = Calendar.getInstance();
+                      int nowMinutesOfDay = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE);
 
                       while (trMatcher.find()) {
                           String trHtml = trMatcher.group(1);
@@ -299,15 +569,41 @@ jobs:
                           if (rowText.isEmpty()) continue;
 
                           Matcher tm = timePattern.matcher(rowText);
-                          String timeRange = "";
-                          String startTime = "";
-                          if (tm.find()) {
-                              timeRange = tm.group(0);
-                              int hh = Integer.parseInt(tm.group(1));
-                              startTime = String.format(Locale.US, "%02d:%s", hh, tm.group(2));
-                              synchronized (parsedTimes) {
-                                  parsedTimes.add(startTime);
+                          Matcher dm = dayHeaderPattern.matcher(rowText);
+
+                          // Строка с названием дня недели ("Понедельник 12.10.2026")
+                          if (!tm.find()) {
+                              if (dm.find() && rowText.length() < 60) {
+                                  currentGroup = new DayGroup();
+                                  String dayName = dm.group(1);
+                                  String dateStr = dm.group(2);
+                                  currentGroup.header = dateStr != null ? (dayName + " (" + dateStr + ")") : dayName;
+                                  if (dateStr != null) {
+                                      try {
+                                          currentGroup.dateObj = df.parse(dateStr);
+                                      } catch (Exception ignored) {}
+                                  }
+                                  dayGroups.add(currentGroup);
                               }
+                              continue;
+                          }
+
+                          if (currentGroup == null) {
+                              currentGroup = new DayGroup();
+                              currentGroup.header = "Ближайший учебный день";
+                              dayGroups.add(currentGroup);
+                          }
+
+                          String timeRange = tm.group(0);
+                          int startH = Integer.parseInt(tm.group(1));
+                          int startM = Integer.parseInt(tm.group(2));
+                          int endH = Integer.parseInt(tm.group(3));
+                          int endM = Integer.parseInt(tm.group(4));
+                          String startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
+                          int endMinutesOfDay = endH * 60 + endM;
+
+                          if (endMinutesOfDay >= nowMinutesOfDay) {
+                              currentGroup.hasUnfinishedLessons = true;
                           }
 
                           Matcher zm = zanPattern.matcher(trHtml);
@@ -318,274 +614,114 @@ jobs:
                               weekId = zm.group(2);
                           }
 
+                          Matcher sm = startedPattern.matcher(rowText);
+                          String startedAt = sm.find() ? sm.group(1) : null;
+
                           String lowerRow = rowText.toLowerCase(Locale.ROOT);
-                          boolean already = lowerRow.contains("вы присутствуете")
-                                         || lowerRow.contains("отмечен")
-                                         || lowerRow.contains("присутствует");
+                          boolean alreadyInHtml = lowerRow.contains("вы присутствуете")
+                                               || lowerRow.contains("отмечен")
+                                               || lowerRow.contains("присутствует");
 
-                          if (already && raspId != null) {
-                              markedToday.add(raspId);
+                          // 1) Если есть активная кнопка open_zan — сразу жмем её!
+                          if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
+                              if (sendAndVerifyOpenZan(raspId, weekId)) {
+                                  String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                                  markedRaspIdsToday.add(raspId);
+                                  checkInTimeByStart.put(startTime, nowStr);
+                                  completedWindowsToday.add(startTime);
+                                  alreadyInHtml = true;
+
+                                  String cleanSubj = rowText.replace(timeRange, "").replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "").trim();
+                                  if (cleanSubj.length() > 65) cleanSubj = cleanSubj.substring(0, 65);
+                                  newlyChecked.add(cleanSubj + " (отметка в " + nowStr + ")");
+                              }
                           }
 
-                          if (raspId != null && weekId != null && !already && !markedToday.contains(raspId)) {
-                              String payload = "open=1&rasp=" + raspId + "&week=" + weekId;
-                              httpRequest("POST", SCHEDULE_URL + "?" + payload, payload);
-                              markedToday.add(raspId);
-                              already = true;
-                              String cleanSubj = rowText.length() > 75 ? rowText.substring(0, 75) : rowText;
-                              newlyChecked.add(cleanSubj);
+                          // 2) ПУНКТ 2: Если в плашке пары появилось время ("занятие началось ЧЧ:ММ" без кнопки) или статус присутствия —
+                          // значит отметка уже состоялась, запоминаем время и ОСТАНАВЛИВАЕМ запросы до следующей пары!
+                          boolean hasTimeAppeared = (startedAt != null && raspId == null);
+                          boolean isLessonDone = alreadyInHtml
+                                              || hasTimeAppeared
+                                              || completedWindowsToday.contains(startTime)
+                                              || (raspId != null && markedRaspIdsToday.contains(raspId));
+
+                          String displayCheckTime = checkInTimeByStart.get(startTime);
+                          if (displayCheckTime == null && startedAt != null) {
+                              displayCheckTime = startedAt;
+                          }
+                          if (isLessonDone && displayCheckTime == null) {
+                              displayCheckTime = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
                           }
 
-                          if (!timeRange.isEmpty() || raspId != null || already) {
-                              JSONObject item = new JSONObject();
-                              item.put("time", timeRange.isEmpty() ? "Занятие" : timeRange);
-                              item.put("subject", rowText.length() > 85 ? rowText.substring(0, 85) : rowText);
-                              item.put("checked", already || (raspId != null && markedToday.contains(raspId)));
-                              lessonsArr.put(item);
+                          // Если эта пара относится к сегодняшнему/текущему окну и время уже появилось — блокируем дальнейшие запросы в этом окне
+                          if (isLessonDone && currentWindowStart != null && currentWindowStart.equals(startTime)) {
+                              completedWindowsToday.add(startTime);
+                              if (displayCheckTime != null) {
+                                  checkInTimeByStart.put(startTime, displayCheckTime);
+                              }
                           }
+
+                          String cleanSubject = rowText
+                              .replace(timeRange, "")
+                              .replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "")
+                              .trim();
+                          if (cleanSubject.length() > 100) {
+                              cleanSubject = cleanSubject.substring(0, 100);
+                          }
+
+                          JSONObject item = new JSONObject();
+                          item.put("time", timeRange);
+                          item.put("startTime", startTime);
+                          item.put("subject", cleanSubject);
+                          item.put("checked", isLessonDone);
+                          item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
+                          currentGroup.lessons.add(item);
                       }
 
-                      lastLessonsJson = lessonsArr;
+                      // ПУНКТ 3: Оставляем ТОЛЬКО ОДИН ближайший учебный день
+                      DayGroup nearest = selectSingleNearestDay(dayGroups);
+                      if (nearest != null) {
+                          nearestDayTitle = nearest.header;
+                          lastLessonsJson = new JSONArray(nearest.lessons);
+                          synchronized (parsedTimes) {
+                              parsedTimes.clear();
+                              for (JSONObject les : nearest.lessons) {
+                                  String st = les.optString("startTime", "");
+                                  if (!st.isEmpty()) parsedTimes.add(st);
+                              }
+                          }
+                      } else {
+                          nearestDayTitle = "Нет расписания на ближайшие дни";
+                          lastLessonsJson = new JSONArray();
+                      }
 
                       if (!newlyChecked.isEmpty()) {
                           String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                           for (String s : newlyChecked) {
                               String title = "✅ Отметился на паре в " + nowStr + "!";
-                              addLog(title + " (" + s + ")");
-                              sendSystemNotification(title, s);
+                              addLog(title + " — " + s);
+                              sendCheckInAlertNotification(title, s);
                           }
                       } else {
-                          addLog("Проверено: новых кнопок «Начать занятие» пока нет (строк: " + lessonsArr.length() + ").");
+                          addLog("Обновлен день: " + nearestDayTitle + " (пар: " + lastLessonsJson.length() + ")");
                       }
                   } catch (Exception e) {
-                      addLog("Ошибка опроса расписания: " + e.getMessage());
+                      addLog("Ошибка опроса ЛК: " + e.getMessage());
                   }
               }
 
-              private String getLessonWindowInfo(String mode) {
-                  if ("always".equals(mode)) return "Постоянный режим 24/7";
-                  int windowMin = "first_30".equals(mode) ? 30 : 95;
-                  Set<String> allTimes = new HashSet<>(Arrays.asList(BELL_SCHEDULE));
-                  synchronized (parsedTimes) {
-                      allTimes.addAll(parsedTimes);
-                  }
-                  Calendar now = Calendar.getInstance();
-                  long nowMillis = now.getTimeInMillis();
-                  for (String t : allTimes) {
-                      try {
-                          String[] parts = t.replace(".", ":").split(":");
-                          Calendar start = (Calendar) now.clone();
-                          start.set(Calendar.HOUR_OF_DAY, Integer.parseInt(parts[0]));
-                          start.set(Calendar.MINUTE, Integer.parseInt(parts[1]));
-                          start.set(Calendar.SECOND, 0);
-                          double diffMin = (nowMillis - start.getTimeInMillis()) / 60000.0;
-                          if (diffMin >= -10.0 && diffMin <= windowMin) {
-                              if (diffMin < 0) {
-                                  return "Пара в " + t + " (до начала " + Math.abs((int) diffMin) + " мин)";
-                              }
-                              return "Пара " + t + " (идет " + (int) diffMin + " мин)";
-                          }
-                      } catch (Exception ignored) {}
-                  }
-                  return null;
-              }
+              private DayGroup selectSingleNearestDay(List<DayGroup> groups) {
+                  if (groups.isEmpty()) return null;
+                  Calendar cal = Calendar.getInstance();
+                  cal.set(Calendar.HOUR_OF_DAY, 0);
+                  cal.set(Calendar.MINUTE, 0);
+                  cal.set(Calendar.SECOND, 0);
+                  cal.set(Calendar.MILLISECOND, 0);
+                  Date todayStart = cal.getTime();
 
-              public class WebBridge {
-                  @JavascriptInterface
-                  public String getState() {
-                      try {
-                          JSONObject obj = new JSONObject();
-                          obj.put("active", active);
-                          obj.put("status", statusText);
-                          synchronized (MainActivity.this) {
-                              obj.put("logs", new JSONArray(logs));
-                          }
-                          obj.put("lessons", lastLessonsJson);
-                          return obj.toString();
-                      } catch (Exception e) {
-                          return "{}";
-                      }
-                  }
-
-                  @JavascriptInterface
-                  public void checkNow(final String login, final String password, final String tgToken, final String tgChat) {
-                      savePrefs(login, password, "1", "full_lesson", tgToken, tgChat);
-                      new Thread(new Runnable() {
-                          @Override
-                          public void run() {
-                              addLog("Разовая проверка расписания...");
-                              pollScheduleAndCheckIn(login.trim(), password.trim());
-                          }
-                      }).start();
-                  }
-
-                  @JavascriptInterface
-                  public void toggleWorker(final String login, final String password, final String intervalStr, final String mode, final String tgToken, final String tgChat) {
-                      if (active) {
-                          active = false;
-                          statusText = "Остановлено";
-                          if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
-                          if (workerThread != null) workerThread.interrupt();
-                          addLog("Автоотметка остановлена.");
-                          return;
-                      }
-                      if (login.trim().isEmpty() || password.trim().isEmpty()) {
-                          statusText = "Введите логин и пароль от lk.sut.ru!";
-                          addLog(statusText);
-                          return;
-                      }
-                      savePrefs(login, password, intervalStr, mode, tgToken, tgChat);
-                      active = true;
-                      statusText = "Подключение к lk.sut.ru...";
-                      if (wakeLock != null && !wakeLock.isHeld()) wakeLock.acquire();
-
-                      final double intervalMin = Double.parseDouble(intervalStr);
-                      workerThread = new Thread(new Runnable() {
-                          @Override
-                          public void run() {
-                              if (!authenticate(login.trim(), password.trim())) {
-                                  active = false;
-                                  statusText = "Ошибка авторизации";
-                                  return;
-                              }
-                              while (active) {
-                                  String win = getLessonWindowInfo(mode);
-                                  if (win != null) {
-                                      statusText = "Активно • " + win;
-                                      pollScheduleAndCheckIn(login.trim(), password.trim());
-                                      try {
-                                          Thread.sleep(Math.max(15000L, (long) (intervalMin * 60000L)));
-                                      } catch (InterruptedException e) {
-                                          break;
-                                      }
-                                  } else {
-                                      statusText = "Ждем пару (старт за 10 мин до звонка)";
-                                      try {
-                                          Thread.sleep(25000L);
-                                      } catch (InterruptedException e) {
-                                          break;
-                                      }
-                                  }
-                              }
-                          }
-                      });
-                      workerThread.start();
-                  }
-              }
-
-              private void savePrefs(String login, String pass, String interval, String mode, String tgToken, String tgChat) {
-                  prefs.edit()
-                       .putString("login", login.trim())
-                       .putString("password", pass.trim())
-                       .putString("interval", interval)
-                       .putString("mode", mode)
-                       .putString("tg_token", tgToken != null ? tgToken.trim() : "")
-                       .putString("tg_chat", tgChat != null ? tgChat.trim() : "")
-                       .apply();
-              }
-
-              private String buildHtml() {
-                  String l = prefs.getString("login", "");
-                  String p = prefs.getString("password", "");
-                  String t = prefs.getString("tg_token", "");
-                  String c = prefs.getString("tg_chat", "");
-                  return "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
-                      + "<meta name='viewport' content='width=device-width,initial-scale=1.0,user-scalable=no'>"
-                      + "<style>"
-                      + "body{margin:0;background:#090d16;color:#f8fafc;font-family:sans-serif;padding:14px;}"
-                      + ".card{background:#111827;border:1px solid #1e293b;border-radius:20px;padding:18px;max-width:440px;margin:0 auto;}"
-                      + "input,select{width:100%;box-sizing:border-box;padding:11px;margin:5px 0 10px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:14px;}"
-                      + ".btn{width:100%;padding:14px;border-radius:12px;border:none;background:#2563eb;color:#fff;font-weight:700;font-size:15px;margin-top:6px;}"
-                      + ".btn.on{background:#059669;}"
-                      + ".btn-sec{width:100%;padding:11px;border-radius:12px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-weight:600;font-size:13px;margin-top:8px;}"
-                      + ".item{background:#1e293b;padding:9px;border-radius:10px;margin-bottom:6px;font-size:12px;}"
-                      + ".log{background:#090d16;border:1px solid #1e293b;border-radius:10px;padding:10px;font-family:monospace;font-size:11px;height:140px;overflow-y:auto;white-space:pre-wrap;color:#cbd5e1;}"
-                      + "</style></head><body><div class='card'>"
-                      + "<div style='font-size:18px;font-weight:800;'>Bonch Direct AutoCheck</div>"
-                      + "<div style='font-size:12px;color:#94a3b8;margin-bottom:10px;'>Нативный Android APK • Прямой выход на lk.sut.ru</div>"
-                      + "<input id='login' placeholder='Логин / Email от lk.sut.ru' value=\"" + l + "\">"
-                      + "<input id='password' type='password' placeholder='Пароль от ЛК' value=\"" + p + "\">"
-                      + "<select id='interval'>"
-                      + "<option value='0.5'>Каждые 30 секунд (мгновенно)</option>"
-                      + "<option value='1' selected>Каждую 1 минуту</option>"
-                      + "<option value='5'>Каждые 5 минут</option></select>"
-                      + "<select id='mode'>"
-                      + "<option value='full_lesson' selected>За 10 мин до пары + вся пара (95 мин)</option>"
-                      + "<option value='always'>Постоянно 24/7 (без расписания)</option>"
-                      + "<option value='first_30'>За 10 мин до пары + первые 30 мин</option></select>"
-                      + "<input id='tg_token' placeholder='Telegram Bot Token (по желанию)' value=\"" + t + "\">"
-                      + "<input id='tg_chat' placeholder='Telegram Chat ID (по желанию)' value=\"" + c + "\">"
-                      + "<button id='btn' class='btn' onclick='toggle()'>ВКЛЮЧИТЬ АВТООТМЕТКУ</button>"
-                      + "<button class='btn-sec' onclick='checkNow()'>Проверить расписание и отметиться сейчас</button>"
-                      + "<div id='status' style='margin:10px 0;font-size:13px;font-weight:700;color:#94a3b8;'>Статус: Отключено</div>"
-                      + "<div id='lessons' style='margin-bottom:10px;'></div>"
-                      + "<div id='logs' class='log'>Загрузка...</div>"
-                      + "</div><script>"
-                      + "function val(id){return document.getElementById(id).value;}"
-                      + "function toggle(){AndroidBridge.toggleWorker(val('login'),val('password'),val('interval'),val('mode'),val('tg_token'),val('tg_chat'));poll();}"
-                      + "function checkNow(){AndroidBridge.checkNow(val('login'),val('password'),val('tg_token'),val('tg_chat'));setTimeout(poll,800);}"
-                      + "function poll(){"
-                      + "  try{"
-                      + "    var d=JSON.parse(AndroidBridge.getState());"
-                      + "    var b=document.getElementById('btn');"
-                      + "    var s=document.getElementById('status');"
-                      + "    if(d.active){b.className='btn on';b.innerText='ОСТАНОВИТЬ (РАБОТАЕТ)';s.style.color='#34d399';}"
-                      + "    else{b.className='btn';b.innerText='ВКЛЮЧИТЬ АВТООТМЕТКУ';s.style.color='#94a3b8';}"
-                      + "    s.innerText='Статус: '+(d.status||'Отключено');"
-                      + "    if(d.logs)document.getElementById('logs').innerText=d.logs.join('\\n');"
-                      + "    var h='';"
-                      + "    if(d.lessons){for(var i=0;i<d.lessons.length;i++){"
-                      + "      var x=d.lessons[i];"
-                      + "      var c=x.checked?'#34d399':'#fbbf24';"
-                      + "      var st=x.checked?'✅ Отмечен':'⏳ Ожидание кнопки';"
-                      + "      h+=\"<div class='item'><b style='color:\"+c+\"'>\"+x.time+\" — \"+st+\"</b><br>\"+x.subject+\"</div>\";"
-                      + "    }}"
-                      + "    document.getElementById('lessons').innerHTML=h;"
-                      + "  }catch(e){}"
-                      + "}"
-                      + "setInterval(poll,1500);poll();"
-                      + "</script></body></html>";
-              }
-          }
-          EOF
-
-          "$BUILD_TOOLS/aapt2" compile --dir res -o build/res.zip
-          "$BUILD_TOOLS/aapt2" link -o build/unaligned.apk \
-            -I "$ANDROID_JAR" \
-            --manifest AndroidManifest.xml \
-            --java build/gen \
-            build/res.zip
-
-          javac -encoding UTF-8 -source 8 -target 8 \
-            -bootclasspath "$ANDROID_JAR" \
-            -cp "$ANDROID_JAR" \
-            -d build/obj \
-            build/gen/ru/sut/bonch/R.java \
-            src/ru/sut/bonch/MainActivity.java
-
-          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --output build/ build/obj/ru/sut/bonch/*.class
-
-          zip -uj build/unaligned.apk build/classes.dex
-
-          "$BUILD_TOOLS/zipalign" -f -p 4 build/unaligned.apk build/aligned.apk
-
-          keytool -genkeypair -v \
-            -keystore build/release.keystore \
-            -storepass android -keypass android \
-            -alias bonchkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=BonchAutoCheck,OU=IT,O=SUT,L=SPb,S=SPb,C=RU"
-
-          "$BUILD_TOOLS/apksigner" sign \
-            --ks build/release.keystore \
-            --ks-pass pass:android \
-            --key-pass pass:android \
-            --out build/apk/BonchAutoCheck.apk \
-            build/aligned.apk
-
-          ls -lh build/apk/BonchAutoCheck.apk
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: BonchAutoCheck-APK
-          path: build/apk/BonchAutoCheck.apk
+                  for (DayGroup g : groups) {
+                      if (g.lessons.isEmpty()) continue;
+                      if (g.dateObj != null) {
+                          // Если это сегодня и пары еще не закончились — показываем сегодня
+                          if (g.dateObj.equals(todayStart) && g.hasUnfinishedLessons) {
+                              return g;
