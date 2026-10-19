@@ -2,13 +2,18 @@ name: Build Bonch APK 01.02.03
 
 on:
   push:
-    branches: [ "main", "master" ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-apk:
     runs-on: ubuntu-22.04
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
@@ -16,6 +21,7 @@ jobs:
           java-version: "17"
 
       - name: Compile Native Android VPN-Engine APK v01.02.03
+        shell: bash
         run: |
           set -e
           SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
@@ -24,14 +30,14 @@ jobs:
 
           mkdir -p src/ru/sut/bonch res/values build/gen build/obj build/apk
 
-          cat << 'EOF' > res/values/strings.xml
+          cat <<-'EOF' > res/values/strings.xml
           <?xml version="1.0" encoding="utf-8"?>
           <resources>
               <string name="app_name">Bonch AutoCheck</string>
           </resources>
           EOF
 
-          cat << 'EOF' > AndroidManifest.xml
+          cat <<-'EOF' > AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="ru.sut.bonch"
@@ -55,7 +61,6 @@ jobs:
                   android:persistent="true"
                   android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
-                  <!-- ВЕСЬ движок автоотметки теперь живет напрямую внутри системного VpnService в отдельном процессе :vpn_engine -->
                   <service
                       android:name=".BonchVpnEngineService"
                       android:process=":vpn_engine"
@@ -93,7 +98,7 @@ jobs:
           </manifest>
           EOF
 
-          cat << 'EOF' > src/ru/sut/bonch/BootReceiver.java
+          cat <<-'EOF' > src/ru/sut/bonch/BootReceiver.java
           package ru.sut.bonch;
 
           import android.content.BroadcastReceiver;
@@ -119,7 +124,7 @@ jobs:
           }
           EOF
 
-          cat << 'EOF' > src/ru/sut/bonch/BonchVpnEngineService.java
+          cat <<-'EOF' > src/ru/sut/bonch/BonchVpnEngineService.java
           package ru.sut.bonch;
 
           import android.app.AlarmManager;
@@ -232,14 +237,12 @@ jobs:
                       if (Build.VERSION.SDK_INT >= 29) {
                           builder.setMetered(false);
                       }
-                      // Исключаем сам наш пакет из маршрутизации туннеля, чтобы запросы к lk.sut.ru шли напрямую через интернет телефона
                       try {
                           builder.addDisallowedApplication(getPackageName());
                       } catch (Exception ignored) {}
 
                       vpnTunnel = builder.establish();
 
-                      // Держим открытым поток чтения дескриптора tun0, как это делают настоящие VPN-клиенты
                       if (vpnTunnel != null && (tunnelKeepAliveThread == null || !tunnelKeepAliveThread.isAlive())) {
                           tunnelKeepAliveThread = new Thread(new Runnable() {
                               @Override
@@ -261,7 +264,7 @@ jobs:
                           tunnelKeepAliveThread.start();
                       }
                   } catch (Exception e) {
-                      addLog("Внимание: VPN-туннель не поднят (" + e.getMessage() + "), работаем в режиме Foreground.");
+                      addLog("Работаем в фоновом режиме Foreground.");
                   }
               }
 
@@ -361,7 +364,6 @@ jobs:
                       serviceStartMillis = System.currentTimeMillis();
                   }
 
-                  // 1. Переводим сам VpnService в режим приоритетного уведомления + поднимаем tun0
                   startForeground(FG_NOTIFICATION_ID, buildForegroundNotification("VPN-движок активен в фоне"));
                   establishVpnTunnel();
                   startSilentAudioKeepAlive();
@@ -404,7 +406,7 @@ jobs:
               public void onTaskRemoved(Intent rootIntent) {
                   File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
                   if (enabledFlag.exists()) {
-                      addLog("Окно свернуто/закрыто — VPN-движок продолжает работу.");
+                      addLog("Вкладка закрыта — VPN-движок продолжает работу.");
                       saveStateFile();
                       scheduleWatchdogAlarm();
                   }
@@ -413,7 +415,6 @@ jobs:
 
               @Override
               public void onRevoke() {
-                  // Если система или пользователь отключили VPN в настройках Android
                   File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
                   if (enabledFlag.exists()) enabledFlag.delete();
                   stopEngine();
@@ -429,7 +430,7 @@ jobs:
                   workerThread = new Thread(new Runnable() {
                       @Override
                       public void run() {
-                          addLog("VPN-движок v" + APP_VERSION + " запущен (независимый процесс :vpn_engine).");
+                          addLog("VPN-движок v" + APP_VERSION + " запущен (:vpn_engine).");
                           saveStateFile();
 
                           while (active) {
@@ -1009,4 +1010,237 @@ jobs:
                               ws.startTime = String.format(Locale.US, "%02d:%02d", Integer.parseInt(parts[0]), Integer.parseInt(parts[1]));
                               ws.label = diffMin < 0
                                   ? ("Пара в " + ws.startTime + " (до начала " + Math.abs((int) diffMin) + " мин)")
-                                  : ("Пара " + ws.startTime + " (идет
+                                  : ("Пара " + ws.startTime + " (идет " + (int) diffMin + " мин)");
+                              return ws;
+                          }
+                      } catch (Exception ignored) {}
+                  }
+                  if ("always".equals(mode)) {
+                      WindowState ws = new WindowState();
+                      ws.startTime = "always_" + new SimpleDateFormat("HH", Locale.US).format(new Date());
+                      ws.label = "Постоянный режим";
+                      return ws;
+                  }
+                  return null;
+              }
+          }
+          EOF
+
+          cat <<-'EOF' > src/ru/sut/bonch/MainActivity.java
+          package ru.sut.bonch;
+
+          import android.app.Activity;
+          import android.content.ComponentName;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.net.Uri;
+          import android.net.VpnService;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.PowerManager;
+          import android.provider.Settings;
+          import android.webkit.JavascriptInterface;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import java.io.ByteArrayOutputStream;
+          import java.io.File;
+          import java.io.FileInputStream;
+          import java.io.FileOutputStream;
+          import org.json.JSONObject;
+
+          public class MainActivity extends Activity {
+              private static final int VPN_REQUEST_CODE = 203;
+              private WebView webView;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      try {
+                          requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
+                      } catch (Exception ignored) {}
+                  }
+
+                  if (Build.VERSION.SDK_INT >= 23) {
+                      try {
+                          PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                          if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                              Intent bi = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                              bi.setData(Uri.parse("package:" + getPackageName()));
+                              startActivity(bi);
+                          }
+                      } catch (Exception ignored) {}
+                  }
+
+                  webView = new WebView(this);
+                  webView.clearCache(true);
+                  WebSettings ws = webView.getSettings();
+                  ws.setJavaScriptEnabled(true);
+                  ws.setDomStorageEnabled(true);
+                  ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                  webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
+                  setContentView(webView);
+
+                  webView.loadDataWithBaseURL("https://lk.sut.ru", buildHtml(), "text/html", "UTF-8", null);
+              }
+
+              @Override
+              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+                  super.onActivityResult(requestCode, resultCode, data);
+                  if (requestCode == VPN_REQUEST_CODE) {
+                      if (resultCode == RESULT_OK) {
+                          sendVpnEngineCommand("start");
+                      }
+                  }
+              }
+
+              private void startVpnEngine() {
+                  try {
+                      Intent prep = VpnService.prepare(MainActivity.this);
+                      if (prep != null) {
+                          startActivityForResult(prep, VPN_REQUEST_CODE);
+                          return;
+                      }
+                  } catch (Exception ignored) {}
+                  sendVpnEngineCommand("start");
+              }
+
+              private void sendVpnEngineCommand(String action) {
+                  Intent svc = new Intent(MainActivity.this, BonchVpnEngineService.class);
+                  svc.putExtra("action", action);
+                  if ("start".equals(action) && Build.VERSION.SDK_INT >= 26) {
+                      startForegroundService(svc);
+                  } else {
+                      startService(svc);
+                  }
+              }
+
+              public class WebBridge {
+                  @JavascriptInterface
+                  public String getSavedConfig() {
+                      try {
+                          File f = new File(getFilesDir(), "user_config_010203.json");
+                          if (!f.exists()) {
+                              JSONObject def = new JSONObject();
+                              def.put("interval", "1");
+                              def.put("mode", "full_lesson");
+                              return def.toString();
+                          }
+                          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                          try (FileInputStream fis = new FileInputStream(f)) {
+                              byte[] buf = new byte[2048];
+                              int n;
+                              while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                          }
+                          return new String(baos.toByteArray(), "UTF-8");
+                      } catch (Exception e) {
+                          return "{}";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public String getState() {
+                      try {
+                          File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
+                          File f = new File(getFilesDir(), "bg_state_010203.json");
+                          if (!f.exists()) {
+                              JSONObject empty = new JSONObject();
+                              empty.put("active", enabledFlag.exists());
+                              empty.put("status", enabledFlag.exists() ? "Запуск VPN-движка..." : "Отключено");
+                              return empty.toString();
+                          }
+                          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                          try (FileInputStream fis = new FileInputStream(f)) {
+                              byte[] buf = new byte[4096];
+                              int n;
+                              while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                          }
+                          JSONObject state = new JSONObject(new String(baos.toByteArray(), "UTF-8"));
+                          state.put("active", enabledFlag.exists() && state.optBoolean("active", false));
+                          return state.toString();
+                      } catch (Exception e) {
+                          return "{}";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public void saveSettingsOnly(String login, String password, String intervalStr, String mode) {
+                      writeConfigFile(login, password, intervalStr, mode);
+                  }
+
+                  @JavascriptInterface
+                  public void toggleAutoCheck(String login, String password, String intervalStr, String mode) {
+                      writeConfigFile(login, password, intervalStr, mode);
+                      File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
+                      if (enabledFlag.exists()) {
+                          sendVpnEngineCommand("stop");
+                      } else {
+                          runOnUiThread(new Runnable() {
+                              @Override
+                              public void run() {
+                                  startVpnEngine();
+                              }
+                          });
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public void checkNow(String login, String password, String intervalStr, String mode) {
+                      writeConfigFile(login, password, intervalStr, mode);
+                      sendVpnEngineCommand("check_once");
+                  }
+
+                  @JavascriptInterface
+                  public void openXiaomiAutoStart() {
+                      try {
+                          Intent intent = new Intent();
+                          intent.setComponent(new ComponentName(
+                              "com.miui.securitycenter",
+                              "com.miui.permcenter.autostart.AutoStartManagementActivity"
+                          ));
+                          startActivity(intent);
+                          return;
+                      } catch (Exception ignored) {}
+                      try {
+                          Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                          intent.setData(Uri.parse("package:" + getPackageName()));
+                          startActivity(intent);
+                      } catch (Exception ignored) {}
+                  }
+              }
+
+              private synchronized void writeConfigFile(String login, String pass, String interval, String mode) {
+                  try {
+                      JSONObject cfg = new JSONObject();
+                      cfg.put("login", login != null ? login.trim() : "");
+                      cfg.put("password", pass != null ? pass.trim() : "");
+                      cfg.put("interval", (interval != null && !interval.isEmpty()) ? interval : "1");
+                      cfg.put("mode", (mode != null && !mode.isEmpty()) ? mode : "full_lesson");
+                      File f = new File(getFilesDir(), "user_config_010203.json");
+                      try (FileOutputStream fos = new FileOutputStream(f)) {
+                          fos.write(cfg.toString().getBytes("UTF-8"));
+                      }
+                  } catch (Exception ignored) {}
+              }
+
+              private String buildHtml() {
+                  return "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+                      + "<meta name='viewport' content='width=device-width,initial-scale=1.0,user-scalable=no'>"
+                      + "<style>"
+                      + "body{margin:0;background:#090d16;color:#f8fafc;font-family:sans-serif;padding:14px;}"
+                      + ".card{background:#111827;border:1px solid #1e293b;border-radius:20px;padding:18px;max-width:440px;margin:0 auto;}"
+                      + ".lbl{font-size:11px;color:#94a3b8;margin-top:4px;display:block;}"
+                      + "input,select{width:100%;box-sizing:border-box;padding:11px;margin:4px 0 10px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:14px;}"
+                      + ".btn{width:100%;padding:15px;border-radius:12px;border:none;background:#2563eb;color:#fff;font-weight:800;font-size:15px;margin-top:6px;}"
+                      + ".btn.on{background:#dc2626;}"
+                      + ".btn-sec{width:100%;padding:11px;border-radius:12px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-weight:600;font-size:12px;margin-top:7px;}"
+                      + ".btn-miui{width:100%;padding:10px;border-radius:10px;border:1px solid #059669;background:#064e3b;color:#6ee7b7;font-weight:700;font-size:12px;margin-bottom:10px;}"
+                      + ".day-nav{display:flex;align-items:center;gap:6px;margin:12px 0 8px;}"
+                      + ".nav-btn{width:42px;height:40px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#60a5fa;font-weight:900;font-size:16px;}"
+                      + ".day-sel{flex:1;margin:0;font-weight:700;color:#60a5fa;}"
+                      + ".item{background:#1e293b;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;border-left:4px solid #fbbf24;}"
+                      + ".item.done{border-left-color:#34d399;}"
+                      + ".log{background:#090d16;border:1px solid #1e293b;border-radius:10px;padding:10px;font-family:monospace;font-size:11px;height:120px;overflow-y:auto;white-space:pre-wrap;color:#cbd5e1;}"
+                      + ".ver-footer{margin-top:14px;padding-top:10px;border-top:1px solid #1e293b;text-align:center;font-size:12px;font-weight:800;color:#60a5fa;letter-spacing:0.5px;}"
+                      + "</style></head><body><div class='card'>"
