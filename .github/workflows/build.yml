@@ -1,7 +1,8 @@
-name: Build Bonch APK 01.02.06
+name: Build Bonch APK 01.03.00
 
 on:
   push:
+    branches: [ "main", "master" ]
   workflow_dispatch:
 
 permissions:
@@ -20,7 +21,7 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Compile Native Android APK v01.02.06
+      - name: Compile Native Android APK v01.03.00
         shell: bash
         run: |
           set -e
@@ -41,8 +42,8 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="ru.sut.bonch"
-              android:versionCode="108"
-              android:versionName="01.02.06">
+              android:versionCode="109"
+              android:versionName="01.03.00">
 
               <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
               <uses-permission android:name="android.permission.INTERNET" />
@@ -157,6 +158,7 @@ jobs:
           import java.util.Date;
           import java.util.HashMap;
           import java.util.HashSet;
+          import java.util.LinkedHashMap;
           import java.util.List;
           import java.util.Locale;
           import java.util.Map;
@@ -167,7 +169,8 @@ jobs:
           import org.json.JSONObject;
 
           public class BonchBackgroundDaemon extends Service {
-              public static final String APP_VERSION = "01.02.06";
+              public static final String APP_VERSION = "01.03.00";
+              private static final int TOTAL_SEMESTER_WEEKS = 18;
 
               private static final String BASE_URL = "https://lk.sut.ru/cabinet";
               private static final String LOGIN_PAGE_URL = BASE_URL + "/?login=yes";
@@ -175,9 +178,9 @@ jobs:
               private static final String INI_URL = BASE_URL + "/ini.php";
               private static final String SCHEDULE_URL = BASE_URL + "/project/cabinet/forms/raspisanie.php";
 
-              private static final String CHANNEL_BG = "bonch_compact_service_010206";
-              private static final String CHANNEL_ALERT = "bonch_alert_010206";
-              private static final int FG_NOTIFICATION_ID = 2006;
+              private static final String CHANNEL_BG = "bonch_compact_service_010300";
+              private static final String CHANNEL_ALERT = "bonch_alert_010300";
+              private static final int FG_NOTIFICATION_ID = 2007;
 
               private static final String[] BELL_SCHEDULE = {
                   "09:00", "10:30", "10:45", "13:00", "14:45", "16:30", "18:15", "20:00"
@@ -188,10 +191,13 @@ jobs:
               private CookieManager cookieManager;
 
               private volatile boolean active = false;
+              private volatile boolean scanningSemester = false;
+              private volatile String scanStatusText = "";
               private volatile String statusText = "Отключено";
               private volatile long serviceStartMillis = 0L;
               private final List<String> logs = new ArrayList<>();
               private JSONArray daysWeekArray = new JSONArray();
+              private JSONArray smartCatalogArray = new JSONArray();
               private int defaultNearestDayIdx = 0;
 
               private final Set<String> completedWindowsToday = new HashSet<>();
@@ -210,10 +216,11 @@ jobs:
                   resetCookies();
                   PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                   if (pm != null) {
-                      wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BonchDaemon::CompactServiceLock");
+                      wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BonchDaemon::SmartServiceLock");
                   }
                   createNotificationChannels();
                   loadPersistedState();
+                  loadSmartCatalogFile();
               }
 
               private synchronized void resetCookies() {
@@ -249,6 +256,21 @@ jobs:
                   final String pass = cfg.optString("password", "").trim();
                   final String mode = cfg.optString("mode", "full_lesson");
 
+                  if ("scan_semester".equals(action)) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (login.isEmpty() || pass.isEmpty()) {
+                                  addLog("Введите логин и пароль для сканирования семестра!");
+                                  saveStateFile();
+                                  return;
+                              }
+                              scanFullSemesterSchedule(login, pass);
+                          }
+                      }).start();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
+
                   if ("check_once".equals(action)) {
                       new Thread(new Runnable() {
                           @Override
@@ -262,6 +284,9 @@ jobs:
                               saveStateFile();
                               WindowState win = getCurrentWindowState(mode);
                               pollScheduleAndCheckIn(login, pass, win != null ? win.startTime : null);
+                              if (smartCatalogArray.length() == 0 && !scanningSemester) {
+                                  scanFullSemesterSchedule(login, pass);
+                              }
                           }
                       }).start();
                       return active ? START_STICKY : START_NOT_STICKY;
@@ -284,7 +309,7 @@ jobs:
                       serviceStartMillis = System.currentTimeMillis();
                   }
 
-                  startForeground(FG_NOTIFICATION_ID, buildCompactServiceNotification("Подключено • Фоновый режим"));
+                  startForeground(FG_NOTIFICATION_ID, buildCompactServiceNotification("Подключено • Умный режим"));
                   scheduleWatchdogAlarm();
 
                   if (!login.equals(lastUsedLogin) || !pass.equals(lastUsedPass)) {
@@ -388,6 +413,15 @@ jobs:
                                   }
                                   WindowState initWin = getCurrentWindowState(mode);
                                   pollScheduleAndCheckIn(login, password, initWin != null ? initWin.startTime : null);
+                                  // При первом входе автоматически анализируем расписание за полгода
+                                  if (smartCatalogArray.length() == 0 && !scanningSemester) {
+                                      new Thread(new Runnable() {
+                                          @Override
+                                          public void run() {
+                                              scanFullSemesterSchedule(login, password);
+                                          }
+                                      }).start();
+                                  }
                               }
 
                               WindowState win = getCurrentWindowState(mode);
@@ -407,7 +441,7 @@ jobs:
                                   String tMarked = checkInTimeByStart.get(win.startTime);
                                   String nextLesson = findNextLessonAfter(win.startTime);
                                   String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Спим до след. пары";
-                                  updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
+                                  updateStatus("✅ Готово (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
                                   sleepQuietly(25000L);
                                   continue;
                               }
@@ -417,7 +451,7 @@ jobs:
 
                               if (completedWindowsToday.contains(win.startTime)) {
                                   String tMarked = checkInTimeByStart.get(win.startTime);
-                                  updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • Спим до след. пары");
+                                  updateStatus("✅ Готово (" + (tMarked != null ? tMarked : "ОК") + ") • Спим до след. пары");
                                   sleepQuietly(25000L);
                               } else {
                                   sleepQuietly(Math.max(15000L, (long) (intervalMin * 60000L)));
@@ -446,7 +480,7 @@ jobs:
 
               private JSONObject readConfigFile() {
                   try {
-                      File f = new File(getFilesDir(), "user_config_010206.json");
+                      File f = new File(getFilesDir(), "user_config_010300.json");
                       if (!f.exists()) return new JSONObject();
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -460,17 +494,67 @@ jobs:
                   }
               }
 
+              private JSONObject readSmartRulesMap() {
+                  try {
+                      File f = new File(getFilesDir(), "smart_rules_010300.json");
+                      if (!f.exists()) return new JSONObject();
+                      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                      try (FileInputStream fis = new FileInputStream(f)) {
+                          byte[] buf = new byte[4096];
+                          int n;
+                          while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                      }
+                      return new JSONObject(new String(baos.toByteArray(), "UTF-8"));
+                  } catch (Exception e) {
+                      return new JSONObject();
+                  }
+              }
+
+              private boolean isLessonAllowedBySmartFilter(String ruleKey) {
+                  JSONObject rules = readSmartRulesMap();
+                  if (!rules.has(ruleKey)) {
+                      return true; // По умолчанию галочка включена
+                  }
+                  return rules.optBoolean(ruleKey, true);
+              }
+
+              private synchronized void saveSmartCatalogFile() {
+                  try {
+                      File f = new File(getFilesDir(), "smart_catalog_010300.json");
+                      try (FileOutputStream fos = new FileOutputStream(f)) {
+                          fos.write(smartCatalogArray.toString().getBytes("UTF-8"));
+                      }
+                  } catch (Exception ignored) {}
+              }
+
+              private synchronized void loadSmartCatalogFile() {
+                  try {
+                      File f = new File(getFilesDir(), "smart_catalog_010300.json");
+                      if (!f.exists()) return;
+                      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                      try (FileInputStream fis = new FileInputStream(f)) {
+                          byte[] buf = new byte[4096];
+                          int n;
+                          while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                      }
+                      smartCatalogArray = new JSONArray(new String(baos.toByteArray(), "UTF-8"));
+                  } catch (Exception ignored) {}
+              }
+
               private synchronized void saveStateFile() {
                   try {
                       File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
                       JSONObject obj = new JSONObject();
                       obj.put("active", active && enabledFlag.exists());
                       obj.put("status", statusText);
+                      obj.put("scanningSemester", scanningSemester);
+                      obj.put("scanStatus", scanStatusText);
                       obj.put("startMillis", serviceStartMillis);
                       obj.put("defaultDayIdx", defaultNearestDayIdx);
                       obj.put("days", daysWeekArray);
+                      obj.put("catalog", smartCatalogArray);
                       obj.put("logs", new JSONArray(logs));
-                      File f = new File(getFilesDir(), "bg_state_010206.json");
+                      File f = new File(getFilesDir(), "bg_state_010300.json");
                       try (FileOutputStream fos = new FileOutputStream(f)) {
                           fos.write(obj.toString().getBytes("UTF-8"));
                       }
@@ -479,7 +563,7 @@ jobs:
 
               private synchronized void loadPersistedState() {
                   try {
-                      File f = new File(getFilesDir(), "bg_state_010206.json");
+                      File f = new File(getFilesDir(), "bg_state_010300.json");
                       if (!f.exists()) return;
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -497,6 +581,188 @@ jobs:
                           for (int i = 0; i < lg.length(); i++) logs.add(lg.getString(i));
                       }
                   } catch (Exception ignored) {}
+              }
+
+              private static class ParsedRowDetails {
+                  String subject = "Предмет";
+                  String lessonType = "Занятие";
+                  String teacher = "Не указан";
+                  String room = "";
+                  String ruleKey = "";
+              }
+
+              // Разбор ячеек <td> строки расписания на Предмет, Тип (Лекция/Практика/Лаба) и Преподавателя
+              private ParsedRowDetails extractStructuredLessonInfo(String trInner, String timeRange) {
+                  ParsedRowDetails info = new ParsedRowDetails();
+                  List<String> tds = new ArrayList<>();
+                  Pattern tdPat = Pattern.compile("<td[^>]*>(.*?)</td>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                  Matcher tdMat = tdPat.matcher(trInner);
+                  while (tdMat.find()) {
+                      tds.add(tdMat.group(1));
+                  }
+
+                  String rawSubjectCell = tds.size() >= 2 ? tds.get(1) : trInner;
+                  String rawRoomCell = tds.size() >= 3 ? tds.get(2) : "";
+                  String rawTeacherCell = tds.size() >= 4 ? tds.get(3) : "";
+
+                  // 1. Определяем тип занятия
+                  String cellPlain = rawSubjectCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                  String lowerCell = cellPlain.toLowerCase(Locale.ROOT);
+                  if (lowerCell.contains("лабораторн")) {
+                      info.lessonType = "Лабораторная работа";
+                  } else if (lowerCell.contains("практическ")) {
+                      info.lessonType = "Практические занятия";
+                  } else if (lowerCell.contains("лекци")) {
+                      info.lessonType = "Лекция";
+                  } else if (lowerCell.contains("зачет") || lowerCell.contains("зачёт")) {
+                      info.lessonType = "Зачет";
+                  } else if (lowerCell.contains("экзамен")) {
+                      info.lessonType = "Экзамен";
+                  } else if (lowerCell.contains("консультац")) {
+                      info.lessonType = "Консультация";
+                  } else {
+                      info.lessonType = "Занятие";
+                  }
+
+                  // 2. Извлекаем чистое название предмета
+                  Pattern boldPat = Pattern.compile("<(b|strong)[^>]*>(.*?)</\\1>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                  Matcher boldMat = boldPat.matcher(rawSubjectCell);
+                  if (boldMat.find()) {
+                      String bText = boldMat.group(2).replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+                      if (!bText.isEmpty()) {
+                          info.subject = bText;
+                      }
+                  }
+                  if ("Предмет".equals(info.subject)) {
+                      String cleaned = cellPlain
+                          .replace(timeRange, "")
+                          .replaceAll("(?i)(Лабораторная работа|Практические занятия|Лекция|Зачет|Экзамен|Консультация).*", "")
+                          .replaceAll("(?i)занятие\\s+началось.*", "")
+                          .replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "")
+                          .trim();
+                      if (!cleaned.isEmpty()) {
+                          info.subject = cleaned;
+                      }
+                  }
+
+                  // 3. Извлекаем ФИО преподавателя
+                  String teacherClean = rawTeacherCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                  if (teacherClean.isEmpty()) {
+                      Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.)");
+                      Matcher fioMat = fioPat.matcher(cellPlain);
+                      if (fioMat.find()) {
+                          teacherClean = fioMat.group(1);
+                      }
+                  }
+                  if (!teacherClean.isEmpty()) {
+                      info.teacher = teacherClean;
+                  }
+
+                  info.room = rawRoomCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                  info.ruleKey = info.subject + "||" + info.lessonType + "||" + info.teacher;
+                  return info;
+              }
+
+              // Анализатор расписания за полгода (проходит недели семестра 1..18 на lk.sut.ru)
+              private void scanFullSemesterSchedule(String login, String password) {
+                  if (scanningSemester) return;
+                  scanningSemester = true;
+                  scanStatusText = "Начинаем анализ расписания за полгода (18 недель)...";
+                  addLog("🤖 Запуск анализа расписания за полгода...");
+                  saveStateFile();
+
+                  try {
+                      if (!isAuthenticated && !authenticate(login, password)) {
+                          scanningSemester = false;
+                          scanStatusText = "Ошибка входа в ЛК";
+                          saveStateFile();
+                          return;
+                      }
+
+                      Pattern trPattern = Pattern.compile("<tr([^>]*)>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                      Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)");
+
+                      Map<String, JSONObject> catalogMap = new LinkedHashMap<>();
+
+                      for (int week = 1; week <= TOTAL_SEMESTER_WEEKS; week++) {
+                          scanStatusText = "Анализ семестра: неделя " + week + " из " + TOTAL_SEMESTER_WEEKS + "...";
+                          saveStateFile();
+
+                          String payload = "week=" + week;
+                          String html = httpRequest("POST", SCHEDULE_URL + "?" + payload, payload);
+                          if (html.isEmpty() || !html.toLowerCase(Locale.ROOT).contains("<table")) {
+                              continue;
+                          }
+
+                          Matcher trMatcher = trPattern.matcher(html);
+                          while (trMatcher.find()) {
+                              String trInner = trMatcher.group(2);
+                              String rowText = trInner.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                              if (rowText.isEmpty()) continue;
+
+                              Matcher tm = timePattern.matcher(rowText);
+                              if (!tm.find()) continue;
+
+                              ParsedRowDetails det = extractStructuredLessonInfo(trInner, tm.group(0));
+                              JSONObject existing = catalogMap.get(det.ruleKey);
+                              if (existing == null) {
+                                  existing = new JSONObject();
+                                  existing.put("key", det.ruleKey);
+                                  existing.put("subject", det.subject);
+                                  existing.put("type", det.lessonType);
+                                  existing.put("teacher", det.teacher);
+                                  existing.put("count", 1);
+                                  catalogMap.put(det.ruleKey, existing);
+                              } else {
+                                  existing.put("count", existing.optInt("count", 1) + 1);
+                              }
+                          }
+                      }
+
+                      // Если по параметру week=N вуз отдал пустоту, берем данные из текущей загруженной недели
+                      if (catalogMap.isEmpty() && daysWeekArray.length() > 0) {
+                          for (int d = 0; d < daysWeekArray.length(); d++) {
+                              JSONObject dayObj = daysWeekArray.optJSONObject(d);
+                              if (dayObj == null) continue;
+                              JSONArray lesArr = dayObj.optJSONArray("lessons");
+                              if (lesArr == null) continue;
+                              for (int l = 0; l < lesArr.length(); l++) {
+                                  JSONObject les = lesArr.optJSONObject(l);
+                                  if (les == null) continue;
+                                  String key = les.optString("ruleKey", "");
+                                  if (key.isEmpty()) continue;
+                                  JSONObject existing = catalogMap.get(key);
+                                  if (existing == null) {
+                                      existing = new JSONObject();
+                                      existing.put("key", key);
+                                      existing.put("subject", les.optString("subjectTitle", "Предмет"));
+                                      existing.put("type", les.optString("lessonType", "Занятие"));
+                                      existing.put("teacher", les.optString("teacher", "Не указан"));
+                                      existing.put("count", 1);
+                                      catalogMap.put(key, existing);
+                                  } else {
+                                      existing.put("count", existing.optInt("count", 1) + 1);
+                                  }
+                              }
+                          }
+                      }
+
+                      JSONArray newCatalog = new JSONArray();
+                      for (JSONObject item : catalogMap.values()) {
+                          newCatalog.put(item);
+                      }
+                      smartCatalogArray = newCatalog;
+                      saveSmartCatalogFile();
+
+                      scanStatusText = "Проанализировано за полгода: записей " + newCatalog.length();
+                      addLog("🤖 Анализ полгода завершен! Найдено видов занятий: " + newCatalog.length());
+                  } catch (Exception e) {
+                      scanStatusText = "Ошибка анализа: " + e.getMessage();
+                      addLog("Ошибка анализа семестра: " + e.getMessage());
+                  } finally {
+                      scanningSemester = false;
+                      saveStateFile();
+                  }
               }
 
               private String findNextUnmarkedLessonTime() {
@@ -638,7 +904,6 @@ jobs:
                   conn.setRequestMethod(method);
                   conn.setConnectTimeout(15000);
                   conn.setReadTimeout(15000);
-                  // Отключаем автоматическое зацикливание редиректов (предотвращает ошибку Too many follow-up requests: 21)
                   conn.setInstanceFollowRedirects(false);
                   conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/128.0.0.0 Mobile Safari/537.36");
                   conn.setRequestProperty("Referer", LOGIN_PAGE_URL);
@@ -655,7 +920,6 @@ jobs:
                   }
 
                   int code = conn.getResponseCode();
-                  // Если сервер возвращает 301/302/303 редирект, значит сессия истекла — возвращаем пустую строку для переавторизации
                   if (code >= 300 && code < 400) {
                       conn.disconnect();
                       return "";
@@ -689,7 +953,6 @@ jobs:
 
               private synchronized boolean authenticate(String login, String password) {
                   try {
-                      // Полный сброс старых куки перед новой авторизацией
                       resetCookies();
                       httpRequest("GET", LOGIN_PAGE_URL, null);
                       String data = "users=" + URLEncoder.encode(login, "UTF-8")
@@ -825,6 +1088,9 @@ jobs:
                               currentGroup.hasUnfinishedLessons = true;
                           }
 
+                          ParsedRowDetails structured = extractStructuredLessonInfo(trInner, timeRange);
+                          boolean allowedBySmart = isLessonAllowedBySmartFilter(structured.ruleKey);
+
                           Matcher zm = zanPattern.matcher(fullTrHtml);
                           String raspId = null;
                           String weekId = null;
@@ -841,7 +1107,13 @@ jobs:
                                                || lowerRow.contains("отмечен")
                                                || lowerRow.contains("присутствует");
 
-                          if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
+                          // Если пара ВЫКЛЮЧЕНА пользователем в 🤖 Умной отметке — пропускаем её и не шлем запросы
+                          if (!allowedBySmart) {
+                              if (currentWindowStart != null && currentWindowStart.equals(startTime)) {
+                                  completedWindowsToday.add(startTime);
+                                  checkInTimeByStart.put(startTime, "пропуск 🤖");
+                              }
+                          } else if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
                               if (sendAndVerifyOpenZan(raspId, weekId)) {
                                   String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
                                   markedRaspIdsToday.add(raspId);
@@ -849,9 +1121,7 @@ jobs:
                                   completedWindowsToday.add(startTime);
                                   alreadyInHtml = true;
 
-                                  String cleanSubj = rowText.replace(timeRange, "").replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "").trim();
-                                  if (cleanSubj.length() > 65) cleanSubj = cleanSubj.substring(0, 65);
-                                  newlyChecked.add(cleanSubj + " (отметка в " + nowStr + ")");
+                                  newlyChecked.add(structured.subject + " (" + structured.lessonType + ", отметка в " + nowStr + ")");
                               }
                           }
 
@@ -875,19 +1145,16 @@ jobs:
                               }
                           }
 
-                          String cleanSubject = rowText
-                              .replace(timeRange, "")
-                              .replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "")
-                              .replaceAll("Кнопка\\s+появится\\s+в\\s*\\d{1,2}[:.]\\d{2}\\.?\\s*Обновить\\.?", "")
-                              .trim();
-                          if (cleanSubject.length() > 100) {
-                              cleanSubject = cleanSubject.substring(0, 100);
-                          }
-
                           JSONObject item = new JSONObject();
                           item.put("time", timeRange);
                           item.put("startTime", startTime);
-                          item.put("subject", cleanSubject);
+                          item.put("subjectTitle", structured.subject);
+                          item.put("lessonType", structured.lessonType);
+                          item.put("teacher", structured.teacher);
+                          item.put("room", structured.room);
+                          item.put("ruleKey", structured.ruleKey);
+                          item.put("smartAllowed", allowedBySmart);
+                          item.put("subject", structured.subject + " • " + structured.lessonType + " (" + structured.teacher + ")");
                           item.put("checked", isLessonDone);
                           item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
                           item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
@@ -929,7 +1196,7 @@ jobs:
                           }
                       } else if (!nonEmptyGroups.isEmpty()) {
                           String activeDayName = nonEmptyGroups.get(defaultNearestDayIdx).header;
-                          addLog("Актуальный день: " + activeDayName + " (всего дней: " + allDaysJson.length() + ")");
+                          addLog("Актуальный день: " + activeDayName);
                       }
                       saveStateFile();
                   } catch (Exception e) {
@@ -944,17 +1211,12 @@ jobs:
                   if (groups.isEmpty()) return 0;
 
                   for (int i = 0; i < groups.size(); i++) {
-                      if (groups.get(i).isHighlightedOrange) {
-                          return i;
-                      }
+                      if (groups.get(i).isHighlightedOrange) return i;
                   }
 
                   String todayStr = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
                   for (int i = 0; i < groups.size(); i++) {
-                      DayGroup g = groups.get(i);
-                      if (todayStr.equals(g.dateString)) {
-                          return i;
-                      }
+                      if (todayStr.equals(groups.get(i).dateString)) return i;
                   }
 
                   Calendar cal = Calendar.getInstance();
@@ -966,17 +1228,13 @@ jobs:
 
                   for (int i = 0; i < groups.size(); i++) {
                       DayGroup g = groups.get(i);
-                      if (g.dateObj != null && !g.dateObj.before(todayStart)) {
-                          return i;
-                      }
+                      if (g.dateObj != null && !g.dateObj.before(todayStart)) return i;
                   }
 
                   String[] ruDays = {"Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"};
                   String todayRuName = ruDays[Calendar.getInstance().get(Calendar.DAY_OF_WEEK) - 1].toLowerCase(Locale.ROOT);
                   for (int i = 0; i < groups.size(); i++) {
-                      if (groups.get(i).header.toLowerCase(Locale.ROOT).contains(todayRuName)) {
-                          return i;
-                      }
+                      if (groups.get(i).header.toLowerCase(Locale.ROOT).contains(todayRuName)) return i;
                   }
 
                   return 0;
@@ -1055,3 +1313,517 @@ jobs:
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
+
+                  if (Build.VERSION.SDK_INT >= 33) {
+                      try {
+                          requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 101);
+                      } catch (Exception ignored) {}
+                  }
+
+                  if (Build.VERSION.SDK_INT >= 23) {
+                      try {
+                          PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                          if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName())) {
+                              Intent bi = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS);
+                              bi.setData(Uri.parse("package:" + getPackageName()));
+                              startActivity(bi);
+                          }
+                      } catch (Exception ignored) {}
+                  }
+
+                  webView = new WebView(this);
+                  webView.clearCache(true);
+                  WebSettings ws = webView.getSettings();
+                  ws.setJavaScriptEnabled(true);
+                  ws.setDomStorageEnabled(true);
+                  ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
+                  webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
+                  setContentView(webView);
+
+                  webView.loadDataWithBaseURL("https://lk.sut.ru", buildHtml(), "text/html", "UTF-8", null);
+              }
+
+              private void sendDaemonCommand(String action) {
+                  Intent svc = new Intent(MainActivity.this, BonchBackgroundDaemon.class);
+                  svc.putExtra("action", action);
+                  if ("start".equals(action) && Build.VERSION.SDK_INT >= 26) {
+                      startForegroundService(svc);
+                  } else {
+                      startService(svc);
+                  }
+              }
+
+              public class WebBridge {
+                  @JavascriptInterface
+                  public String getSavedConfig() {
+                      try {
+                          File f = new File(getFilesDir(), "user_config_010300.json");
+                          if (!f.exists()) {
+                              JSONObject def = new JSONObject();
+                              def.put("interval", "1");
+                              def.put("mode", "full_lesson");
+                              return def.toString();
+                          }
+                          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                          try (FileInputStream fis = new FileInputStream(f)) {
+                              byte[] buf = new byte[2048];
+                              int n;
+                              while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                          }
+                          return new String(baos.toByteArray(), "UTF-8");
+                      } catch (Exception e) {
+                          return "{}";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public String getSmartRules() {
+                      try {
+                          File f = new File(getFilesDir(), "smart_rules_010300.json");
+                          if (!f.exists()) return "{}";
+                          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                          try (FileInputStream fis = new FileInputStream(f)) {
+                              byte[] buf = new byte[4096];
+                              int n;
+                              while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                          }
+                          return new String(baos.toByteArray(), "UTF-8");
+                      } catch (Exception e) {
+                          return "{}";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public void saveSmartRules(String rulesJsonStr) {
+                      try {
+                          File f = new File(getFilesDir(), "smart_rules_010300.json");
+                          try (FileOutputStream fos = new FileOutputStream(f)) {
+                              fos.write((rulesJsonStr != null ? rulesJsonStr : "{}").getBytes("UTF-8"));
+                          }
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public String getState() {
+                      try {
+                          File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
+                          File f = new File(getFilesDir(), "bg_state_010300.json");
+                          if (!f.exists()) {
+                              JSONObject empty = new JSONObject();
+                              empty.put("active", enabledFlag.exists());
+                              empty.put("status", enabledFlag.exists() ? "Запуск фоновой службы..." : "Отключено");
+                              return empty.toString();
+                          }
+                          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                          try (FileInputStream fis = new FileInputStream(f)) {
+                              byte[] buf = new byte[4096];
+                              int n;
+                              while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                          }
+                          JSONObject state = new JSONObject(new String(baos.toByteArray(), "UTF-8"));
+                          state.put("active", enabledFlag.exists() && state.optBoolean("active", false));
+                          return state.toString();
+                      } catch (Exception e) {
+                          return "{}";
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public void saveSettingsOnly(String login, String password, String intervalStr, String mode) {
+                      writeConfigFile(login, password, intervalStr, mode);
+                  }
+
+                  @JavascriptInterface
+                  public void toggleAutoCheck(String login, String password, String intervalStr, String mode) {
+                      writeConfigFile(login, password, intervalStr, mode);
+                      File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
+                      if (enabledFlag.exists()) {
+                          sendDaemonCommand("stop");
+                      } else {
+                          sendDaemonCommand("start");
+                      }
+                  }
+
+                  @JavascriptInterface
+                  public void checkNow(String login, String password, String intervalStr, String mode) {
+                      writeConfigFile(login, password, intervalStr, mode);
+                      sendDaemonCommand("check_once");
+                  }
+
+                  @JavascriptInterface
+                  public void scanSemesterNow(String login, String password, String intervalStr, String mode) {
+                      writeConfigFile(login, password, intervalStr, mode);
+                      sendDaemonCommand("scan_semester");
+                  }
+
+                  @JavascriptInterface
+                  public void hideToBackground() {
+                      runOnUiThread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (Build.VERSION.SDK_INT >= 21) {
+                                  finishAndRemoveTask();
+                              } else {
+                                  finish();
+                              }
+                          }
+                      });
+                  }
+              }
+
+              private synchronized void writeConfigFile(String login, String pass, String interval, String mode) {
+                  try {
+                      JSONObject cfg = new JSONObject();
+                      cfg.put("login", login != null ? login.trim() : "");
+                      cfg.put("password", pass != null ? pass.trim() : "");
+                      cfg.put("interval", (interval != null && !interval.isEmpty()) ? interval : "1");
+                      cfg.put("mode", (mode != null && !mode.isEmpty()) ? mode : "full_lesson");
+                      File f = new File(getFilesDir(), "user_config_010300.json");
+                      try (FileOutputStream fos = new FileOutputStream(f)) {
+                          fos.write(cfg.toString().getBytes("UTF-8"));
+                      }
+                  } catch (Exception ignored) {}
+              }
+
+              private String buildHtml() {
+                  return "<!DOCTYPE html><html><head><meta charset='UTF-8'>"
+                      + "<meta name='viewport' content='width=device-width,initial-scale=1.0,user-scalable=no'>"
+                      + "<style>"
+                      + "body{margin:0;background:#090d16;color:#f8fafc;font-family:sans-serif;padding:12px 12px 80px 12px;}"
+                      + ".card{background:#111827;border:1px solid #1e293b;border-radius:20px;padding:16px;max-width:450px;margin:0 auto;}"
+                      + ".lbl{font-size:11px;color:#94a3b8;margin-top:4px;display:block;}"
+                      + "input,select{width:100%;box-sizing:border-box;padding:11px;margin:4px 0 10px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#fff;font-size:14px;}"
+                      + ".btn{width:100%;padding:15px;border-radius:12px;border:none;background:#2563eb;color:#fff;font-weight:800;font-size:15px;margin-top:6px;}"
+                      + ".btn.on{background:#dc2626;}"
+                      + ".btn-sec{width:100%;padding:11px;border-radius:12px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-weight:600;font-size:12px;margin-top:7px;}"
+                      + ".btn-hide{width:100%;padding:11px;border-radius:12px;border:1px solid #059669;background:#064e3b;color:#6ee7b7;font-weight:700;font-size:12px;margin-top:7px;}"
+                      + ".status-card{margin:12px 0 6px;padding:12px 14px;background:#0f172a;border:1px solid #334155;border-left:4px solid #64748b;border-radius:12px;}"
+                      + ".status-card.on{border-left-color:#34d399;background:#06281e;border-color:#059669;}"
+                      + ".status-title{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-weight:700;}"
+                      + ".status-val{font-size:14px;font-weight:800;color:#f8fafc;line-height:1.35;}"
+                      + ".day-nav{display:flex;align-items:center;gap:6px;margin:12px 0 8px;}"
+                      + ".nav-btn{width:42px;height:40px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#f97316;font-weight:900;font-size:16px;}"
+                      + ".day-sel{flex:1;margin:0;font-weight:700;color:#fb923c;}"
+                      + ".item{background:#1e293b;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;border-left:4px solid #f97316;}"
+                      + ".item.done{border-left-color:#34d399;}"
+                      + ".item.skip{border-left-color:#ef4444;opacity:0.65;}"
+                      + ".dev-panel{display:none;margin-top:12px;padding:12px;background:#090d16;border:1px dashed #f97316;border-radius:12px;}"
+                      + ".dev-hdr{font-size:11px;font-weight:800;color:#f97316;margin-bottom:6px;display:flex;justify-content:space-between;}"
+                      + ".log{background:#05080f;border:1px solid #1e293b;border-radius:8px;padding:8px;font-family:monospace;font-size:11px;height:120px;overflow-y:auto;white-space:pre-wrap;color:#cbd5e1;}"
+                      + ".ver-footer{margin-top:14px;padding:10px;border-top:1px solid #1e293b;text-align:center;font-size:12px;font-weight:800;color:#f97316;letter-spacing:0.5px;user-select:none;cursor:pointer;}"
+                      + ".bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:#0f172a;border-top:1px solid #1e293b;display:flex;z-index:999;}"
+                      + ".tab-btn{flex:1;border:none;background:none;color:#64748b;font-size:12px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}"
+                      + ".tab-btn.active{color:#f97316;background:#1e293b44;}"
+                      + ".stat-box{background:#0f172a;border:1px solid #334155;border-radius:12px;padding:12px;margin-bottom:10px;font-size:12px;line-height:1.5;}"
+                      + ".chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}"
+                      + ".chip{flex:1;padding:8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-size:11px;font-weight:700;text-align:center;}"
+                      + ".subj-group{background:#0f172a;border:1px solid #1e293b;border-radius:12px;padding:11px;margin-bottom:10px;}"
+                      + ".subj-hdr{font-size:13px;font-weight:800;color:#f8fafc;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;}"
+                      + ".rule-row{display:flex;align-items:center;gap:10px;padding:8px;background:#1e293b;border-radius:9px;margin-bottom:6px;cursor:pointer;}"
+                      + ".chk-box{width:22px;height:22px;border-radius:6px;border:2px solid #64748b;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;flex-shrink:0;}"
+                      + ".chk-box.on{background:#10b981;border-color:#10b981;color:#052e16;}"
+                      + ".badge-type{font-size:10px;padding:2px 6px;border-radius:5px;font-weight:700;background:#334155;color:#e2e8f0;}"
+                      + "</style></head><body>"
+
+                      // ВКЛАДКА 1: ОСНОВНАЯ
+                      + "<div id='tab_main' class='card'>"
+                      + "<div style='font-size:18px;font-weight:800;margin-bottom:6px;'>Bonch AutoCheck</div>"
+                      + "<span class='lbl'>Логин / Email от lk.sut.ru</span>"
+                      + "<input id='login' placeholder='student@sut.ru' oninput='saveCfg()' onchange='saveCfg()'>"
+                      + "<span class='lbl'>Пароль от ЛК (хранится локально)</span>"
+                      + "<input id='password' type='password' placeholder='••••••••' oninput='saveCfg()' onchange='saveCfg()'>"
+                      + "<span class='lbl'>Через сколько отправлять запросы</span>"
+                      + "<select id='interval' onchange='saveCfg()'>"
+                      + "<option value='0.5'>Каждые 30 секунд (мгновенно)</option>"
+                      + "<option value='1'>Каждую 1 минуту</option>"
+                      + "<option value='5'>Каждые 5 минут</option></select>"
+                      + "<span class='lbl'>Как долго проверять (после отметки спит до след. пары)</span>"
+                      + "<select id='mode' onchange='saveCfg()'>"
+                      + "<option value='full_lesson'>За 10 мин до пары + вся пара (95 мин)</option>"
+                      + "<option value='first_30'>За 10 мин до пары + первые 30 мин</option>"
+                      + "<option value='always'>Постоянно 24/7</option></select>"
+                      + "<button id='btn' class='btn' onclick='toggle()'>ВКЛЮЧИТЬ АВТООТМЕТКУ</button>"
+                      + "<button class='btn-hide' onclick='AndroidBridge.hideToBackground()'>СВЕРНУТЬ В ФОН (СКРЫТЬ ИЗ ВКЛАДОК)</button>"
+                      + "<button class='btn-sec' onclick='checkNow()'>Обновить расписание недели</button>"
+                      + "<div id='status_box' class='status-card'>"
+                      + "  <div class='status-title'>Статус на данный момент</div>"
+                      + "  <div id='status' class='status-val'>Отключено</div>"
+                      + "</div>"
+                      + "<div class='day-nav'>"
+                      + "  <button class='nav-btn' onclick='shiftDay(-1)'>◀</button>"
+                      + "  <select id='day_select' class='day-sel' onchange='onSelectDay()'><option value='0'>📅 Загрузка дня...</option></select>"
+                      + "  <button class='nav-btn' onclick='shiftDay(1)'>▶</button>"
+                      + "</div>"
+                      + "<div id='lessons' style='margin-bottom:6px;'></div>"
+                      + "<div id='dev_panel' class='dev-panel'>"
+                      + "  <div class='dev-hdr'><span>🔧 ПАНЕЛЬ РАЗРАБОТЧИКА</span><span id='uptime' style='color:#34d399;'></span></div>"
+                      + "  <div id='logs' class='log'>Загрузка логов...</div>"
+                      + "</div>"
+                      + "<div id='ver_box' class='ver-footer' onclick='onVerTap()'>Версия: 01.03.00</div>"
+                      + "</div>"
+
+                      // ВКЛАДКА 2: УМНАЯ АВТООТМЕТКА (РОБОТ)
+                      + "<div id='tab_robot' class='card' style='display:none;'>"
+                      + "<div style='font-size:18px;font-weight:800;margin-bottom:4px;'>🤖 Умная автоотметка</div>"
+                      + "<div style='font-size:12px;color:#94a3b8;margin-bottom:10px;'>Снимите галочку с предметов, лекций, практик или лаб, на которых бот НЕ должен отмечаться.</div>"
+                      + "<div id='smart_stats' class='stat-box'>Загрузка анализа семестра...</div>"
+                      + "<button class='btn-sec' style='margin-top:0;margin-bottom:10px;border-color:#f97316;color:#fb923c;' onclick='scanSemester()'>🔄 Проанализировать все расписание за полгода (18 нед.)</button>"
+                      + "<div class='chip-row'>"
+                      + "  <button class='chip' onclick='bulkSetRules(true)'>✅ Включить все</button>"
+                      + "  <button class='chip' onclick='bulkSetRules(false)'>🚫 Выключить все</button>"
+                      + "  <button class='chip' onclick='onlyPracticeAndLabs()'>🛠 Только практики/лабы</button>"
+                      + "</div>"
+                      + "<div id='smart_list'></div>"
+                      + "<div class='ver-footer'>Версия: 01.03.00</div>"
+                      + "</div>"
+
+                      // НИЖНЯЯ НАВИГАЦИЯ
+                      + "<div class='bottom-nav'>"
+                      + "  <button id='nav_main' class='tab-btn active' onclick='switchTab(0)'><span style='font-size:18px;'>📅</span><span>Расписание</span></button>"
+                      + "  <button id='nav_robot' class='tab-btn' onclick='switchTab(1)'><span style='font-size:18px;'>🤖</span><span>Умная отметка</span></button>"
+                      + "</div>"
+
+                      + "<script>"
+                      + "var daysCache=[];var catalogCache=[];var smartRules={};"
+                      + "var selectedDayIdx=-1;var lastDefaultIdx=-1;var userManuallyChangedDay=false;"
+                      + "var verTapCount=0;var verTapTimer=null;var devOpen=false;var lastCatalogHash='';"
+                      + "function switchTab(idx){"
+                      + "  document.getElementById('tab_main').style.display=idx===0?'block':'none';"
+                      + "  document.getElementById('tab_robot').style.display=idx===1?'block':'none';"
+                      + "  document.getElementById('nav_main').className=idx===0?'tab-btn active':'tab-btn';"
+                      + "  document.getElementById('nav_robot').className=idx===1?'tab-btn active':'tab-btn';"
+                      + "  if(idx===1)renderSmartCatalog();"
+                      + "}"
+                      + "function onVerTap(){"
+                      + "  verTapCount++;"
+                      + "  if(verTapTimer)clearTimeout(verTapTimer);"
+                      + "  if(verTapCount>=5){"
+                      + "    verTapCount=0;"
+                      + "    devOpen=!devOpen;"
+                      + "    document.getElementById('dev_panel').style.display=devOpen?'block':'none';"
+                      + "    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.03.00 (Dev ON)':'Версия: 01.03.00';"
+                      + "  }else{"
+                      + "    verTapTimer=setTimeout(function(){verTapCount=0;},1500);"
+                      + "  }"
+                      + "}"
+                      + "function val(id){return document.getElementById(id).value;}"
+                      + "function initConfig(){"
+                      + "  try{"
+                      + "    var c=JSON.parse(AndroidBridge.getSavedConfig());"
+                      + "    if(c.login!==undefined)document.getElementById('login').value=c.login;"
+                      + "    if(c.password!==undefined)document.getElementById('password').value=c.password;"
+                      + "    if(c.interval)document.getElementById('interval').value=c.interval;"
+                      + "    if(c.mode)document.getElementById('mode').value=c.mode;"
+                      + "    smartRules=JSON.parse(AndroidBridge.getSmartRules()||'{}');"
+                      + "  }catch(e){smartRules={};}"
+                      + "}"
+                      + "function isRuleOn(key){return smartRules[key]===undefined?true:Boolean(smartRules[key]);}"
+                      + "function toggleRule(key){"
+                      + "  smartRules[key]=!isRuleOn(key);"
+                      + "  AndroidBridge.saveSmartRules(JSON.stringify(smartRules));"
+                      + "  renderSmartCatalog();"
+                      + "  renderSelectedDay();"
+                      + "}"
+                      + "function bulkSetRules(state){"
+                      + "  for(var i=0;i<catalogCache.length;i++)smartRules[catalogCache[i].key]=state;"
+                      + "  AndroidBridge.saveSmartRules(JSON.stringify(smartRules));"
+                      + "  renderSmartCatalog();renderSelectedDay();"
+                      + "}"
+                      + "function onlyPracticeAndLabs(){"
+                      + "  for(var i=0;i<catalogCache.length;i++){"
+                      + "    var t=(catalogCache[i].type||'').toLowerCase();"
+                      + "    smartRules[catalogCache[i].key]=(t.indexOf('лекц')===-1);"
+                      + "  }"
+                      + "  AndroidBridge.saveSmartRules(JSON.stringify(smartRules));"
+                      + "  renderSmartCatalog();renderSelectedDay();"
+                      + "}"
+                      + "function renderSmartCatalog(){"
+                      + "  var statEl=document.getElementById('smart_stats');"
+                      + "  var listEl=document.getElementById('smart_list');"
+                      + "  if(!catalogCache || !catalogCache.length){"
+                      + "    statEl.innerHTML='Расписание за полгода еще не проанализировано.<br>Нажмите кнопку ниже или войдите в аккаунт.';"
+                      + "    listEl.innerHTML='';"
+                      + "    return;"
+                      + "  }"
+                      + "  var groups={};var subjOrder=[];var totalPairs=0;var enabledCount=0;"
+                      + "  for(var i=0;i<catalogCache.length;i++){"
+                      + "    var it=catalogCache[i];"
+                      + "    var s=it.subject||'Предмет';"
+                      + "    if(!groups[s]){groups[s]=[];subjOrder.push(s);}"
+                      + "    groups[s].push(it);"
+                      + "    totalPairs+=(it.count||1);"
+                      + "    if(isRuleOn(it.key))enabledCount++;"
+                      + "  }"
+                      + "  statEl.innerHTML='📚 <b>Предметов найдено:</b> '+subjOrder.length"
+                      + "    +'<br>🧩 <b>Групп (лекции/практики/лабы):</b> '+catalogCache.length+' (включено: '+enabledCount+')'"
+                      + "    +'<br>📊 <b>Всего пар за полгода:</b> '+totalPairs;"
+                      + "  var h='';"
+                      + "  for(var j=0;j<subjOrder.length;j++){"
+                      + "    var sName=subjOrder[j];"
+                      + "    var items=groups[sName];"
+                      + "    var subjTotal=0;for(var k=0;k<items.length;k++)subjTotal+=(items[k].count||1);"
+                      + "    h+=\"<div class='subj-group'><div class='subj-hdr'><span>\"+sName+\"</span><span style='font-size:11px;color:#fb923c;'>\"+subjTotal+\" пар</span></div>\";"
+                      + "    for(var m=0;m<items.length;m++){"
+                      + "      var r=items[m];"
+                      + "      var on=isRuleOn(r.key);"
+                      + "      var safeKey=r.key.replace(/'/g,\"\\\\'\").replace(/\"/g,'&quot;');"
+                      + "      h+=\"<div class='rule-row' onclick=\\\"toggleRule('\"+safeKey+\"')\\\">\""
+                      + "        +\"<div class='chk-box \"+(on?'on':'')+\"'>\"+(on?'✓':'')+\"</div>\""
+                      + "        +\"<div style='flex:1;'><div style='display:flex;justify-content:space-between;align-items:center;'>\""
+                      + "        +\"<span class='badge-type'>\"+r.type+\"</span><span style='font-size:11px;color:#94a3b8;'>\"+(r.count||1)+\" за семестр</span></div>\""
+                      + "        +\"<div style='font-size:12px;color:#cbd5e1;margin-top:4px;'>👤 Преподаватель: <b>\"+r.teacher+\"</b></div>\""
+                      + "        +\"<div style='font-size:11px;margin-top:2px;color:\"+(on?'#34d399':'#f87171')+\";'>\"+(on?'✅ Автоотметка включена':'🚫 Автоотметка отключена')+\"</div>\""
+                      + "        +\"</div></div>\";"
+                      + "    }"
+                      + "    h+=\"</div>\";"
+                      + "  }"
+                      + "  listEl.innerHTML=h;"
+                      + "}"
+                      + "function saveCfg(){AndroidBridge.saveSettingsOnly(val('login'),val('password'),val('interval'),val('mode'));}"
+                      + "function toggle(){AndroidBridge.toggleAutoCheck(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,400);}"
+                      + "function checkNow(){userManuallyChangedDay=false;AndroidBridge.checkNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,700);}"
+                      + "function scanSemester(){AndroidBridge.scanSemesterNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,500);}"
+                      + "function shiftDay(dir){"
+                      + "  if(!daysCache.length)return;"
+                      + "  userManuallyChangedDay=true;"
+                      + "  selectedDayIdx=(selectedDayIdx+dir+daysCache.length)%daysCache.length;"
+                      + "  document.getElementById('day_select').value=String(selectedDayIdx);"
+                      + "  renderSelectedDay();"
+                      + "}"
+                      + "function onSelectDay(){"
+                      + "  userManuallyChangedDay=true;"
+                      + "  selectedDayIdx=parseInt(document.getElementById('day_select').value||'0',10);"
+                      + "  renderSelectedDay();"
+                      + "}"
+                      + "function renderSelectedDay(){"
+                      + "  var box=document.getElementById('lessons');"
+                      + "  if(!daysCache || !daysCache.length){"
+                      + "    box.innerHTML=\"<div style='font-size:12px;color:#94a3b8;'>Нажмите «ВКЛЮЧИТЬ АВТООТМЕТКУ» или «Обновить расписание недели».</div>\";"
+                      + "    return;"
+                      + "  }"
+                      + "  if(selectedDayIdx<0 || selectedDayIdx>=daysCache.length)selectedDayIdx=0;"
+                      + "  var dayObj=daysCache[selectedDayIdx];"
+                      + "  var list=dayObj.lessons||[];"
+                      + "  var h='';"
+                      + "  for(var i=0;i<list.length;i++){"
+                      + "    var x=list[i];"
+                      + "    var allowed=x.ruleKey?isRuleOn(x.ruleKey):true;"
+                      + "    var cls=!allowed?'item skip':(x.checked?'item done':'item');"
+                      + "    var c=!allowed?'#f87171':(x.checked?'#34d399':'#fb923c');"
+                      + "    var waitHint=x.waitBtnTime?(' (кнопка в '+x.waitBtnTime+')'):'';"
+                      + "    var st=!allowed?'🚫 Выключено в 🤖 Умной отметке':(x.checked?('✅ Отмечен (время: '+(x.checkTime||'ОК')+')'):('⏳ Ждем кнопку'+waitHint));"
+                      + "    h+=\"<div class='\"+cls+\"'><b style='color:\"+c+\"'>\"+x.time+\" — \"+st+\"</b><br>\"+x.subject+\"</div>\";"
+                      + "  }"
+                      + "  box.innerHTML=h;"
+                      + "}"
+                      + "function poll(){"
+                      + "  try{"
+                      + "    var d=JSON.parse(AndroidBridge.getState());"
+                      + "    var b=document.getElementById('btn');"
+                      + "    var s=document.getElementById('status');"
+                      + "    var sb=document.getElementById('status_box');"
+                      + "    var u=document.getElementById('uptime');"
+                      + "    if(d.active){"
+                      + "      b.className='btn on';"
+                      + "      b.innerText='ВЫКЛЮЧИТЬ АВТООТМЕТКУ';"
+                      + "      sb.className='status-card on';"
+                      + "      s.style.color='#34d399';"
+                      + "      if(d.startMillis && d.startMillis>0){"
+                      + "        var sec=Math.floor((Date.now()-d.startMillis)/1000);"
+                      + "        var m=Math.floor(sec/60);var rs=sec%60;"
+                      + "        u.innerText='Аптайм: '+m+'м '+rs+'с';"
+                      + "      }"
+                      + "    }else{"
+                      + "      b.className='btn';"
+                      + "      b.innerText='ВКЛЮЧИТЬ АВТООТМЕТКУ';"
+                      + "      sb.className='status-card';"
+                      + "      s.style.color='#94a3b8';"
+                      + "      u.innerText='Остановлено';"
+                      + "    }"
+                      + "    s.innerText=d.scanningSemester?(d.scanStatus||'Анализ семестра...'):(d.status||'Отключено');"
+                      + "    if(d.logs)document.getElementById('logs').innerText=d.logs.join('\\n');"
+                      + "    if(d.catalog && d.catalog.length){"
+                      + "      catalogCache=d.catalog;"
+                      + "      var ch=catalogCache.length+'_'+ (d.scanningSemester?'1':'0');"
+                      + "      if(ch!==lastCatalogHash){lastCatalogHash=ch;renderSmartCatalog();}"
+                      + "    }else if(d.scanningSemester && d.scanStatus){"
+                      + "      document.getElementById('smart_stats').innerText='🔄 '+d.scanStatus;"
+                      + "    }"
+                      + "    if(d.days && d.days.length){"
+                      + "      daysCache=d.days;"
+                      + "      var defIdx=d.defaultDayIdx||0;"
+                      + "      var sel=document.getElementById('day_select');"
+                      + "      var opts='';"
+                      + "      for(var j=0;j<daysCache.length;j++){"
+                      + "        var tag=daysCache[j].isOrange?' 🟠 (Сегодня)':(j===defIdx?' (Ближайший)':'');"
+                      + "        opts+=\"<option value='\"+j+\"'>📅 \"+daysCache[j].title+tag+\"</option>\";"
+                      + "      }"
+                      + "      if(sel.innerHTML!==opts)sel.innerHTML=opts;"
+                      + "      if(!userManuallyChangedDay || selectedDayIdx===-1 || lastDefaultIdx!==defIdx){"
+                      + "        lastDefaultIdx=defIdx;"
+                      + "        selectedDayIdx=defIdx;"
+                      + "      }"
+                      + "      sel.value=String(selectedDayIdx);"
+                      + "      renderSelectedDay();"
+                      + "    }"
+                      + "  }catch(e){}"
+                      + "}"
+                      + "initConfig();setInterval(poll,1500);poll();"
+                      + "</script></body></html>";
+              }
+          }
+          EOF
+
+          sed -i 's/^[[:space:]]*//' res/values/strings.xml AndroidManifest.xml
+
+          "$BUILD_TOOLS/aapt2" compile --dir res -o build/res.zip
+          "$BUILD_TOOLS/aapt2" link -o build/unaligned.apk \
+            -I "$ANDROID_JAR" \
+            --manifest AndroidManifest.xml \
+            --java build/gen \
+            build/res.zip
+
+          javac -encoding UTF-8 -source 8 -target 8 \
+            -bootclasspath "$ANDROID_JAR" \
+            -cp "$ANDROID_JAR" \
+            -d build/obj \
+            build/gen/ru/sut/bonch/R.java \
+            src/ru/sut/bonch/BootReceiver.java \
+            src/ru/sut/bonch/BonchBackgroundDaemon.java \
+            src/ru/sut/bonch/MainActivity.java
+
+          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --output build/ build/obj/ru/sut/bonch/*.class
+
+          zip -uj build/unaligned.apk build/classes.dex
+
+          "$BUILD_TOOLS/zipalign" -f -p 4 build/unaligned.apk build/aligned.apk
+
+          keytool -genkeypair -v \
+            -keystore build/release.keystore \
+            -storepass android -keypass android \
+            -alias bonchkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=BonchAutoCheck,OU=IT,O=SUT,L=SPb,S=SPb,C=RU"
+
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks build/release.keystore \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out build/apk/BonchAutoCheck-01.03.00.apk \
+            build/aligned.apk
+
+          ls -lh build/apk/BonchAutoCheck-01.03.00.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BonchAutoCheck-01.03.00-APK
+          path: build/apk/BonchAutoCheck-01.03.00.apk
+
+      - name: Publish Direct APK to GitHub Releases
+        if: always()
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v01.03.00
+          name: "Bonch AutoCheck v01.03.00"
+          files: build/apk/BonchAutoCheck-01.03.00.apk
