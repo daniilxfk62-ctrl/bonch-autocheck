@@ -1,4 +1,4 @@
-name: Build Bonch APK 01.03.01
+name: Build Bonch APK 01.03.02
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Compile Native Android APK v01.03.01
+      - name: Compile Native Android APK v01.03.02
         shell: bash
         run: |
           set -e
@@ -42,8 +42,8 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="ru.sut.bonch"
-              android:versionCode="110"
-              android:versionName="01.03.01">
+              android:versionCode="111"
+              android:versionName="01.03.02">
 
               <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
               <uses-permission android:name="android.permission.INTERNET" />
@@ -171,7 +171,7 @@ jobs:
           import org.json.JSONObject;
 
           public class BonchBackgroundDaemon extends Service {
-              public static final String APP_VERSION = "01.03.01";
+              public static final String APP_VERSION = "01.03.02";
               private static final int TOTAL_SEMESTER_WEEKS = 18;
 
               private static final String BASE_URL = "https://lk.sut.ru/cabinet";
@@ -180,19 +180,16 @@ jobs:
               private static final String INI_URL = BASE_URL + "/ini.php";
               private static final String SCHEDULE_URL = BASE_URL + "/project/cabinet/forms/raspisanie.php";
 
-              private static final String CHANNEL_BG = "bonch_compact_service_010301";
-              private static final String CHANNEL_ALERT = "bonch_alert_010301";
-              private static final int FG_NOTIFICATION_ID = 2008;
+              private static final String CHANNEL_BG = "bonch_compact_service_010302";
+              private static final String CHANNEL_ALERT = "bonch_alert_010302";
+              private static final int FG_NOTIFICATION_ID = 2009;
 
-              private static final String[] BELL_SCHEDULE = {
-                  "09:00", "10:30", "10:45", "13:00", "14:45", "16:30", "18:15", "20:00"
-              };
-
+              // Только 6 учебных дней (Воскресенье полностью удалено)
               private static final String[] RU_DAYS_FULL = {
-                  "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"
+                  "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"
               };
               private static final String[] RU_DAYS_SHORT = {
-                  "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"
+                  "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"
               };
 
               private PowerManager.WakeLock wakeLock;
@@ -206,15 +203,15 @@ jobs:
               private volatile long serviceStartMillis = 0L;
               private final List<String> logs = new ArrayList<>();
 
-              // Постоянный кэш всех дней семестра и каталога предметов (сохраняется на диск и не требует повторной загрузки)
               private JSONArray semesterDaysArray = new JSONArray();
               private JSONArray smartCatalogArray = new JSONArray();
               private int todayDayIdx = 0;
+              private volatile boolean hasTodayScheduleLoaded = false;
 
               private final Set<String> completedWindowsToday = new HashSet<>();
               private final Set<String> markedRaspIdsToday = new HashSet<>();
               private final Map<String, String> checkInTimeByStart = new HashMap<>();
-              private final Set<String> parsedTimes = new HashSet<>();
+              private final Set<String> todayRealStartTimes = new HashSet<>();
               private String currentDayStamp = "";
 
               private volatile boolean isAuthenticated = false;
@@ -263,6 +260,12 @@ jobs:
                       return START_NOT_STICKY;
                   }
 
+                  if ("refresh_rules".equals(action)) {
+                      syncTodayRealStartTimes();
+                      saveStateFile();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
+
                   final String login = cfg.optString("login", "").trim();
                   final String pass = cfg.optString("password", "").trim();
                   final String mode = cfg.optString("mode", "full_lesson");
@@ -295,7 +298,7 @@ jobs:
                               saveStateFile();
                               WindowState win = getCurrentWindowState(mode);
                               pollScheduleAndCheckIn(login, pass, win != null ? win.startTime : null);
-                              if ((smartCatalogArray.length() == 0 || semesterDaysArray.length() < 14) && !scanningSemester) {
+                              if ((smartCatalogArray.length() == 0 || semesterDaysArray.length() < 12) && !scanningSemester) {
                                   scanFullSemesterSchedule(login, pass);
                               }
                           }
@@ -425,8 +428,7 @@ jobs:
                                   }
                                   WindowState initWin = getCurrentWindowState(mode);
                                   pollScheduleAndCheckIn(login, password, initWin != null ? initWin.startTime : null);
-                                  // Если семестр еще не сохранен в кэше — один раз сканируем все 18 недель и сохраняем навсегда
-                                  if ((smartCatalogArray.length() == 0 || semesterDaysArray.length() < 14) && !scanningSemester) {
+                                  if ((smartCatalogArray.length() == 0 || semesterDaysArray.length() < 12) && !scanningSemester) {
                                       new Thread(new Runnable() {
                                           @Override
                                           public void run() {
@@ -436,6 +438,7 @@ jobs:
                                   }
                               }
 
+                              syncTodayRealStartTimes();
                               WindowState win = getCurrentWindowState(mode);
 
                               if (win == null) {
@@ -443,7 +446,7 @@ jobs:
                                   if (nextLesson != null) {
                                       updateStatus("Подключено • Ждем пару в " + nextLesson);
                                   } else {
-                                      updateStatus("Подключено • Пары на сегодня завершены");
+                                      updateStatus("Подключено • На сегодня активных пар больше нет");
                                   }
                                   sleepQuietly(25000L);
                                   continue;
@@ -452,8 +455,8 @@ jobs:
                               if (completedWindowsToday.contains(win.startTime)) {
                                   String tMarked = checkInTimeByStart.get(win.startTime);
                                   String nextLesson = findNextLessonAfter(win.startTime);
-                                  String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Спим до след. пары";
-                                  updateStatus("✅ Готово (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
+                                  String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Пары на сегодня завершены";
+                                  updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
                                   sleepQuietly(25000L);
                                   continue;
                               }
@@ -463,7 +466,9 @@ jobs:
 
                               if (completedWindowsToday.contains(win.startTime)) {
                                   String tMarked = checkInTimeByStart.get(win.startTime);
-                                  updateStatus("✅ Готово (" + (tMarked != null ? tMarked : "ОК") + ") • Спим до след. пары");
+                                  String nextLesson = findNextLessonAfter(win.startTime);
+                                  String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Пары на сегодня завершены";
+                                  updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
                                   sleepQuietly(25000L);
                               } else {
                                   sleepQuietly(Math.max(15000L, (long) (intervalMin * 60000L)));
@@ -492,7 +497,7 @@ jobs:
 
               private JSONObject readConfigFile() {
                   try {
-                      File f = new File(getFilesDir(), "user_config_010301.json");
+                      File f = new File(getFilesDir(), "user_config_010302.json");
                       if (!f.exists()) return new JSONObject();
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -508,7 +513,7 @@ jobs:
 
               private JSONObject readSmartRulesMap() {
                   try {
-                      File f = new File(getFilesDir(), "smart_rules_010301.json");
+                      File f = new File(getFilesDir(), "smart_rules_010302.json");
                       if (!f.exists()) return new JSONObject();
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -523,6 +528,7 @@ jobs:
               }
 
               private boolean isLessonAllowedBySmartFilter(String ruleKey) {
+                  if (ruleKey == null || ruleKey.isEmpty()) return true;
                   JSONObject rules = readSmartRulesMap();
                   if (!rules.has(ruleKey)) {
                       return true;
@@ -532,11 +538,11 @@ jobs:
 
               private synchronized void saveSemesterCacheFiles() {
                   try {
-                      File fCat = new File(getFilesDir(), "smart_catalog_010301.json");
+                      File fCat = new File(getFilesDir(), "smart_catalog_010302.json");
                       try (FileOutputStream fos = new FileOutputStream(fCat)) {
                           fos.write(smartCatalogArray.toString().getBytes("UTF-8"));
                       }
-                      File fDays = new File(getFilesDir(), "semester_days_010301.json");
+                      File fDays = new File(getFilesDir(), "semester_days_010302.json");
                       try (FileOutputStream fos = new FileOutputStream(fDays)) {
                           fos.write(semesterDaysArray.toString().getBytes("UTF-8"));
                       }
@@ -545,7 +551,7 @@ jobs:
 
               private synchronized void loadSemesterCacheFiles() {
                   try {
-                      File fCat = new File(getFilesDir(), "smart_catalog_010301.json");
+                      File fCat = new File(getFilesDir(), "smart_catalog_010302.json");
                       if (fCat.exists()) {
                           ByteArrayOutputStream baos = new ByteArrayOutputStream();
                           try (FileInputStream fis = new FileInputStream(fCat)) {
@@ -555,7 +561,7 @@ jobs:
                           }
                           smartCatalogArray = new JSONArray(new String(baos.toByteArray(), "UTF-8"));
                       }
-                      File fDays = new File(getFilesDir(), "semester_days_010301.json");
+                      File fDays = new File(getFilesDir(), "semester_days_010302.json");
                       if (fDays.exists()) {
                           ByteArrayOutputStream baos = new ByteArrayOutputStream();
                           try (FileInputStream fis = new FileInputStream(fDays)) {
@@ -569,26 +575,81 @@ jobs:
                   } catch (Exception ignored) {}
               }
 
+              // Берем ТОЛЬКО реальные пары сегодняшнего дня (и только те, которые не выключены в Умной отметке)
+              private synchronized void syncTodayRealStartTimes() {
+                  String todayStr = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
+                  synchronized (todayRealStartTimes) {
+                      todayRealStartTimes.clear();
+                      hasTodayScheduleLoaded = false;
+                      if (semesterDaysArray == null || semesterDaysArray.length() == 0) {
+                          return;
+                      }
+                      for (int i = 0; i < semesterDaysArray.length(); i++) {
+                          JSONObject d = semesterDaysArray.optJSONObject(i);
+                          if (d != null && todayStr.equals(d.optString("dateStr", ""))) {
+                              hasTodayScheduleLoaded = true;
+                              JSONArray lessons = d.optJSONArray("lessons");
+                              if (lessons != null) {
+                                  for (int k = 0; k < lessons.length(); k++) {
+                                      JSONObject les = lessons.optJSONObject(k);
+                                      if (les == null) continue;
+                                      String st = les.optString("startTime", "");
+                                      String rk = les.optString("ruleKey", "");
+                                      boolean checked = les.optBoolean("checked", false);
+                                      if (!st.isEmpty() && isLessonAllowedBySmartFilter(rk)) {
+                                          todayRealStartTimes.add(st);
+                                          if (checked) {
+                                              completedWindowsToday.add(st);
+                                              String ct = les.optString("checkTime", "");
+                                              if (!ct.isEmpty() && !checkInTimeByStart.containsKey(st)) {
+                                                  checkInTimeByStart.put(st, ct);
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                              break;
+                          }
+                      }
+                  }
+              }
+
               private synchronized void recalculateTodayIndex() {
                   if (semesterDaysArray == null || semesterDaysArray.length() == 0) {
                       todayDayIdx = 0;
                       return;
                   }
-                  String todayStr = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
+                  SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy", Locale.US);
+                  String todayStr = df.format(new Date());
                   for (int i = 0; i < semesterDaysArray.length(); i++) {
                       JSONObject d = semesterDaysArray.optJSONObject(i);
                       if (d != null && todayStr.equals(d.optString("dateStr", ""))) {
                           todayDayIdx = i;
+                          syncTodayRealStartTimes();
                           return;
                       }
                   }
+                  // Если сегодня воскресенье — выбираем ближайший понедельник (следующий учебный день)
+                  Calendar cal = Calendar.getInstance();
+                  cal.set(Calendar.HOUR_OF_DAY, 0);
+                  cal.set(Calendar.MINUTE, 0);
+                  cal.set(Calendar.SECOND, 0);
+                  cal.set(Calendar.MILLISECOND, 0);
+                  Date todayDate = cal.getTime();
                   for (int i = 0; i < semesterDaysArray.length(); i++) {
                       JSONObject d = semesterDaysArray.optJSONObject(i);
-                      if (d != null && d.optBoolean("isOrange", false)) {
-                          todayDayIdx = i;
-                          return;
+                      if (d != null) {
+                          try {
+                              Date dDate = df.parse(d.optString("dateStr", ""));
+                              if (dDate != null && !dDate.before(todayDate)) {
+                                  todayDayIdx = i;
+                                  syncTodayRealStartTimes();
+                                  return;
+                              }
+                          } catch (Exception ignored) {}
                       }
                   }
+                  syncTodayRealStartTimes();
               }
 
               private synchronized void saveStateFile() {
@@ -602,7 +663,7 @@ jobs:
                       obj.put("startMillis", serviceStartMillis);
                       obj.put("todayDayIdx", todayDayIdx);
                       obj.put("logs", new JSONArray(logs));
-                      File f = new File(getFilesDir(), "bg_state_010301.json");
+                      File f = new File(getFilesDir(), "bg_state_010302.json");
                       try (FileOutputStream fos = new FileOutputStream(f)) {
                           fos.write(obj.toString().getBytes("UTF-8"));
                       }
@@ -611,7 +672,7 @@ jobs:
 
               private synchronized void loadPersistedState() {
                   try {
-                      File f = new File(getFilesDir(), "bg_state_010301.json");
+                      File f = new File(getFilesDir(), "bg_state_010302.json");
                       if (!f.exists()) return;
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -632,12 +693,12 @@ jobs:
 
               private static class ParsedRowDetails {
                   String subject = "Предмет";
-                  String normType = "Практика"; // Строго один из 3 типов: Лекция, Практика, Лаба
+                  String normType = "Практика";
                   String teacher = "";
+                  String room = "";
                   String ruleKey = "";
               }
 
-              // Извлекаем предмет, преподавателя и приводим тип к 3 кнопкам (Лекция / Практика / Лаба) БЕЗ кабинетов
               private ParsedRowDetails extractStructuredLessonInfo(String trInner, String timeRange) {
                   ParsedRowDetails info = new ParsedRowDetails();
                   List<String> tds = new ArrayList<>();
@@ -648,6 +709,7 @@ jobs:
                   }
 
                   String rawSubjectCell = tds.size() >= 2 ? tds.get(1) : trInner;
+                  String rawRoomCell = tds.size() >= 3 ? tds.get(2) : "";
                   String rawTeacherCell = tds.size() >= 4 ? tds.get(3) : "";
 
                   String cellPlain = rawSubjectCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
@@ -689,7 +751,7 @@ jobs:
                       }
                   }
                   info.teacher = teacherClean;
-                  // Ключ фильтра зависит ТОЛЬКО от предмета и одного из 3 типов (Лекция / Практика / Лаба) без кабинетов!
+                  info.room = rawRoomCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
                   info.ruleKey = info.subject + "||" + info.normType;
                   return info;
               }
@@ -702,7 +764,6 @@ jobs:
                   Set<String> teachers = new LinkedHashSet<>();
               }
 
-              // Полное сканирование семестра (18 недель): формирует полный 7-дневный календарь всех недель и каталог предметов (Лекция/Практика/Лаба)
               private void scanFullSemesterSchedule(String login, String password) {
                   if (scanningSemester) return;
                   scanningSemester = true;
@@ -809,8 +870,8 @@ jobs:
                                   lesObj.put("subjectTitle", det.subject);
                                   lesObj.put("lessonType", det.normType);
                                   lesObj.put("teacher", det.teacher);
+                                  lesObj.put("room", det.room);
                                   lesObj.put("ruleKey", det.ruleKey);
-                                  lesObj.put("subject", det.subject + " • " + det.normType + (det.teacher.isEmpty() ? "" : " (" + det.teacher + ")"));
                                   lesObj.put("checked", done);
                                   lesObj.put("checkTime", startedAt);
                                   lesObj.put("waitBtnTime", waitBtn);
@@ -818,7 +879,7 @@ jobs:
                               }
                           }
 
-                          // Строим все 7 дней недели (Пн..Вс), чтобы боковая панель из 7 дней работала для каждого дня недели
+                          // Строим ТОЛЬКО 6 учебных дней недели (0=Пн .. 5=Сб, без воскресенья!)
                           if (anyDateInWeek != null) {
                               Calendar cal = Calendar.getInstance();
                               cal.setTime(anyDateInWeek);
@@ -830,7 +891,7 @@ jobs:
                               int diffToMon = (dow == Calendar.SUNDAY) ? -6 : (Calendar.MONDAY - dow);
                               cal.add(Calendar.DAY_OF_MONTH, diffToMon);
 
-                              for (int dIdx = 0; dIdx < 7; dIdx++) {
+                              for (int dIdx = 0; dIdx < 6; dIdx++) {
                                   Date dDate = cal.getTime();
                                   String dStr = df.format(dDate);
                                   String dShortDate = shortDateFmt.format(dDate);
@@ -839,7 +900,7 @@ jobs:
 
                                   JSONObject dayJson = new JSONObject();
                                   dayJson.put("weekNum", week);
-                                  dayJson.put("dowIdx", dIdx); // 0=Пн .. 6=Вс
+                                  dayJson.put("dowIdx", dIdx); // 0=Пн .. 5=Сб
                                   dayJson.put("shortDow", RU_DAYS_SHORT[dIdx]);
                                   dayJson.put("shortDate", dShortDate);
                                   dayJson.put("dateStr", dStr);
@@ -882,8 +943,8 @@ jobs:
                       smartCatalogArray = newCatalog;
                       saveSemesterCacheFiles();
 
-                      scanStatusText = "Семестр сохранен в память (" + smartCatalogArray.length() + " предм., " + semesterDaysArray.length() + " дн.)";
-                      addLog("🤖 Расписание на семестр сохранено в память телефона!");
+                      scanStatusText = "Семестр сохранен (" + smartCatalogArray.length() + " предм.)";
+                      addLog("🤖 Расписание на семестр сохранено в память!");
                   } catch (Exception e) {
                       scanStatusText = "Ошибка анализа: " + e.getMessage();
                       addLog("Ошибка анализа семестра: " + e.getMessage());
@@ -893,35 +954,39 @@ jobs:
                   }
               }
 
+              // Ищем следующую неотмеченную пару СТРОГО по реальному расписанию сегодняшнего дня (без ложных 09:00)
               private String findNextUnmarkedLessonTime() {
+                  syncTodayRealStartTimes();
                   Calendar now = Calendar.getInstance();
                   int nowMins = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
-                  Set<String> times = new HashSet<>(Arrays.asList(BELL_SCHEDULE));
-                  synchronized (parsedTimes) {
-                      times.addAll(parsedTimes);
+                  String[] sorted;
+                  synchronized (todayRealStartTimes) {
+                      if (todayRealStartTimes.isEmpty()) {
+                          return null;
+                      }
+                      sorted = todayRealStartTimes.toArray(new String[0]);
                   }
-                  String[] sorted = times.toArray(new String[0]);
                   Arrays.sort(sorted);
                   for (String t : sorted) {
                       if (completedWindowsToday.contains(t)) continue;
                       try {
                           String[] p = t.split(":");
                           int m = Integer.parseInt(p[0]) * 60 + Integer.parseInt(p[1]);
-                          if (m > nowMins - 10) return t;
+                          if (m + 95 >= nowMins) return t;
                       } catch (Exception ignored) {}
                   }
                   return null;
               }
 
               private String findNextLessonAfter(String currentStart) {
-                  Set<String> times = new HashSet<>(Arrays.asList(BELL_SCHEDULE));
-                  synchronized (parsedTimes) {
-                      times.addAll(parsedTimes);
+                  syncTodayRealStartTimes();
+                  String[] sorted;
+                  synchronized (todayRealStartTimes) {
+                      sorted = todayRealStartTimes.toArray(new String[0]);
                   }
-                  String[] sorted = times.toArray(new String[0]);
                   Arrays.sort(sorted);
                   for (String t : sorted) {
-                      if (t.compareTo(currentStart) > 0) return t;
+                      if (t.compareTo(currentStart) > 0 && !completedWindowsToday.contains(t)) return t;
                   }
                   return null;
               }
@@ -1121,7 +1186,6 @@ jobs:
                   }
               }
 
-              // Опрос текущей недели для быстрой автоотметки и синхронизации статусов с кэшем семестра
               private synchronized void pollScheduleAndCheckIn(String login, String password, String currentWindowStart) {
                   if (!isAuthenticated && !authenticate(login, password)) {
                       return;
@@ -1237,7 +1301,7 @@ jobs:
                               displayCheckTime = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
                           }
 
-                          if (isLessonDone && currentWindowStart != null && currentWindowStart.equals(startTime)) {
+                          if (isLessonDone && todayStr.equals(curDateStr)) {
                               completedWindowsToday.add(startTime);
                               if (displayCheckTime != null) {
                                   checkInTimeByStart.put(startTime, displayCheckTime);
@@ -1251,8 +1315,8 @@ jobs:
                               item.put("subjectTitle", structured.subject);
                               item.put("lessonType", structured.normType);
                               item.put("teacher", structured.teacher);
+                              item.put("room", structured.room);
                               item.put("ruleKey", structured.ruleKey);
-                              item.put("subject", structured.subject + " • " + structured.normType + (structured.teacher.isEmpty() ? "" : " (" + structured.teacher + ")"));
                               item.put("checked", isLessonDone);
                               item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
                               item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
@@ -1260,7 +1324,7 @@ jobs:
                           }
                       }
 
-                      // Обновляем дни текущей недели внутри общего кэша семестра (или создаем 7 дней текущей недели, если семестр еще сканируется)
+                      // Обновляем 6 учебных дней текущей недели (Пн..Сб)
                       if (anyDateInWeek != null) {
                           Calendar cal = Calendar.getInstance();
                           cal.setTime(anyDateInWeek);
@@ -1273,22 +1337,12 @@ jobs:
                           cal.add(Calendar.DAY_OF_MONTH, diffToMon);
 
                           Map<String, JSONObject> currentWeekDays = new LinkedHashMap<>();
-                          for (int dIdx = 0; dIdx < 7; dIdx++) {
+                          for (int dIdx = 0; dIdx < 6; dIdx++) {
                               Date dDate = cal.getTime();
                               String dStr = df.format(dDate);
                               String dShortDate = shortDateFmt.format(dDate);
                               List<JSONObject> dayLessons = weekLessonsByDate.get(dStr);
                               if (dayLessons == null) dayLessons = new ArrayList<>();
-
-                              if (todayStr.equals(dStr)) {
-                                  synchronized (parsedTimes) {
-                                      parsedTimes.clear();
-                                      for (JSONObject les : dayLessons) {
-                                          String st = les.optString("startTime", "");
-                                          if (!st.isEmpty()) parsedTimes.add(st);
-                                      }
-                                  }
-                              }
 
                               JSONObject dayJson = new JSONObject();
                               dayJson.put("weekNum", 0);
@@ -1346,15 +1400,17 @@ jobs:
                   String label;
               }
 
+              // Проверяем окно пары ТОЛЬКО по реальным парам сегодняшнего дня (todayRealStartTimes)
               private WindowState getCurrentWindowState(String mode) {
+                  syncTodayRealStartTimes();
                   int windowMin = "first_30".equals(mode) ? 30 : 95;
-                  Set<String> allTimes = new HashSet<>(Arrays.asList(BELL_SCHEDULE));
-                  synchronized (parsedTimes) {
-                      allTimes.addAll(parsedTimes);
+                  Set<String> activeTimes;
+                  synchronized (todayRealStartTimes) {
+                      activeTimes = new HashSet<>(todayRealStartTimes);
                   }
                   Calendar now = Calendar.getInstance();
                   long nowMillis = now.getTimeInMillis();
-                  for (String t : allTimes) {
+                  for (String t : activeTimes) {
                       try {
                           String[] parts = t.replace(".", ":").split(":");
                           Calendar start = (Calendar) now.clone();
@@ -1473,39 +1529,40 @@ jobs:
               public class WebBridge {
                   @JavascriptInterface
                   public String getSavedConfig() {
-                      return readFileAsString("user_config_010301.json", "{\"interval\":\"1\",\"mode\":\"full_lesson\"}");
+                      return readFileAsString("user_config_010302.json", "{\"interval\":\"1\",\"mode\":\"full_lesson\"}");
                   }
 
                   @JavascriptInterface
                   public String getSmartRules() {
-                      return readFileAsString("smart_rules_010301.json", "{}");
+                      return readFileAsString("smart_rules_010302.json", "{}");
                   }
 
                   @JavascriptInterface
                   public void saveSmartRules(String rulesJsonStr) {
                       try {
-                          File f = new File(getFilesDir(), "smart_rules_010301.json");
+                          File f = new File(getFilesDir(), "smart_rules_010302.json");
                           try (FileOutputStream fos = new FileOutputStream(f)) {
                               fos.write((rulesJsonStr != null ? rulesJsonStr : "{}").getBytes("UTF-8"));
                           }
+                          sendDaemonCommand("refresh_rules");
                       } catch (Exception ignored) {}
                   }
 
                   @JavascriptInterface
                   public String getCachedSemesterDays() {
-                      return readFileAsString("semester_days_010301.json", "[]");
+                      return readFileAsString("semester_days_010302.json", "[]");
                   }
 
                   @JavascriptInterface
                   public String getCachedSmartCatalog() {
-                      return readFileAsString("smart_catalog_010301.json", "[]");
+                      return readFileAsString("smart_catalog_010302.json", "[]");
                   }
 
                   @JavascriptInterface
                   public String getState() {
                       try {
                           File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
-                          String raw = readFileAsString("bg_state_010301.json", "");
+                          String raw = readFileAsString("bg_state_010302.json", "");
                           if (raw.isEmpty()) {
                               JSONObject empty = new JSONObject();
                               empty.put("active", enabledFlag.exists());
@@ -1514,8 +1571,8 @@ jobs:
                           }
                           JSONObject state = new JSONObject(raw);
                           state.put("active", enabledFlag.exists() && state.optBoolean("active", false));
-                          File fDays = new File(getFilesDir(), "semester_days_010301.json");
-                          File fCat = new File(getFilesDir(), "smart_catalog_010301.json");
+                          File fDays = new File(getFilesDir(), "semester_days_010302.json");
+                          File fCat = new File(getFilesDir(), "smart_catalog_010302.json");
                           state.put("daysMtime", fDays.exists() ? fDays.lastModified() : 0L);
                           state.put("catMtime", fCat.exists() ? fCat.lastModified() : 0L);
                           return state.toString();
@@ -1560,7 +1617,7 @@ jobs:
                       cfg.put("password", pass != null ? pass.trim() : "");
                       cfg.put("interval", (interval != null && !interval.isEmpty()) ? interval : "1");
                       cfg.put("mode", (mode != null && !mode.isEmpty()) ? mode : "full_lesson");
-                      File f = new File(getFilesDir(), "user_config_010301.json");
+                      File f = new File(getFilesDir(), "user_config_010302.json");
                       try (FileOutputStream fos = new FileOutputStream(f)) {
                           fos.write(cfg.toString().getBytes("UTF-8"));
                       }
@@ -1583,28 +1640,44 @@ jobs:
                       + ".status-card.on{border-left-color:#34d399;background:#06281e;border-color:#059669;}"
                       + ".status-title{font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;font-weight:700;}"
                       + ".status-val{font-size:14px;font-weight:800;color:#f8fafc;line-height:1.35;}"
-                      + ".item{background:#1e293b;padding:11px;border-radius:12px;margin-bottom:8px;font-size:12px;border-left:4px solid #f97316;}"
-                      + ".item.done{border-left-color:#34d399;}"
-                      + ".item.skip{border-left-color:#ef4444;opacity:0.6;}"
                       + ".dev-panel{display:none;margin-top:12px;padding:12px;background:#090d16;border:1px dashed #f97316;border-radius:12px;}"
                       + ".dev-hdr{font-size:11px;font-weight:800;color:#f97316;margin-bottom:6px;display:flex;justify-content:space-between;}"
                       + ".log{background:#05080f;border:1px solid #1e293b;border-radius:8px;padding:8px;font-family:monospace;font-size:11px;height:120px;overflow-y:auto;white-space:pre-wrap;color:#cbd5e1;}"
                       + ".ver-footer{margin-top:14px;padding:10px;border-top:1px solid #1e293b;text-align:center;font-size:12px;font-weight:800;color:#f97316;letter-spacing:0.5px;user-select:none;cursor:pointer;}"
 
-                      // СТИЛИ TIKTOK-ЛЕНТЫ РАСПИСАНИЯ И БОКОВОЙ ПАНЕЛИ 7 ДНЕЙ
+                      // TIKTOK-ЛЕНТА РАСПИСАНИЯ (4 ПАРЫ НА ВЕСЬ ЭКРАН + РАЗНЫЕ ЦВЕТА ЛЕКЦИЙ/ПРАКТИК/ЛАБ + ПАРЯЩИЕ КНОПКИ ПОВЕРХ)
                       + "#tab_schedule{display:none;position:relative;height:calc(100vh - 62px);width:100vw;overflow:hidden;}"
                       + ".tiktok-feed{height:calc(100vh - 62px);width:100%;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;}"
                       + ".tiktok-feed::-webkit-scrollbar{display:none;}"
-                      + ".day-slide{height:calc(100vh - 62px);width:100%;scroll-snap-align:start;scroll-snap-stop:always;box-sizing:border-box;padding:14px 64px 20px 14px;display:flex;flex-direction:column;}"
-                      + ".slide-hdr{background:#111827;border:1px solid #1e293b;border-radius:16px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}"
-                      + ".slide-body{flex:1;overflow-y:auto;padding-right:2px;}"
-                      + ".week-sidebar{position:fixed;right:8px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:5px;z-index:900;background:#111827dd;border:1px solid #1e293b;padding:6px 4px;border-radius:14px;}"
-                      + ".side-day-btn{width:44px;height:42px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:11px;font-weight:800;padding:0;}"
-                      + ".side-day-btn.active{background:#f97316;border-color:#fb923c;color:#090d16;}"
-                      + ".side-day-btn.today-ring{border:2px solid #34d399;}"
-                      + ".today-float-btn{display:none;position:fixed;bottom:76px;left:50%;transform:translateX(-50%);z-index:950;background:#f97316;color:#090d16;border:none;border-radius:999px;padding:10px 20px;font-size:13px;font-weight:900;box-shadow:0 8px 24px rgba(249,115,22,0.45);}"
+                      + ".day-slide{height:calc(100vh - 62px);width:100%;scroll-snap-align:start;scroll-snap-stop:always;box-sizing:border-box;padding:10px 12px 14px 12px;display:flex;flex-direction:column;}"
+                      + ".slide-hdr{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:10px 60px 10px 14px;margin-bottom:10px;flex-shrink:0;}"
+                      + ".slide-body{flex:1;display:flex;flex-direction:column;gap:10px;height:100%;box-sizing:border-box;overflow-y:auto;}"
 
-                      // СТИЛИ ВКЛАДКИ УМНОЙ ОТМЕТКИ (3 КНОПКИ В РЯД: ЛЕКЦИЯ / ПРАКТИКА / ЛАБА)
+                      // КАРТОЧКИ ПАР: 4 ПАРЫ ЗАНИМАЮТ РОВНО ВЕСЬ ЭКРАН, ЦВЕТА РАЗЛИЧАЮТСЯ ПО ТИПУ ЗАНЯТИЯ
+                      + ".lesson-card{flex:0 0 calc((100% - 30px) / 4);min-height:112px;box-sizing:border-box;border-radius:16px;padding:12px 62px 12px 15px;display:flex;flex-direction:column;justify-content:space-between;position:relative;box-shadow:0 6px 18px rgba(0,0,0,0.35);}"
+                      + ".lesson-card.type-lec{background:linear-gradient(135deg,#2e1065 0%,#1e1b4b 100%);border:1px solid #7c3aed;border-left:6px solid #a855f7;}"
+                      + ".lesson-card.type-prac{background:linear-gradient(135deg,#082f49 0%,#0f172a 100%);border:1px solid #0284c7;border-left:6px solid #38bdf8;}"
+                      + ".lesson-card.type-lab{background:linear-gradient(135deg,#4c0519 0%,#1f1224 100%);border:1px solid #e11d48;border-left:6px solid #fb7185;}"
+                      + ".lesson-card.done{border-color:#10b981;box-shadow:0 0 18px rgba(16,185,129,0.22);}"
+                      + ".lesson-card.skip{background:#111827;border:1px dashed #ef4444;border-left:6px solid #ef4444;opacity:0.55;}"
+                      + ".les-top{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;}"
+                      + ".les-time{font-size:14px;font-weight:900;color:#ffffff;letter-spacing:0.3px;}"
+                      + ".type-pill{font-size:11px;font-weight:900;padding:3px 9px;border-radius:999px;text-transform:uppercase;letter-spacing:0.5px;}"
+                      + ".pill-lec{background:#a855f7;color:#090d16;}"
+                      + ".pill-prac{background:#38bdf8;color:#090d16;}"
+                      + ".pill-lab{background:#fb7185;color:#090d16;}"
+                      + ".les-title{font-size:16px;font-weight:900;color:#f8fafc;line-height:1.25;margin:4px 0;}"
+                      + ".les-meta{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#cbd5e1;font-weight:600;gap:6px;flex-wrap:wrap;}"
+
+                      // ПЛАВАЮЩАЯ ПОВЕРХ РАСПИСАНИЯ TIKTOK-ПАНЕЛЬ ДНЕЙ НЕДЕЛИ (6 ДНЕЙ + СТРЕЛКИ НЕДЕЛЬ ▲ / ▼)
+                      + ".tiktok-rail{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;z-index:920;pointer-events:auto;}"
+                      + ".rail-arrow{width:44px;height:34px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:rgba(15,23,42,0.68);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fb923c;font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.45);}"
+                      + ".rail-day{width:46px;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,0.14);background:rgba(15,23,42,0.58);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f1f5f9;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:900;padding:0;box-shadow:0 4px 12px rgba(0,0,0,0.4);transition:transform 0.15s;}"
+                      + ".rail-day.active{background:rgba(249,115,22,0.92);border-color:#fdba74;color:#090d16;transform:scale(1.08);}"
+                      + ".rail-day.today-ring{border:2px solid #34d399;}"
+                      + ".today-float-btn{display:none;position:fixed;bottom:76px;left:50%;transform:translateX(-50%);z-index:950;background:rgba(249,115,22,0.95);backdrop-filter:blur(6px);color:#090d16;border:none;border-radius:999px;padding:11px 22px;font-size:13px;font-weight:900;box-shadow:0 8px 24px rgba(249,115,22,0.5);}"
+
+                      // ВКЛАДКА УМНОЙ ОТМЕТКИ
                       + ".stat-box{background:#0f172a;border:1px solid #334155;border-radius:12px;padding:12px;margin-bottom:10px;font-size:12px;line-height:1.5;}"
                       + ".chip-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;}"
                       + ".chip{flex:1;padding:8px;border-radius:8px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-size:11px;font-weight:700;text-align:center;}"
@@ -1615,13 +1688,13 @@ jobs:
                       + ".type-btn.on{background:#064e3b;border-color:#10b981;color:#34d399;}"
                       + ".type-btn.zero{opacity:0.35;}"
 
-                      // НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (3 ВКЛАДКИ)
+                      // НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ
                       + ".bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:#0f172a;border-top:1px solid #1e293b;display:flex;z-index:999;}"
                       + ".tab-btn{flex:1;border:none;background:none;color:#64748b;font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}"
                       + ".tab-btn.active{color:#f97316;background:#1e293b44;}"
                       + "</style></head><body>"
 
-                      // ВКЛАДКА 0: ГЛАВНАЯ (БЕЗ КНОПКИ СВЕРНУТЬ В ФОН)
+                      // ВКЛАДКА 0: ГЛАВНАЯ
                       + "<div id='tab_main' class='page-pad'><div class='card'>"
                       + "<div style='font-size:18px;font-weight:800;margin-bottom:6px;'>Bonch AutoCheck</div>"
                       + "<span class='lbl'>Логин / Email от lk.sut.ru</span>"
@@ -1648,17 +1721,17 @@ jobs:
                       + "  <div class='dev-hdr'><span>🔧 ПАНЕЛЬ РАЗРАБОТЧИКА</span><span id='uptime' style='color:#34d399;'></span></div>"
                       + "  <div id='logs' class='log'>Загрузка логов...</div>"
                       + "</div>"
-                      + "<div id='ver_box' class='ver-footer' onclick='onVerTap()'>Версия: 01.03.01</div>"
+                      + "<div id='ver_box' class='ver-footer' onclick='onVerTap()'>Версия: 01.03.02</div>"
                       + "</div></div>"
 
-                      // ВКЛАДКА 1: РАСПИСАНИЕ (TIKTOK-ЛЕНТА ПО ДНЯМ + 7 ДНЕЙ СБОКУ + КНОПКА СЕГОДНЯ)
+                      // ВКЛАДКА 1: РАСПИСАНИЕ (TIKTOK-ЛЕНТА + ПАРЯЩИЕ КНОПКИ ДНЕЙ И НЕДЕЛЬ ПОВЕРХ)
                       + "<div id='tab_schedule'>"
                       + "  <div id='tiktok_feed' class='tiktok-feed' onscroll='onFeedScroll()'></div>"
-                      + "  <div id='week_sidebar' class='week-sidebar'></div>"
+                      + "  <div id='week_sidebar' class='tiktok-rail'></div>"
                       + "  <button id='btn_today' class='today-float-btn' onclick='jumpToToday()'>🎯 Сегодня</button>"
                       + "</div>"
 
-                      // ВКЛАДКА 2: УМНАЯ ОТМЕТКА (РОБОТ — 3 КНОПКИ НА ПРЕДМЕТ: ЛЕКЦИЯ, ПРАКТИКА, ЛАБА)
+                      // ВКЛАДКА 2: УМНАЯ ОТМЕТКА
                       + "<div id='tab_robot' class='page-pad' style='display:none;'><div class='card'>"
                       + "<div style='font-size:18px;font-weight:800;margin-bottom:4px;'>🤖 Умная автоотметка</div>"
                       + "<div style='font-size:12px;color:#94a3b8;margin-bottom:10px;'>Нажмите на кнопку <b>Лекция</b>, <b>Практика</b> или <b>Лаба</b> у любого предмета, чтобы включить или выключить автоотметку.</div>"
@@ -1670,10 +1743,10 @@ jobs:
                       + "  <button class='chip' onclick='onlyPracticeAndLabs()'>🛠 Выключить все лекции</button>"
                       + "</div>"
                       + "<div id='smart_list'></div>"
-                      + "<div class='ver-footer'>Версия: 01.03.01</div>"
+                      + "<div class='ver-footer'>Версия: 01.03.02</div>"
                       + "</div></div>"
 
-                      // НИЖНЯЯ НАВИГАЦИЯ (ГЛАВНАЯ / РАСПИСАНИЕ / УМНАЯ ОТМЕТКА)
+                      // НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ
                       + "<div class='bottom-nav'>"
                       + "  <button id='nav_0' class='tab-btn active' onclick='switchTab(0)'><span style='font-size:18px;'>🏠</span><span>Главная</span></button>"
                       + "  <button id='nav_1' class='tab-btn' onclick='switchTab(1)'><span style='font-size:18px;'>📅</span><span>Расписание</span></button>"
@@ -1709,7 +1782,7 @@ jobs:
                       + "    verTapCount=0;"
                       + "    devOpen=!devOpen;"
                       + "    document.getElementById('dev_panel').style.display=devOpen?'block':'none';"
-                      + "    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.03.01 (Dev ON)':'Версия: 01.03.01';"
+                      + "    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.03.02 (Dev ON)':'Версия: 01.03.02';"
                       + "  }else{"
                       + "    verTapTimer=setTimeout(function(){verTapCount=0;},1500);"
                       + "  }"
@@ -1757,7 +1830,6 @@ jobs:
                       + "  renderSmartCatalog();"
                       + "}"
 
-                      // РЕНДЕР ВКЛАДКИ УМНОЙ ОТМЕТКИ (3 КНОПКИ В ОДИН РЯД БЕЗ КАБИНЕТОВ)
                       + "function renderSmartCatalog(){"
                       + "  var statEl=document.getElementById('smart_stats');"
                       + "  var listEl=document.getElementById('smart_list');"
@@ -1793,7 +1865,7 @@ jobs:
                       + "  listEl.innerHTML=h;"
                       + "}"
 
-                      // РЕНДЕР TIKTOK-ЛЕНТЫ РАСПИСАНИЯ И БОКОВОЙ ПАНЕЛИ НА 7 ДНЕЙ
+                      // РЕНДЕР TIKTOK-РАСПИСАНИЯ: 4 КАРТОЧКИ НА ЭКРАН + ЦВЕТОВОЕ РАЗДЕЛЕНИЕ ЛЕКЦИЙ, ПРАКТИК И ЛАБ
                       + "function renderTikTokSchedule(){"
                       + "  var feed=document.getElementById('tiktok_feed');"
                       + "  if(!semesterDays || !semesterDays.length){"
@@ -1805,25 +1877,34 @@ jobs:
                       + "  for(var i=0;i<semesterDays.length;i++){"
                       + "    var d=semesterDays[i];"
                       + "    var isToday=(i===todaySlideIdx);"
-                      + "    var wBadge=d.weekNum?('Неделя '+d.weekNum):'Текущая неделя';"
+                      + "    var wBadge=d.weekNum?('Неделя #'+d.weekNum):'Текущая неделя';"
                       + "    var tBadge=isToday?\" <span style='color:#34d399;'>• СЕГОДНЯ</span>\":'';"
                       + "    h+=\"<div class='day-slide' id='slide_\"+i+\"'>\""
-                      + "      +\"<div class='slide-hdr'><div><div style='font-size:15px;font-weight:900;color:#fb923c;'>\"+d.title+tBadge+\"</div>\""
-                      + "      +\"<div style='font-size:11px;color:#94a3b8;margin-top:2px;'>\"+wBadge+\" • Листайте вверх/вниз ↕</div></div></div>\""
+                      + "      +\"<div class='slide-hdr'><div style='font-size:16px;font-weight:900;color:#fb923c;'>\"+d.title+tBadge+\"</div>\""
+                      + "      +\"<div style='font-size:11px;color:#94a3b8;margin-top:2px;'>\"+wBadge+\"</div></div>\""
                       + "      +\"<div class='slide-body'>\";"
                       + "    var list=d.lessons||[];"
                       + "    if(!list.length){"
-                      + "      h+=\"<div style='background:#111827;border:1px solid #1e293b;border-radius:14px;padding:24px;text-align:center;color:#94a3b8;font-size:13px;margin-top:20px;'>🎉 Пар нет • Выходной день</div>\";"
+                      + "      h+=\"<div style='background:#111827;border:1px solid #1e293b;border-radius:16px;padding:30px;text-align:center;color:#94a3b8;font-size:15px;font-weight:700;margin-top:10px;'>🎉 Пар нет • Свободный день</div>\";"
                       + "    }else{"
                       + "      for(var k=0;k<list.length;k++){"
                       + "        var x=list[k];"
                       + "        var allowed=x.ruleKey?isRuleOn(x.ruleKey):true;"
-                      + "        var cls=!allowed?'item skip':(x.checked?'item done':'item');"
-                      + "        var c=!allowed?'#f87171':(x.checked?'#34d399':'#fb923c');"
-                      + "        var waitHint=x.waitBtnTime?(' (кнопка в '+x.waitBtnTime+')'):'';"
-                      + "        var st=!allowed?'🚫 Выключено в 🤖':(x.checked?('✅ Отмечен ('+(x.checkTime||'ОК')+')'):('⏳ Ждем кнопку'+waitHint));"
-                      + "        h+=\"<div class='\"+cls+\"'><b style='color:\"+c+\"'>\"+x.time+\" — \"+st+\"</b><br><span style='color:#e2e8f0;font-weight:700;'>\"+(x.subjectTitle||x.subject)+\"</span>\""
-                      + "          +\"<div style='font-size:11px;color:#94a3b8;margin-top:3px;'>\"+(x.lessonType||'')+(x.teacher?(' • '+x.teacher):'')+\"</div></div>\";"
+                      + "        var lType=x.lessonType||'Практика';"
+                      + "        var typeClass=(lType==='Лекция')?'type-lec':((lType==='Лаба')?'type-lab':'type-prac');"
+                      + "        var pillClass=(lType==='Лекция')?'pill-lec':((lType==='Лаба')?'pill-lab':'pill-prac');"
+                      + "        var pillLabel=(lType==='Лекция')?'🎓 ЛЕКЦИЯ':((lType==='Лаба')?'🧪 ЛАБА':'📘 ПРАКТИКА');"
+                      + "        var cardCls='lesson-card '+typeClass+(!allowed?' skip':(x.checked?' done':''));"
+                      + "        var waitHint=x.waitBtnTime?(' (в '+x.waitBtnTime+')'):'';"
+                      + "        var stText=!allowed?'🚫 Выкл в 🤖':(x.checked?('✅ Отмечен '+(x.checkTime||'ОК')):('⏳ Ждем'+waitHint));"
+                      + "        var stColor=!allowed?'#f87171':(x.checked?'#34d399':'#fde047');"
+                      + "        var roomInfo=x.room?('📍 '+x.room):'';"
+                      + "        h+=\"<div class='\"+cardCls+\"'>\""
+                      + "          +\"<div class='les-top'><span class='les-time'>🕐 \"+x.time+\"</span><span class='type-pill \"+pillClass+\"'>\"+pillLabel+\"</span></div>\""
+                      + "          +\"<div class='les-title'>\"+(x.subjectTitle||x.subject)+\"</div>\""
+                      + "          +\"<div class='les-meta'><span>👤 \"+(x.teacher||'Преподаватель')+(roomInfo?(' • '+roomInfo):'')+\"</span>\""
+                      + "          +\"<span style='color:\"+stColor+\";font-weight:800;'>\"+stText+\"</span></div>\""
+                      + "          +\"</div>\";"
                       + "      }"
                       + "    }"
                       + "    h+=\"</div></div>\";"
@@ -1845,6 +1926,7 @@ jobs:
                       + "  }"
                       + "}"
 
+                      // БОКОВАЯ TIKTOK-ПАНЕЛЬ ПОВЕРХ РАСПИСАНИЯ (СТРЕЛКА ▲ НЕДЕЛЯ НАЗАД + 6 ДНЕЙ ПН..СБ + СТРЕЛКА ▼ НЕДЕЛЯ ВПЕРЕД)
                       + "function updateSidebarAndTodayBtn(){"
                       + "  var btnToday=document.getElementById('btn_today');"
                       + "  if(activeTab===1 && semesterDays.length>0 && currentSlideIdx!==todaySlideIdx){"
@@ -1857,20 +1939,29 @@ jobs:
                       + "  var curDay=semesterDays[currentSlideIdx]||semesterDays[0];"
                       + "  var curDow=curDay.dowIdx||0;"
                       + "  var mondaySlideIdx=currentSlideIdx-curDow;"
-                      + "  var sh='';"
-                      + "  var shortNames=['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];"
-                      + "  for(var d=0;d<7;d++){"
+                      + "  var sh=\"<button class='rail-arrow' onclick='shiftWeek(-1)' title='Предыдущая неделя'>▲</button>\";"
+                      + "  var shortNames=['Пн','Вт','Ср','Чт','Пт','Сб'];"
+                      + "  for(var d=0;d<6;d++){"
                       + "    var targetIdx=mondaySlideIdx+d;"
                       + "    if(targetIdx>=0 && targetIdx<semesterDays.length){"
                       + "      var dayItem=semesterDays[targetIdx];"
                       + "      var isAct=(targetIdx===currentSlideIdx);"
                       + "      var isTod=(targetIdx===todaySlideIdx);"
-                      + "      var cls='side-day-btn'+(isAct?' active':'')+(isTod?' today-ring':'');"
+                      + "      var cls='rail-day'+(isAct?' active':'')+(isTod?' today-ring':'');"
                       + "      sh+=\"<button class='\"+cls+\"' onclick='jumpToSlide(\"+targetIdx+\",true)'>\""
                       + "        +\"<span>\"+shortNames[d]+\"</span><span style='font-size:9px;opacity:0.85;'>\"+(dayItem.shortDate||'')+\"</span></button>\";"
                       + "    }"
                       + "  }"
+                      + "  sh+=\"<button class='rail-arrow' onclick='shiftWeek(1)' title='Следующая неделя'>▼</button>\";"
                       + "  sb.innerHTML=sh;"
+                      + "}"
+
+                      + "function shiftWeek(dir){"
+                      + "  if(!semesterDays.length)return;"
+                      + "  var nextIdx=currentSlideIdx+(dir*6);"
+                      + "  if(nextIdx<0)nextIdx=0;"
+                      + "  if(nextIdx>=semesterDays.length)nextIdx=semesterDays.length-1;"
+                      + "  jumpToSlide(nextIdx,true);"
                       + "}"
 
                       + "function jumpToSlide(idx,smooth){"
@@ -1972,22 +2063,22 @@ jobs:
             --ks build/release.keystore \
             --ks-pass pass:android \
             --key-pass pass:android \
-            --out build/apk/BonchAutoCheck-01.03.01.apk \
+            --out build/apk/BonchAutoCheck-01.03.02.apk \
             build/aligned.apk
 
-          ls -lh build/apk/BonchAutoCheck-01.03.01.apk
+          ls -lh build/apk/BonchAutoCheck-01.03.02.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BonchAutoCheck-01.03.01-APK
-          path: build/apk/BonchAutoCheck-01.03.01.apk
+          name: BonchAutoCheck-01.03.02-APK
+          path: build/apk/BonchAutoCheck-01.03.02.apk
 
       - name: Publish Direct APK to GitHub Releases
         if: always()
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v01.03.01
-          name: "Bonch AutoCheck v01.03.01"
-          files: build/apk/BonchAutoCheck-01.03.01.apk
+          tag_name: v01.03.02
+          name: "Bonch AutoCheck v01.03.02"
+          files: build/apk/BonchAutoCheck-01.03.02.apk
