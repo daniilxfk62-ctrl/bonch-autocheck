@@ -1,4 +1,4 @@
-name: Build Bonch APK 01.02.03
+name: Build Bonch APK 01.02.04
 
 on:
   push:
@@ -20,7 +20,7 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Compile Native Android VPN-Engine APK v01.02.03
+      - name: Compile Native Android APK v01.02.04
         shell: bash
         run: |
           set -e
@@ -41,8 +41,8 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="ru.sut.bonch"
-              android:versionCode="105"
-              android:versionName="01.02.03">
+              android:versionCode="106"
+              android:versionName="01.02.04">
 
               <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
               <uses-permission android:name="android.permission.INTERNET" />
@@ -50,6 +50,8 @@ jobs:
               <uses-permission android:name="android.permission.WAKE_LOCK" />
               <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
               <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
               <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
               <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
               <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -58,24 +60,20 @@ jobs:
                   android:label="@string/app_name"
                   android:allowBackup="false"
                   android:usesCleartextTraffic="false"
-                  android:persistent="true"
                   android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
+                  <!-- Независимый фоновый процесс :bg_daemon (не конфликтует с внешним VPN на телефоне!) -->
                   <service
-                      android:name=".BonchVpnEngineService"
-                      android:process=":vpn_engine"
+                      android:name=".BonchBackgroundDaemon"
+                      android:process=":bg_daemon"
                       android:enabled="true"
-                      android:exported="true"
+                      android:exported="false"
                       android:stopWithTask="false"
-                      android:permission="android.permission.BIND_VPN_SERVICE">
-                      <intent-filter>
-                          <action android:name="android.net.VpnService" />
-                      </intent-filter>
-                  </service>
+                      android:foregroundServiceType="mediaPlayback|dataSync" />
 
                   <receiver
                       android:name=".BootReceiver"
-                      android:process=":vpn_engine"
+                      android:process=":bg_daemon"
                       android:enabled="true"
                       android:exported="true">
                       <intent-filter>
@@ -85,9 +83,11 @@ jobs:
                       </intent-filter>
                   </receiver>
 
+                  <!-- excludeFromRecents="true" скрывает окно из списка недавних вкладок при сворачивании, чтобы система не убила его при смахивании -->
                   <activity
                       android:name=".MainActivity"
                       android:exported="true"
+                      android:excludeFromRecents="true"
                       android:configChanges="orientation|screenSize|keyboardHidden">
                       <intent-filter>
                           <action android:name="android.intent.action.MAIN" />
@@ -110,9 +110,9 @@ jobs:
           public class BootReceiver extends BroadcastReceiver {
               @Override
               public void onReceive(Context context, Intent intent) {
-                  File enabledFlag = new File(context.getFilesDir(), "engine_enabled.flag");
+                  File enabledFlag = new File(context.getFilesDir(), "daemon_enabled.flag");
                   if (enabledFlag.exists()) {
-                      Intent svc = new Intent(context, BonchVpnEngineService.class);
+                      Intent svc = new Intent(context, BonchBackgroundDaemon.class);
                       svc.putExtra("action", "start");
                       if (Build.VERSION.SDK_INT >= 26) {
                           context.startForegroundService(svc);
@@ -124,7 +124,7 @@ jobs:
           }
           EOF
 
-          cat <<-'EOF' > src/ru/sut/bonch/BonchVpnEngineService.java
+          cat <<-'EOF' > src/ru/sut/bonch/BonchBackgroundDaemon.java
           package ru.sut.bonch;
 
           import android.app.AlarmManager;
@@ -132,14 +132,16 @@ jobs:
           import android.app.NotificationChannel;
           import android.app.NotificationManager;
           import android.app.PendingIntent;
+          import android.app.Service;
           import android.content.Context;
           import android.content.Intent;
           import android.media.AudioFormat;
           import android.media.AudioManager;
           import android.media.AudioTrack;
-          import android.net.VpnService;
+          import android.media.session.MediaSession;
+          import android.media.session.PlaybackState;
           import android.os.Build;
-          import android.os.ParcelFileDescriptor;
+          import android.os.IBinder;
           import android.os.PowerManager;
           import android.os.SystemClock;
           import java.io.ByteArrayOutputStream;
@@ -171,8 +173,8 @@ jobs:
           import org.json.JSONArray;
           import org.json.JSONObject;
 
-          public class BonchVpnEngineService extends VpnService {
-              public static final String APP_VERSION = "01.02.03";
+          public class BonchBackgroundDaemon extends Service {
+              public static final String APP_VERSION = "01.02.04";
 
               private static final String BASE_URL = "https://lk.sut.ru/cabinet";
               private static final String LOGIN_PAGE_URL = BASE_URL + "/?login=yes";
@@ -180,19 +182,18 @@ jobs:
               private static final String INI_URL = BASE_URL + "/ini.php";
               private static final String SCHEDULE_URL = BASE_URL + "/project/cabinet/forms/raspisanie.php";
 
-              private static final String CHANNEL_BG = "bonch_vpn_engine_010203";
-              private static final String CHANNEL_ALERT = "bonch_alert_010203";
-              private static final int FG_NOTIFICATION_ID = 2001;
+              private static final String CHANNEL_BG = "bonch_daemon_010204";
+              private static final String CHANNEL_ALERT = "bonch_alert_010204";
+              private static final int FG_NOTIFICATION_ID = 2004;
 
               private static final String[] BELL_SCHEDULE = {
                   "09:00", "10:30", "10:45", "13:00", "14:45", "16:30", "18:15", "20:00"
               };
 
-              private ParcelFileDescriptor vpnTunnel = null;
               private PowerManager.WakeLock wakeLock;
               private AudioTrack silentAudioTrack;
+              private MediaSession mediaSession;
               private Thread workerThread;
-              private Thread tunnelKeepAliveThread;
 
               private volatile boolean active = false;
               private volatile String statusText = "Отключено";
@@ -219,65 +220,26 @@ jobs:
                   }
                   PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                   if (pm != null) {
-                      wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BonchVpnEngine::CoreWakeLock");
+                      wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BonchDaemon::CoreWakeLock");
                   }
                   createNotificationChannels();
                   loadPersistedState();
               }
 
-              private void establishVpnTunnel() {
-                  if (vpnTunnel != null) return;
+              // Системная MediaSession + бесшумный звуковой цикл: делает сервис неприкасаемым для убийцы процессов MIUI/HyperOS и работает вместе с любым внешним VPN
+              private void startUnkillableMediaSession() {
                   try {
-                      Builder builder = new Builder();
-                      builder.setSession("Bonch AutoCheck VPN")
-                             .addAddress("10.254.254.1", 30)
-                             .addRoute("10.254.254.0", 30)
-                             .setMtu(1400)
-                             .setBlocking(true);
-                      if (Build.VERSION.SDK_INT >= 29) {
-                          builder.setMetered(false);
+                      if (mediaSession == null) {
+                          mediaSession = new MediaSession(this, "BonchAutoCheckMediaSession");
+                          PlaybackState state = new PlaybackState.Builder()
+                              .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE)
+                              .setState(PlaybackState.STATE_PLAYING, 0L, 1.0f, SystemClock.elapsedRealtime())
+                              .build();
+                          mediaSession.setPlaybackState(state);
+                          mediaSession.setActive(true);
                       }
-                      try {
-                          builder.addDisallowedApplication(getPackageName());
-                      } catch (Exception ignored) {}
+                  } catch (Exception ignored) {}
 
-                      vpnTunnel = builder.establish();
-
-                      if (vpnTunnel != null && (tunnelKeepAliveThread == null || !tunnelKeepAliveThread.isAlive())) {
-                          tunnelKeepAliveThread = new Thread(new Runnable() {
-                              @Override
-                              public void run() {
-                                  byte[] packet = new byte[1024];
-                                  while (active && vpnTunnel != null) {
-                                      try {
-                                          FileInputStream in = new FileInputStream(vpnTunnel.getFileDescriptor());
-                                          int read = in.read(packet);
-                                          if (read <= 0) {
-                                              Thread.sleep(2000L);
-                                          }
-                                      } catch (Exception e) {
-                                          try { Thread.sleep(2000L); } catch (Exception ignored) {}
-                                      }
-                                  }
-                              }
-                          });
-                          tunnelKeepAliveThread.start();
-                      }
-                  } catch (Exception e) {
-                      addLog("Работаем в фоновом режиме Foreground.");
-                  }
-              }
-
-              private void closeVpnTunnel() {
-                  if (vpnTunnel != null) {
-                      try {
-                          vpnTunnel.close();
-                      } catch (Exception ignored) {}
-                      vpnTunnel = null;
-                  }
-              }
-
-              private void startSilentAudioKeepAlive() {
                   try {
                       if (silentAudioTrack != null) return;
                       int sampleRate = 8000;
@@ -299,12 +261,19 @@ jobs:
                   } catch (Exception ignored) {}
               }
 
-              private void stopSilentAudioKeepAlive() {
+              private void stopUnkillableMediaSession() {
                   try {
                       if (silentAudioTrack != null) {
                           silentAudioTrack.stop();
                           silentAudioTrack.release();
                           silentAudioTrack = null;
+                      }
+                  } catch (Exception ignored) {}
+                  try {
+                      if (mediaSession != null) {
+                          mediaSession.setActive(false);
+                          mediaSession.release();
+                          mediaSession = null;
                       }
                   } catch (Exception ignored) {}
               }
@@ -313,7 +282,7 @@ jobs:
               public int onStartCommand(Intent intent, int flags, int startId) {
                   JSONObject cfg = readConfigFile();
                   String action = intent != null ? intent.getStringExtra("action") : null;
-                  File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
+                  File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
 
                   if (action == null) {
                       action = enabledFlag.exists() ? "start" : "stop";
@@ -321,7 +290,7 @@ jobs:
 
                   if ("stop".equals(action)) {
                       if (enabledFlag.exists()) enabledFlag.delete();
-                      stopEngine();
+                      stopDaemon();
                       return START_NOT_STICKY;
                   }
 
@@ -338,7 +307,7 @@ jobs:
                                   saveStateFile();
                                   return;
                               }
-                              addLog("Обновление расписания на неделю...");
+                              addLog("Загрузка расписания и поиск оранжевого дня...");
                               saveStateFile();
                               WindowState win = getCurrentWindowState(mode);
                               pollScheduleAndCheckIn(login, pass, win != null ? win.startTime : null);
@@ -364,9 +333,8 @@ jobs:
                       serviceStartMillis = System.currentTimeMillis();
                   }
 
-                  startForeground(FG_NOTIFICATION_ID, buildForegroundNotification("VPN-движок активен в фоне"));
-                  establishVpnTunnel();
-                  startSilentAudioKeepAlive();
+                  startUnkillableMediaSession();
+                  startForeground(FG_NOTIFICATION_ID, buildForegroundNotification("Фоновый демон активен"));
                   scheduleWatchdogAlarm();
 
                   if (!login.equals(lastUsedLogin) || !pass.equals(lastUsedPass)) {
@@ -392,7 +360,7 @@ jobs:
                       PendingIntent pi = PendingIntent.getBroadcast(getApplicationContext(), 99, restartIntent, pFlags);
                       AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
                       if (am != null) {
-                          long triggerAt = SystemClock.elapsedRealtime() + 30000L;
+                          long triggerAt = SystemClock.elapsedRealtime() + 25000L;
                           if (Build.VERSION.SDK_INT >= 23) {
                               am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi);
                           } else {
@@ -404,9 +372,9 @@ jobs:
 
               @Override
               public void onTaskRemoved(Intent rootIntent) {
-                  File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
+                  File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
                   if (enabledFlag.exists()) {
-                      addLog("Вкладка закрыта — VPN-движок продолжает работу.");
+                      addLog("Окно закрыто — фоновый демон продолжает работу.");
                       saveStateFile();
                       scheduleWatchdogAlarm();
                   }
@@ -414,11 +382,12 @@ jobs:
               }
 
               @Override
-              public void onRevoke() {
-                  File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
-                  if (enabledFlag.exists()) enabledFlag.delete();
-                  stopEngine();
-                  super.onRevoke();
+              public void onDestroy() {
+                  File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
+                  if (enabledFlag.exists()) {
+                      scheduleWatchdogAlarm();
+                  }
+                  super.onDestroy();
               }
 
               private void startWorkerLoop() {
@@ -430,17 +399,16 @@ jobs:
                   workerThread = new Thread(new Runnable() {
                       @Override
                       public void run() {
-                          addLog("VPN-движок v" + APP_VERSION + " запущен (:vpn_engine).");
+                          addLog("Фоновый демон v" + APP_VERSION + " запущен (:bg_daemon).");
                           saveStateFile();
 
                           while (active) {
-                              File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
+                              File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
                               if (!enabledFlag.exists()) {
                                   break;
                               }
 
                               scheduleWatchdogAlarm();
-                              establishVpnTunnel();
 
                               JSONObject cfg = readConfigFile();
                               String login = cfg.optString("login", "").trim();
@@ -477,9 +445,9 @@ jobs:
                               if (win == null) {
                                   String nextLesson = findNextUnmarkedLessonTime();
                                   if (nextLesson != null) {
-                                      updateStatus("VPN активен • Ждем пару в " + nextLesson);
+                                      updateStatus("В фоне • Ждем пару в " + nextLesson + " (кнопка за 10 мин)");
                                   } else {
-                                      updateStatus("VPN активен • Ждем следующую пару");
+                                      updateStatus("В фоне • Пары на сегодня завершены");
                                   }
                                   sleepQuietly(25000L);
                                   continue;
@@ -510,19 +478,18 @@ jobs:
                   workerThread.start();
               }
 
-              private void stopEngine() {
+              private void stopDaemon() {
                   active = false;
                   serviceStartMillis = 0L;
                   statusText = "Отключено";
-                  stopSilentAudioKeepAlive();
-                  closeVpnTunnel();
+                  stopUnkillableMediaSession();
                   if (wakeLock != null && wakeLock.isHeld()) {
                       wakeLock.release();
                   }
                   if (workerThread != null) {
                       workerThread.interrupt();
                   }
-                  addLog("Автоотметка и VPN-движок ВЫКЛЮЧЕНЫ пользователем.");
+                  addLog("Автоотметка ВЫКЛЮЧЕНА по кнопке.");
                   saveStateFile();
                   stopForeground(true);
                   stopSelf();
@@ -530,7 +497,7 @@ jobs:
 
               private JSONObject readConfigFile() {
                   try {
-                      File f = new File(getFilesDir(), "user_config_010203.json");
+                      File f = new File(getFilesDir(), "user_config_010204.json");
                       if (!f.exists()) return new JSONObject();
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -546,7 +513,7 @@ jobs:
 
               private synchronized void saveStateFile() {
                   try {
-                      File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
+                      File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
                       JSONObject obj = new JSONObject();
                       obj.put("active", active && enabledFlag.exists());
                       obj.put("status", statusText);
@@ -554,7 +521,7 @@ jobs:
                       obj.put("defaultDayIdx", defaultNearestDayIdx);
                       obj.put("days", daysWeekArray);
                       obj.put("logs", new JSONArray(logs));
-                      File f = new File(getFilesDir(), "bg_state_010203.json");
+                      File f = new File(getFilesDir(), "bg_state_010204.json");
                       try (FileOutputStream fos = new FileOutputStream(f)) {
                           fos.write(obj.toString().getBytes("UTF-8"));
                       }
@@ -563,7 +530,7 @@ jobs:
 
               private synchronized void loadPersistedState() {
                   try {
-                      File f = new File(getFilesDir(), "bg_state_010203.json");
+                      File f = new File(getFilesDir(), "bg_state_010204.json");
                       if (!f.exists()) return;
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -647,7 +614,7 @@ jobs:
                       if (nm == null) return;
                       NotificationChannel bgChannel = new NotificationChannel(
                           CHANNEL_BG,
-                          "VPN-движок Bonch AutoCheck",
+                          "Фоновый демон Bonch AutoCheck",
                           NotificationManager.IMPORTANCE_LOW
                       );
                       nm.createNotificationChannel(bgChannel);
@@ -669,11 +636,14 @@ jobs:
                   Notification.Builder builder = Build.VERSION.SDK_INT >= 26
                       ? new Notification.Builder(this, CHANNEL_BG)
                       : new Notification.Builder(this);
-                  builder.setContentTitle("Bonch VPN AutoCheck v" + APP_VERSION)
+                  builder.setContentTitle("Bonch AutoCheck v" + APP_VERSION + " (В фоне)")
                          .setContentText(content)
                          .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
                          .setContentIntent(pendingIntent)
                          .setOngoing(true);
+                  if (mediaSession != null && Build.VERSION.SDK_INT >= 21) {
+                      builder.setStyle(new Notification.MediaStyle().setMediaSession(mediaSession.getSessionToken()));
+                  }
                   return builder.build();
               }
 
@@ -776,9 +746,11 @@ jobs:
 
               private static class DayGroup {
                   String header;
+                  String dateString;
                   Date dateObj;
                   List<JSONObject> lessons = new ArrayList<>();
                   boolean hasUnfinishedLessons = false;
+                  boolean isHighlightedOrange = false;
               }
 
               private synchronized void pollScheduleAndCheckIn(String login, String password, String currentWindowStart) {
@@ -792,11 +764,15 @@ jobs:
                           html = httpRequest("POST", SCHEDULE_URL, "");
                       }
 
-                      Pattern trPattern = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                      Pattern dayHeaderPattern = Pattern.compile("(Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье)[\\s\\S]*?(\\d{2}\\.\\d{2}\\.\\d{4})?", Pattern.CASE_INSENSITIVE);
+                      Pattern trPattern = Pattern.compile("<tr([^>]*)>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                      Pattern dayNamePattern = Pattern.compile("(Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье)", Pattern.CASE_INSENSITIVE);
+                      Pattern dateValPattern = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");
                       Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)");
                       Pattern zanPattern = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
                       Pattern startedPattern = Pattern.compile("занятие\\s+началось\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
+                      Pattern waitBtnPattern = Pattern.compile("Кнопка\\s+появится\\s+в\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
+                      // Определение оранжевой подсветки текущего дня на сайте СПбГУТ
+                      Pattern orangeStylePattern = Pattern.compile("(#ff|#f9|#fb|#f8|#fd|#fe|orange|rgb\\s*\\(\\s*255|rgb\\s*\\(\\s*254|rgb\\s*\\(\\s*251|rgb\\s*\\(\\s*249)", Pattern.CASE_INSENSITIVE);
 
                       Matcher trMatcher = trPattern.matcher(html);
                       List<DayGroup> dayGroups = new ArrayList<>();
@@ -808,25 +784,31 @@ jobs:
                       int nowMinutesOfDay = nowCal.get(Calendar.HOUR_OF_DAY) * 60 + nowCal.get(Calendar.MINUTE);
 
                       while (trMatcher.find()) {
-                          String trHtml = trMatcher.group(1);
-                          String rowText = trHtml.replaceAll("<[^>]+>", " ")
-                                                 .replaceAll("&nbsp;", " ")
-                                                 .replaceAll("\\s+", " ")
-                                                 .trim();
+                          String trAttrs = trMatcher.group(1);
+                          String trInner = trMatcher.group(2);
+                          String fullTrHtml = "<tr" + trAttrs + ">" + trInner + "</tr>";
+
+                          String rowText = trInner.replaceAll("<[^>]+>", " ")
+                                                  .replaceAll("&nbsp;", " ")
+                                                  .replaceAll("\\s+", " ")
+                                                  .trim();
                           if (rowText.isEmpty()) continue;
 
                           Matcher tm = timePattern.matcher(rowText);
-                          Matcher dm = dayHeaderPattern.matcher(rowText);
+                          Matcher dm = dayNamePattern.matcher(rowText);
+                          Matcher dateM = dateValPattern.matcher(rowText);
 
+                          // Если в строке нет времени пары, но есть название дня недели ("Вторник 20.10.2026")
                           if (!tm.find()) {
-                              if (dm.find() && rowText.length() < 60) {
+                              if (dm.find() && rowText.length() < 75) {
                                   currentGroup = new DayGroup();
-                                  String dayName = dm.group(1);
-                                  String dateStr = dm.group(2);
-                                  currentGroup.header = dateStr != null ? (dayName + " (" + dateStr + ")") : dayName;
-                                  if (dateStr != null) {
+                                  String dName = dm.group(1);
+                                  String dStr = dateM.find() ? dateM.group(1) : null;
+                                  currentGroup.dateString = dStr;
+                                  currentGroup.header = dStr != null ? (dName + " " + dStr) : dName;
+                                  if (dStr != null) {
                                       try {
-                                          currentGroup.dateObj = df.parse(dateStr);
+                                          currentGroup.dateObj = df.parse(dStr);
                                       } catch (Exception ignored) {}
                                   }
                                   dayGroups.add(currentGroup);
@@ -836,8 +818,16 @@ jobs:
 
                           if (currentGroup == null) {
                               currentGroup = new DayGroup();
-                              currentGroup.header = "Учебный день";
+                              currentGroup.header = "Сегодня";
                               dayGroups.add(currentGroup);
+                          }
+
+                          // Проверяем, подсвечена ли строка этого дня оранжевым цветом в ЛК или содержит "Кнопка появится в..."
+                          Matcher wm = waitBtnPattern.matcher(rowText);
+                          String btnAppearTime = wm.find() ? wm.group(1) : null;
+
+                          if (orangeStylePattern.matcher(fullTrHtml).find() || btnAppearTime != null) {
+                              currentGroup.isHighlightedOrange = true;
                           }
 
                           String timeRange = tm.group(0);
@@ -852,7 +842,7 @@ jobs:
                               currentGroup.hasUnfinishedLessons = true;
                           }
 
-                          Matcher zm = zanPattern.matcher(trHtml);
+                          Matcher zm = zanPattern.matcher(fullTrHtml);
                           String raspId = null;
                           String weekId = null;
                           if (zm.find()) {
@@ -868,6 +858,7 @@ jobs:
                                                || lowerRow.contains("отмечен")
                                                || lowerRow.contains("присутствует");
 
+                          // Если появилась кнопка open_zan — сразу жмем её
                           if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
                               if (sendAndVerifyOpenZan(raspId, weekId)) {
                                   String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
@@ -905,6 +896,7 @@ jobs:
                           String cleanSubject = rowText
                               .replace(timeRange, "")
                               .replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "")
+                              .replaceAll("Кнопка\\s+появится\\s+в\\s*\\d{1,2}[:.]\\d{2}\\.?\\s*Обновить\\.?", "")
                               .trim();
                           if (cleanSubject.length() > 100) {
                               cleanSubject = cleanSubject.substring(0, 100);
@@ -916,6 +908,7 @@ jobs:
                           item.put("subject", cleanSubject);
                           item.put("checked", isLessonDone);
                           item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
+                          item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
                           currentGroup.lessons.add(item);
                       }
 
@@ -926,18 +919,19 @@ jobs:
                               nonEmptyGroups.add(g);
                               JSONObject dayObj = new JSONObject();
                               dayObj.put("title", g.header);
+                              dayObj.put("isOrange", g.isHighlightedOrange);
                               dayObj.put("lessons", new JSONArray(g.lessons));
                               allDaysJson.put(dayObj);
                           }
                       }
                       daysWeekArray = allDaysJson;
-                      defaultNearestDayIdx = findNearestDayIndex(nonEmptyGroups);
+                      defaultNearestDayIdx = findCurrentOrNearestDayIndex(nonEmptyGroups);
 
                       if (!nonEmptyGroups.isEmpty()) {
-                          DayGroup nearest = nonEmptyGroups.get(defaultNearestDayIdx);
+                          DayGroup targetDay = nonEmptyGroups.get(defaultNearestDayIdx);
                           synchronized (parsedTimes) {
                               parsedTimes.clear();
-                              for (JSONObject les : nearest.lessons) {
+                              for (JSONObject les : targetDay.lessons) {
                                   String st = les.optString("startTime", "");
                                   if (!st.isEmpty()) parsedTimes.add(st);
                               }
@@ -951,8 +945,9 @@ jobs:
                               addLog(title + " — " + s);
                               sendCheckInAlertNotification(title, s);
                           }
-                      } else {
-                          addLog("Неделя обновлена (дней: " + allDaysJson.length() + ").");
+                      } else if (!nonEmptyGroups.isEmpty()) {
+                          String activeDayName = nonEmptyGroups.get(defaultNearestDayIdx).header;
+                          addLog("Актуальный день: " + activeDayName + " (всего дней: " + allDaysJson.length() + ")");
                       }
                       saveStateFile();
                   } catch (Exception e) {
@@ -961,8 +956,26 @@ jobs:
                   }
               }
 
-              private int findNearestDayIndex(List<DayGroup> groups) {
+              private int findCurrentOrNearestDayIndex(List<DayGroup> groups) {
                   if (groups.isEmpty()) return 0;
+
+                  // ПРИОРИТЕТ 1: День, который сам сайт lk.sut.ru подсветил ОРАНЖЕВЫМ цветом (или где написано "Кнопка появится в...")
+                  for (int i = 0; i < groups.size(); i++) {
+                      if (groups.get(i).isHighlightedOrange) {
+                          return i;
+                      }
+                  }
+
+                  // ПРИОРИТЕТ 2: Точное совпадение с сегодняшней датой (например, "20.10.2026")
+                  String todayStr = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
+                  for (int i = 0; i < groups.size(); i++) {
+                      DayGroup g = groups.get(i);
+                      if (todayStr.equals(g.dateString)) {
+                          return i;
+                      }
+                  }
+
+                  // ПРИОРИТЕТ 3: Ближайшая будущая дата (если сегодня выходной)
                   Calendar cal = Calendar.getInstance();
                   cal.set(Calendar.HOUR_OF_DAY, 0);
                   cal.set(Calendar.MINUTE, 0);
@@ -972,15 +985,20 @@ jobs:
 
                   for (int i = 0; i < groups.size(); i++) {
                       DayGroup g = groups.get(i);
-                      if (g.dateObj != null) {
-                          if (g.dateObj.equals(todayStart) && g.hasUnfinishedLessons) return i;
-                          if (g.dateObj.after(todayStart)) return i;
+                      if (g.dateObj != null && !g.dateObj.before(todayStart)) {
+                          return i;
                       }
                   }
+
+                  // ПРИОРИТЕТ 4: По русскому названию текущего дня недели
+                  String[] ruDays = {"Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"};
+                  String todayRuName = ruDays[Calendar.getInstance().get(Calendar.DAY_OF_WEEK) - 1].toLowerCase(Locale.ROOT);
                   for (int i = 0; i < groups.size(); i++) {
-                      DayGroup g = groups.get(i);
-                      if (g.dateObj != null && !g.dateObj.before(todayStart)) return i;
+                      if (groups.get(i).header.toLowerCase(Locale.ROOT).contains(todayRuName)) {
+                          return i;
+                      }
                   }
+
                   return 0;
               }
 
@@ -1023,6 +1041,11 @@ jobs:
                   }
                   return null;
               }
+
+              @Override
+              public IBinder onBind(Intent intent) {
+                  return null;
+              }
           }
           EOF
 
@@ -1034,7 +1057,6 @@ jobs:
           import android.content.Context;
           import android.content.Intent;
           import android.net.Uri;
-          import android.net.VpnService;
           import android.os.Build;
           import android.os.Bundle;
           import android.os.PowerManager;
@@ -1049,7 +1071,6 @@ jobs:
           import org.json.JSONObject;
 
           public class MainActivity extends Activity {
-              private static final int VPN_REQUEST_CODE = 203;
               private WebView webView;
 
               @Override
@@ -1085,29 +1106,8 @@ jobs:
                   webView.loadDataWithBaseURL("https://lk.sut.ru", buildHtml(), "text/html", "UTF-8", null);
               }
 
-              @Override
-              protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-                  super.onActivityResult(requestCode, resultCode, data);
-                  if (requestCode == VPN_REQUEST_CODE) {
-                      if (resultCode == RESULT_OK) {
-                          sendVpnEngineCommand("start");
-                      }
-                  }
-              }
-
-              private void startVpnEngine() {
-                  try {
-                      Intent prep = VpnService.prepare(MainActivity.this);
-                      if (prep != null) {
-                          startActivityForResult(prep, VPN_REQUEST_CODE);
-                          return;
-                      }
-                  } catch (Exception ignored) {}
-                  sendVpnEngineCommand("start");
-              }
-
-              private void sendVpnEngineCommand(String action) {
-                  Intent svc = new Intent(MainActivity.this, BonchVpnEngineService.class);
+              private void sendDaemonCommand(String action) {
+                  Intent svc = new Intent(MainActivity.this, BonchBackgroundDaemon.class);
                   svc.putExtra("action", action);
                   if ("start".equals(action) && Build.VERSION.SDK_INT >= 26) {
                       startForegroundService(svc);
@@ -1120,7 +1120,7 @@ jobs:
                   @JavascriptInterface
                   public String getSavedConfig() {
                       try {
-                          File f = new File(getFilesDir(), "user_config_010203.json");
+                          File f = new File(getFilesDir(), "user_config_010204.json");
                           if (!f.exists()) {
                               JSONObject def = new JSONObject();
                               def.put("interval", "1");
@@ -1142,12 +1142,12 @@ jobs:
                   @JavascriptInterface
                   public String getState() {
                       try {
-                          File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
-                          File f = new File(getFilesDir(), "bg_state_010203.json");
+                          File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
+                          File f = new File(getFilesDir(), "bg_state_010204.json");
                           if (!f.exists()) {
                               JSONObject empty = new JSONObject();
                               empty.put("active", enabledFlag.exists());
-                              empty.put("status", enabledFlag.exists() ? "Запуск VPN-движка..." : "Отключено");
+                              empty.put("status", enabledFlag.exists() ? "Запуск фонового демона..." : "Отключено");
                               return empty.toString();
                           }
                           ByteArrayOutputStream baos = new ByteArrayOutputStream();
@@ -1172,23 +1172,32 @@ jobs:
                   @JavascriptInterface
                   public void toggleAutoCheck(String login, String password, String intervalStr, String mode) {
                       writeConfigFile(login, password, intervalStr, mode);
-                      File enabledFlag = new File(getFilesDir(), "engine_enabled.flag");
+                      File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
                       if (enabledFlag.exists()) {
-                          sendVpnEngineCommand("stop");
+                          sendDaemonCommand("stop");
                       } else {
-                          runOnUiThread(new Runnable() {
-                              @Override
-                              public void run() {
-                                  startVpnEngine();
-                              }
-                          });
+                          sendDaemonCommand("start");
                       }
                   }
 
                   @JavascriptInterface
                   public void checkNow(String login, String password, String intervalStr, String mode) {
                       writeConfigFile(login, password, intervalStr, mode);
-                      sendVpnEngineCommand("check_once");
+                      sendDaemonCommand("check_once");
+                  }
+
+                  @JavascriptInterface
+                  public void hideToBackground() {
+                      runOnUiThread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (Build.VERSION.SDK_INT >= 21) {
+                                  finishAndRemoveTask();
+                              } else {
+                                  finish();
+                              }
+                          }
+                      });
                   }
 
                   @JavascriptInterface
@@ -1217,7 +1226,7 @@ jobs:
                       cfg.put("password", pass != null ? pass.trim() : "");
                       cfg.put("interval", (interval != null && !interval.isEmpty()) ? interval : "1");
                       cfg.put("mode", (mode != null && !mode.isEmpty()) ? mode : "full_lesson");
-                      File f = new File(getFilesDir(), "user_config_010203.json");
+                      File f = new File(getFilesDir(), "user_config_010204.json");
                       try (FileOutputStream fos = new FileOutputStream(f)) {
                           fos.write(cfg.toString().getBytes("UTF-8"));
                       }
@@ -1235,12 +1244,188 @@ jobs:
                       + ".btn{width:100%;padding:15px;border-radius:12px;border:none;background:#2563eb;color:#fff;font-weight:800;font-size:15px;margin-top:6px;}"
                       + ".btn.on{background:#dc2626;}"
                       + ".btn-sec{width:100%;padding:11px;border-radius:12px;border:1px solid #334155;background:#1e293b;color:#cbd5e1;font-weight:600;font-size:12px;margin-top:7px;}"
-                      + ".btn-miui{width:100%;padding:10px;border-radius:10px;border:1px solid #059669;background:#064e3b;color:#6ee7b7;font-weight:700;font-size:12px;margin-bottom:10px;}"
+                      + ".btn-hide{width:100%;padding:11px;border-radius:12px;border:1px solid #059669;background:#064e3b;color:#6ee7b7;font-weight:700;font-size:12px;margin-top:7px;}"
                       + ".day-nav{display:flex;align-items:center;gap:6px;margin:12px 0 8px;}"
-                      + ".nav-btn{width:42px;height:40px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#60a5fa;font-weight:900;font-size:16px;}"
-                      + ".day-sel{flex:1;margin:0;font-weight:700;color:#60a5fa;}"
-                      + ".item{background:#1e293b;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;border-left:4px solid #fbbf24;}"
+                      + ".nav-btn{width:42px;height:40px;border-radius:10px;border:1px solid #334155;background:#1e293b;color:#f97316;font-weight:900;font-size:16px;}"
+                      + ".day-sel{flex:1;margin:0;font-weight:700;color:#fb923c;}"
+                      + ".item{background:#1e293b;padding:10px;border-radius:10px;margin-bottom:6px;font-size:12px;border-left:4px solid #f97316;}"
                       + ".item.done{border-left-color:#34d399;}"
                       + ".log{background:#090d16;border:1px solid #1e293b;border-radius:10px;padding:10px;font-family:monospace;font-size:11px;height:120px;overflow-y:auto;white-space:pre-wrap;color:#cbd5e1;}"
-                      + ".ver-footer{margin-top:14px;padding-top:10px;border-top:1px solid #1e293b;text-align:center;font-size:12px;font-weight:800;color:#60a5fa;letter-spacing:0.5px;}"
+                      + ".ver-footer{margin-top:14px;padding-top:10px;border-top:1px solid #1e293b;text-align:center;font-size:12px;font-weight:800;color:#f97316;letter-spacing:0.5px;}"
                       + "</style></head><body><div class='card'>"
+                      + "<div style='font-size:18px;font-weight:800;margin-bottom:6px;'>Bonch AutoCheck</div>"
+                      + "<span class='lbl'>Логин / Email от lk.sut.ru</span>"
+                      + "<input id='login' placeholder='student@sut.ru' oninput='saveCfg()' onchange='saveCfg()'>"
+                      + "<span class='lbl'>Пароль от ЛК (хранится локально)</span>"
+                      + "<input id='password' type='password' placeholder='••••••••' oninput='saveCfg()' onchange='saveCfg()'>"
+                      + "<span class='lbl'>Через сколько отправлять запросы</span>"
+                      + "<select id='interval' onchange='saveCfg()'>"
+                      + "<option value='0.5'>Каждые 30 секунд (мгновенно)</option>"
+                      + "<option value='1'>Каждую 1 минуту</option>"
+                      + "<option value='5'>Каждые 5 минут</option></select>"
+                      + "<span class='lbl'>Как долго проверять (после отметки спит до след. пары)</span>"
+                      + "<select id='mode' onchange='saveCfg()'>"
+                      + "<option value='full_lesson'>За 10 мин до пары + вся пара (95 мин)</option>"
+                      + "<option value='first_30'>За 10 мин до пары + первые 30 мин</option>"
+                      + "<option value='always'>Постоянно 24/7</option></select>"
+                      + "<button id='btn' class='btn' onclick='toggle()'>ВКЛЮЧИТЬ АВТООТМЕТКУ</button>"
+                      + "<button class='btn-hide' onclick='AndroidBridge.hideToBackground()'>СВЕРНУТЬ В ФОН (СКРЫТЬ ИЗ ВКЛАДОК)</button>"
+                      + "<button class='btn-sec' onclick='checkNow()'>Обновить расписание недели</button>"
+                      + "<div id='status' style='margin:10px 0 4px;font-size:13px;font-weight:700;color:#94a3b8;'>Статус: Отключено</div>"
+                      + "<div id='uptime' style='font-size:11px;color:#34d399;margin-bottom:6px;font-weight:600;'></div>"
+                      + "<div class='day-nav'>"
+                      + "  <button class='nav-btn' onclick='shiftDay(-1)'>◀</button>"
+                      + "  <select id='day_select' class='day-sel' onchange='onSelectDay()'><option value='0'>📅 Загрузка дня...</option></select>"
+                      + "  <button class='nav-btn' onclick='shiftDay(1)'>▶</button>"
+                      + "</div>"
+                      + "<div id='lessons' style='margin-bottom:10px;'></div>"
+                      + "<div id='logs' class='log'>Загрузка...</div>"
+                      + "<div id='ver_box' class='ver-footer'>Версия: 01.02.04</div>"
+                      + "</div><script>"
+                      + "var daysCache=[];var selectedDayIdx=-1;var lastDefaultIdx=-1;var userManuallyChangedDay=false;"
+                      + "function val(id){return document.getElementById(id).value;}"
+                      + "function initConfig(){"
+                      + "  try{"
+                      + "    var c=JSON.parse(AndroidBridge.getSavedConfig());"
+                      + "    if(c.login!==undefined)document.getElementById('login').value=c.login;"
+                      + "    if(c.password!==undefined)document.getElementById('password').value=c.password;"
+                      + "    if(c.interval)document.getElementById('interval').value=c.interval;"
+                      + "    if(c.mode)document.getElementById('mode').value=c.mode;"
+                      + "  }catch(e){}"
+                      + "}"
+                      + "function saveCfg(){AndroidBridge.saveSettingsOnly(val('login'),val('password'),val('interval'),val('mode'));}"
+                      + "function toggle(){AndroidBridge.toggleAutoCheck(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,400);}"
+                      + "function checkNow(){userManuallyChangedDay=false;AndroidBridge.checkNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,700);}"
+                      + "function shiftDay(dir){"
+                      + "  if(!daysCache.length)return;"
+                      + "  userManuallyChangedDay=true;"
+                      + "  selectedDayIdx=(selectedDayIdx+dir+daysCache.length)%daysCache.length;"
+                      + "  document.getElementById('day_select').value=String(selectedDayIdx);"
+                      + "  renderSelectedDay();"
+                      + "}"
+                      + "function onSelectDay(){"
+                      + "  userManuallyChangedDay=true;"
+                      + "  selectedDayIdx=parseInt(document.getElementById('day_select').value||'0',10);"
+                      + "  renderSelectedDay();"
+                      + "}"
+                      + "function renderSelectedDay(){"
+                      + "  var box=document.getElementById('lessons');"
+                      + "  if(!daysCache || !daysCache.length){"
+                      + "    box.innerHTML=\"<div style='font-size:12px;color:#94a3b8;'>Нажмите «ВКЛЮЧИТЬ АВТООТМЕТКУ» или «Обновить расписание недели».</div>\";"
+                      + "    return;"
+                      + "  }"
+                      + "  if(selectedDayIdx<0 || selectedDayIdx>=daysCache.length)selectedDayIdx=0;"
+                      + "  var dayObj=daysCache[selectedDayIdx];"
+                      + "  var list=dayObj.lessons||[];"
+                      + "  var h='';"
+                      + "  for(var i=0;i<list.length;i++){"
+                      + "    var x=list[i];"
+                      + "    var cls=x.checked?'item done':'item';"
+                      + "    var c=x.checked?'#34d399':'#fb923c';"
+                      + "    var waitHint=x.waitBtnTime?(' (кнопка в '+x.waitBtnTime+')'):'';"
+                      + "    var st=x.checked?('✅ Отмечен (время: '+(x.checkTime||'ОК')+')'):('⏳ Ждем кнопку'+waitHint);"
+                      + "    h+=\"<div class='\"+cls+\"'><b style='color:\"+c+\"'>\"+x.time+\" — \"+st+\"</b><br>\"+x.subject+\"</div>\";"
+                      + "  }"
+                      + "  box.innerHTML=h;"
+                      + "}"
+                      + "function poll(){"
+                      + "  try{"
+                      + "    var d=JSON.parse(AndroidBridge.getState());"
+                      + "    var b=document.getElementById('btn');"
+                      + "    var s=document.getElementById('status');"
+                      + "    var u=document.getElementById('uptime');"
+                      + "    if(d.active){"
+                      + "      b.className='btn on';"
+                      + "      b.innerText='ВЫКЛЮЧИТЬ АВТООТМЕТКУ';"
+                      + "      s.style.color='#34d399';"
+                      + "      if(d.startMillis && d.startMillis>0){"
+                      + "        var sec=Math.floor((Date.now()-d.startMillis)/1000);"
+                      + "        var m=Math.floor(sec/60);var rs=sec%60;"
+                      + "        u.innerText='🟢 Фоновый процесс работает непрерывно: '+m+' мин '+rs+' сек';"
+                      + "      }"
+                      + "    }else{"
+                      + "      b.className='btn';"
+                      + "      b.innerText='ВКЛЮЧИТЬ АВТООТМЕТКУ';"
+                      + "      s.style.color='#94a3b8';"
+                      + "      u.innerText='';"
+                      + "    }"
+                      + "    s.innerText='Статус: '+(d.status||'Отключено');"
+                      + "    if(d.logs)document.getElementById('logs').innerText=d.logs.join('\\n');"
+                      + "    if(d.days && d.days.length){"
+                      + "      daysCache=d.days;"
+                      + "      var defIdx=d.defaultDayIdx||0;"
+                      + "      var sel=document.getElementById('day_select');"
+                      + "      var opts='';"
+                      + "      for(var j=0;j<daysCache.length;j++){"
+                      + "        var tag=daysCache[j].isOrange?' 🟠 (Сегодня)':(j===defIdx?' (Ближайший)':'');"
+                      + "        opts+=\"<option value='\"+j+\"'>📅 \"+daysCache[j].title+tag+\"</option>\";"
+                      + "      }"
+                      + "      if(sel.innerHTML!==opts)sel.innerHTML=opts;"
+                      + "      if(!userManuallyChangedDay || selectedDayIdx===-1 || lastDefaultIdx!==defIdx){"
+                      + "        lastDefaultIdx=defIdx;"
+                      + "        selectedDayIdx=defIdx;"
+                      + "      }"
+                      + "      sel.value=String(selectedDayIdx);"
+                      + "      renderSelectedDay();"
+                      + "    }"
+                      + "  }catch(e){}"
+                      + "}"
+                      + "initConfig();setInterval(poll,1500);poll();"
+                      + "</script></body></html>";
+              }
+          }
+          EOF
+
+          sed -i 's/^[[:space:]]*//' res/values/strings.xml AndroidManifest.xml
+
+          "$BUILD_TOOLS/aapt2" compile --dir res -o build/res.zip
+          "$BUILD_TOOLS/aapt2" link -o build/unaligned.apk \
+            -I "$ANDROID_JAR" \
+            --manifest AndroidManifest.xml \
+            --java build/gen \
+            build/res.zip
+
+          javac -encoding UTF-8 -source 8 -target 8 \
+            -bootclasspath "$ANDROID_JAR" \
+            -cp "$ANDROID_JAR" \
+            -d build/obj \
+            build/gen/ru/sut/bonch/R.java \
+            src/ru/sut/bonch/BootReceiver.java \
+            src/ru/sut/bonch/BonchBackgroundDaemon.java \
+            src/ru/sut/bonch/MainActivity.java
+
+          "$BUILD_TOOLS/d8" --lib "$ANDROID_JAR" --output build/ build/obj/ru/sut/bonch/*.class
+
+          zip -uj build/unaligned.apk build/classes.dex
+
+          "$BUILD_TOOLS/zipalign" -f -p 4 build/unaligned.apk build/aligned.apk
+
+          keytool -genkeypair -v \
+            -keystore build/release.keystore \
+            -storepass android -keypass android \
+            -alias bonchkey -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=BonchAutoCheck,OU=IT,O=SUT,L=SPb,S=SPb,C=RU"
+
+          "$BUILD_TOOLS/apksigner" sign \
+            --ks build/release.keystore \
+            --ks-pass pass:android \
+            --key-pass pass:android \
+            --out build/apk/BonchAutoCheck-01.02.04.apk \
+            build/aligned.apk
+
+          ls -lh build/apk/BonchAutoCheck-01.02.04.apk
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BonchAutoCheck-01.02.04-APK
+          path: build/apk/BonchAutoCheck-01.02.04.apk
+
+      - name: Publish Direct APK to GitHub Releases
+        if: always()
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v01.02.04
+          name: "Bonch AutoCheck v01.02.04"
+          files: build/apk/BonchAutoCheck-01.02.04.apk
