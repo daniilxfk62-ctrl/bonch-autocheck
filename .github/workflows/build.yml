@@ -32,6 +32,9 @@ jobs:
           mkdir -p build/gen build/obj build/apk
           sed -i 's/^[[:space:]]*//' res/values/strings.xml AndroidManifest.xml
 
+          # Автоматически исправляем this -> ctx в NotificationHelper.java на строке 54
+          sed -i 's/Notification.Builder(this)/Notification.Builder(ctx)/g' src/ru/sut/bonch/NotificationHelper.java
+
           "$BUILD_TOOLS/aapt2" compile --dir res -o build/res.zip
           "$BUILD_TOOLS/aapt2" link -o build/unaligned.apk \
             -I "$ANDROID_JAR" \
@@ -63,6 +66,8 @@ jobs:
             --key-pass pass:android \
             --out build/apk/BonchAutoCheck-01.04.00.apk \
             build/aligned.apk
+
+          ls -lh build/apk/BonchAutoCheck-01.04.00.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
