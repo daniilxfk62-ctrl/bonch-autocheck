@@ -51,7 +51,7 @@ public class NotificationHelper {
 
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(ctx, CHANNEL_BG)
-            : new Notification.Builder(this);
+            : new Notification.Builder(ctx);
 
         builder.setContentTitle("Bonch AutoCheck")
                .setContentText(content)
