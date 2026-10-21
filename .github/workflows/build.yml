@@ -1,4 +1,4 @@
-name: Build Bonch APK 01.03.02
+name: Build Bonch APK 01.03.03
 
 on:
   push:
@@ -21,7 +21,7 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Compile Native Android APK v01.03.02
+      - name: Compile Native Android APK v01.03.03
         shell: bash
         run: |
           set -e
@@ -42,8 +42,8 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"
               package="ru.sut.bonch"
-              android:versionCode="111"
-              android:versionName="01.03.02">
+              android:versionCode="112"
+              android:versionName="01.03.03">
 
               <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
               <uses-permission android:name="android.permission.INTERNET" />
@@ -158,6 +158,7 @@ jobs:
           import java.util.Date;
           import java.util.HashMap;
           import java.util.HashSet;
+          import java.util.Iterator;
           import java.util.LinkedHashMap;
           import java.util.LinkedHashSet;
           import java.util.List;
@@ -171,7 +172,7 @@ jobs:
           import org.json.JSONObject;
 
           public class BonchBackgroundDaemon extends Service {
-              public static final String APP_VERSION = "01.03.02";
+              public static final String APP_VERSION = "01.03.03";
               private static final int TOTAL_SEMESTER_WEEKS = 18;
 
               private static final String BASE_URL = "https://lk.sut.ru/cabinet";
@@ -179,12 +180,16 @@ jobs:
               private static final String AUTH_URL = BASE_URL + "/lib/autentificationok.php";
               private static final String INI_URL = BASE_URL + "/ini.php";
               private static final String SCHEDULE_URL = BASE_URL + "/project/cabinet/forms/raspisanie.php";
+              private static final String[] DIARY_URLS = {
+                  BASE_URL + "/project/cabinet/forms/dnevnik.php",
+                  BASE_URL + "/project/cabinet/forms/jurnal.php",
+                  BASE_URL + "/project/cabinet/forms/usp.php"
+              };
 
-              private static final String CHANNEL_BG = "bonch_compact_service_010302";
-              private static final String CHANNEL_ALERT = "bonch_alert_010302";
-              private static final int FG_NOTIFICATION_ID = 2009;
+              private static final String CHANNEL_BG = "bonch_compact_service_010303";
+              private static final String CHANNEL_ALERT = "bonch_alert_010303";
+              private static final int FG_NOTIFICATION_ID = 2010;
 
-              // Только 6 учебных дней (Воскресенье полностью удалено)
               private static final String[] RU_DAYS_FULL = {
                   "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"
               };
@@ -201,15 +206,17 @@ jobs:
               private volatile String scanStatusText = "";
               private volatile String statusText = "Отключено";
               private volatile long serviceStartMillis = 0L;
+              private volatile long lastDiaryPollMillis = 0L;
               private final List<String> logs = new ArrayList<>();
 
               private JSONArray semesterDaysArray = new JSONArray();
               private JSONArray smartCatalogArray = new JSONArray();
+              private JSONArray diaryRecentArray = new JSONArray();
               private int todayDayIdx = 0;
-              private volatile boolean hasTodayScheduleLoaded = false;
 
               private final Set<String> completedWindowsToday = new HashSet<>();
               private final Set<String> markedRaspIdsToday = new HashSet<>();
+              private final Set<String> notifiedSkippedToday = new HashSet<>();
               private final Map<String, String> checkInTimeByStart = new HashMap<>();
               private final Set<String> todayRealStartTimes = new HashSet<>();
               private String currentDayStamp = "";
@@ -266,9 +273,36 @@ jobs:
                       return active ? START_STICKY : START_NOT_STICKY;
                   }
 
+                  if ("test_notif".equals(action)) {
+                      sendCheckInAlertNotification(
+                          "🔔 Тест уведомлений Bonch AutoCheck",
+                          "Уведомления об оценках из Дневника и парах работают корректно!"
+                      );
+                      addLog("Отправлено тестовое уведомление.");
+                      saveStateFile();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
+
                   final String login = cfg.optString("login", "").trim();
                   final String pass = cfg.optString("password", "").trim();
                   final String mode = cfg.optString("mode", "full_lesson");
+
+                  if ("check_diary_now".equals(action)) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (login.isEmpty() || pass.isEmpty()) {
+                                  addLog("Введите логин и пароль для проверки Дневника!");
+                                  saveStateFile();
+                                  return;
+                              }
+                              addLog("📚 Проверка раздела «Учеба -> Дневник»...");
+                              saveStateFile();
+                              pollDiaryGradesAndAttendance(login, pass, true);
+                          }
+                      }).start();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
 
                   if ("scan_semester".equals(action)) {
                       new Thread(new Runnable() {
@@ -298,6 +332,9 @@ jobs:
                               saveStateFile();
                               WindowState win = getCurrentWindowState(mode);
                               pollScheduleAndCheckIn(login, pass, win != null ? win.startTime : null);
+                              if (isNotifyDiaryEnabled()) {
+                                  pollDiaryGradesAndAttendance(login, pass, false);
+                              }
                               if ((smartCatalogArray.length() == 0 || semesterDaysArray.length() < 12) && !scanningSemester) {
                                   scanFullSemesterSchedule(login, pass);
                               }
@@ -415,6 +452,7 @@ jobs:
                                   currentDayStamp = today;
                                   completedWindowsToday.clear();
                                   markedRaspIdsToday.clear();
+                                  notifiedSkippedToday.clear();
                                   checkInTimeByStart.clear();
                                   recalculateTodayIndex();
                               }
@@ -428,6 +466,9 @@ jobs:
                                   }
                                   WindowState initWin = getCurrentWindowState(mode);
                                   pollScheduleAndCheckIn(login, password, initWin != null ? initWin.startTime : null);
+                                  if (isNotifyDiaryEnabled()) {
+                                      pollDiaryGradesAndAttendance(login, password, false);
+                                  }
                                   if ((smartCatalogArray.length() == 0 || semesterDaysArray.length() < 12) && !scanningSemester) {
                                       new Thread(new Runnable() {
                                           @Override
@@ -436,6 +477,14 @@ jobs:
                                           }
                                       }).start();
                                   }
+                              }
+
+                              // Проверяем уведомления о парах, на которые ВЫКЛЮЧЕНА автоотметка
+                              checkAndNotifySkippedLessonsToday();
+
+                              // Периодическая проверка раздела «Учеба -> Дневник» (каждые 10 минут), если включен тумблер
+                              if (isNotifyDiaryEnabled() && (System.currentTimeMillis() - lastDiaryPollMillis > 600000L)) {
+                                  pollDiaryGradesAndAttendance(login, password, false);
                               }
 
                               syncTodayRealStartTimes();
@@ -497,7 +546,7 @@ jobs:
 
               private JSONObject readConfigFile() {
                   try {
-                      File f = new File(getFilesDir(), "user_config_010302.json");
+                      File f = new File(getFilesDir(), "user_config_010303.json");
                       if (!f.exists()) return new JSONObject();
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -511,9 +560,38 @@ jobs:
                   }
               }
 
+              private JSONObject readNotifPrefsFile() {
+                  try {
+                      File f = new File(getFilesDir(), "notif_prefs_010303.json");
+                      if (!f.exists()) {
+                          JSONObject def = new JSONObject();
+                          def.put("notifyDiary", true);
+                          def.put("notifySkippedLessons", true);
+                          return def;
+                      }
+                      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                      try (FileInputStream fis = new FileInputStream(f)) {
+                          byte[] buf = new byte[2048];
+                          int n;
+                          while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                      }
+                      return new JSONObject(new String(baos.toByteArray(), "UTF-8"));
+                  } catch (Exception e) {
+                      return new JSONObject();
+                  }
+              }
+
+              private boolean isNotifyDiaryEnabled() {
+                  return readNotifPrefsFile().optBoolean("notifyDiary", true);
+              }
+
+              private boolean isNotifySkippedLessonsEnabled() {
+                  return readNotifPrefsFile().optBoolean("notifySkippedLessons", true);
+              }
+
               private JSONObject readSmartRulesMap() {
                   try {
-                      File f = new File(getFilesDir(), "smart_rules_010302.json");
+                      File f = new File(getFilesDir(), "smart_rules_010303.json");
                       if (!f.exists()) return new JSONObject();
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -536,22 +614,262 @@ jobs:
                   return rules.optBoolean(ruleKey, true);
               }
 
+              // Уведомление о парах, на которые ВЫКЛЮЧЕНА автоотметка во вкладке 🤖 (за 10 минут до начала и во время пары)
+              private void checkAndNotifySkippedLessonsToday() {
+                  if (!isNotifySkippedLessonsEnabled()) return;
+                  if (semesterDaysArray == null || semesterDaysArray.length() == 0) return;
+
+                  String todayStr = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
+                  Calendar now = Calendar.getInstance();
+                  long nowMillis = now.getTimeInMillis();
+
+                  for (int i = 0; i < semesterDaysArray.length(); i++) {
+                      JSONObject d = semesterDaysArray.optJSONObject(i);
+                      if (d == null || !todayStr.equals(d.optString("dateStr", ""))) continue;
+
+                      JSONArray lessons = d.optJSONArray("lessons");
+                      if (lessons == null) break;
+
+                      for (int k = 0; k < lessons.length(); k++) {
+                          JSONObject les = lessons.optJSONObject(k);
+                          if (les == null) continue;
+                          String st = les.optString("startTime", "");
+                          String rk = les.optString("ruleKey", "");
+                          String subj = les.optString("subjectTitle", "Пара");
+                          String lType = les.optString("lessonType", "Занятие");
+                          String teacher = les.optString("teacher", "");
+
+                          // Только если автоотметка на эту пару ВЫКЛЮЧЕНА!
+                          if (!st.isEmpty() && !isLessonAllowedBySmartFilter(rk)) {
+                              String uniqueKey = todayStr + "_" + st + "_" + rk;
+                              if (notifiedSkippedToday.contains(uniqueKey)) continue;
+
+                              try {
+                                  String[] parts = st.replace(".", ":").split(":");
+                                  Calendar start = (Calendar) now.clone();
+                                  start.set(Calendar.HOUR_OF_DAY, Integer.parseInt(parts[0]));
+                                  start.set(Calendar.MINUTE, Integer.parseInt(parts[1]));
+                                  start.set(Calendar.SECOND, 0);
+                                  double diffMin = (nowMillis - start.getTimeInMillis()) / 60000.0;
+
+                                  if (diffMin >= -10.0 && diffMin <= 45.0) {
+                                      notifiedSkippedToday.add(uniqueKey);
+                                      String title = "🔔 Пара без автоотметки (" + st + ")";
+                                      String msg = subj + " • " + lType + (teacher.isEmpty() ? "" : " (" + teacher + ")")
+                                          + " — автоотметка выключена в 🤖.";
+                                      addLog(title + ": " + msg);
+                                      sendCheckInAlertNotification(title, msg);
+                                      saveStateFile();
+                                  }
+                              } catch (Exception ignored) {}
+                          }
+                      }
+                      break;
+                  }
+              }
+
+              // Парсинг раздела «Учеба -> Дневник» (таблицы с ячейками оценок и посещений)
+              private synchronized void pollDiaryGradesAndAttendance(String login, String password, boolean manualTrigger) {
+                  lastDiaryPollMillis = System.currentTimeMillis();
+                  if (!isAuthenticated && !authenticate(login, password)) {
+                      return;
+                  }
+
+                  try {
+                      File snapFile = new File(getFilesDir(), "diary_snapshot_010303.json");
+                      boolean hadBaseline = snapFile.exists();
+                      JSONObject oldSnap = new JSONObject();
+                      if (hadBaseline) {
+                          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                          try (FileInputStream fis = new FileInputStream(snapFile)) {
+                              byte[] buf = new byte[4096];
+                              int n;
+                              while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                          }
+                          oldSnap = new JSONObject(new String(baos.toByteArray(), "UTF-8"));
+                      }
+
+                      JSONObject newSnap = new JSONObject();
+                      Iterator<String> oldKeys = oldSnap.keys();
+                      while (oldKeys.hasNext()) {
+                          String k = oldKeys.next();
+                          newSnap.put(k, oldSnap.optString(k, ""));
+                      }
+
+                      List<JSONObject> recentEntries = new ArrayList<>();
+                      List<String> newAlerts = new ArrayList<>();
+
+                      Pattern trPattern = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                      Pattern cellPattern = Pattern.compile("<t[dh][^>]*>(.*?)</t[dh]>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                      Pattern dateRegex = Pattern.compile("(\\d{2}\\.\\d{2}(?:\\.\\d{2,4})?)");
+                      Pattern cyrillicSubjectRegex = Pattern.compile("[А-Яа-яЁё]{4,}");
+
+                      String todayDateShort = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
+
+                      for (String url : DIARY_URLS) {
+                          String html = httpRequest("POST", url, "");
+                          if (html.length() < 40 || !html.toLowerCase(Locale.ROOT).contains("<table")) {
+                              continue;
+                          }
+
+                          Matcher trMat = trPattern.matcher(html);
+                          List<String> currentHeaderDates = new ArrayList<>();
+                          String currentSectionSubject = "";
+
+                          while (trMat.find()) {
+                              String trInner = trMat.group(1);
+                              Matcher tdMat = cellPattern.matcher(trInner);
+                              List<String> cells = new ArrayList<>();
+                              while (tdMat.find()) {
+                                  String cText = tdMat.group(1)
+                                      .replaceAll("<[^>]+>", " ")
+                                      .replaceAll("&nbsp;", " ")
+                                      .replaceAll("\\s+", " ")
+                                      .trim();
+                                  cells.add(cText);
+                              }
+                              if (cells.isEmpty()) continue;
+
+                              // 1. Проверяем, является ли строка шапкой с датами колонок (матричная таблица Дневника)
+                              int dateCountInRow = 0;
+                              for (String c : cells) {
+                                  if (dateRegex.matcher(c).find()) dateCountInRow++;
+                              }
+                              if (dateCountInRow >= 2 && cells.size() >= 3) {
+                                  currentHeaderDates.clear();
+                                  for (String c : cells) {
+                                      Matcher dm = dateRegex.matcher(c);
+                                      currentHeaderDates.add(dm.find() ? dm.group(1) : c);
+                                  }
+                                  continue;
+                              }
+
+                              // 2. Если строка состоит из 1 ячейки с названием предмета
+                              if (cells.size() == 1 && cyrillicSubjectRegex.matcher(cells.get(0)).find() && cells.get(0).length() > 5 && cells.get(0).length() < 90) {
+                                  currentSectionSubject = cells.get(0);
+                                  continue;
+                              }
+
+                              // 3. Разбор строки матричной таблицы (Колонка 0/1 = Предмет, остальные колонки = клетки за конкретные числа)
+                              String rowSubj = "";
+                              int firstDataCol = 1;
+                              if (cyrillicSubjectRegex.matcher(cells.get(0)).find() && ! cells.get(0).matches("^\\d+$")) {
+                                  rowSubj = cells.get(0);
+                                  firstDataCol = 1;
+                              } else if (cells.size() >= 2 && cyrillicSubjectRegex.matcher(cells.get(1)).find()) {
+                                  rowSubj = cells.get(1);
+                                  firstDataCol = 2;
+                              }
+
+                              if (!rowSubj.isEmpty() && !currentHeaderDates.isEmpty() && cells.size() == currentHeaderDates.size()) {
+                                  for (int col = firstDataCol; col < cells.size(); col++) {
+                                      String cellVal = cells.get(col).trim();
+                                      if (cellVal.isEmpty() || "-".equals(cellVal) || "—".equals(cellVal)) continue;
+                                      String dateLabel = currentHeaderDates.get(col);
+                                      if (dateLabel == null || dateLabel.isEmpty()) dateLabel = todayDateShort;
+
+                                      String cellKey = rowSubj + "||" + dateLabel + "||col" + col;
+                                      String prevVal = oldSnap.optString(cellKey, "");
+                                      newSnap.put(cellKey, cellVal);
+
+                                      JSONObject entry = new JSONObject();
+                                      entry.put("subject", rowSubj);
+                                      entry.put("date", dateLabel);
+                                      entry.put("value", cellVal);
+                                      recentEntries.add(entry);
+
+                                      if (hadBaseline && !cellVal.equals(prevVal)) {
+                                          newAlerts.add("Предмет: " + rowSubj + " • Число: " + dateLabel + " • В клетке: «" + cellVal + "»");
+                                      }
+                                  }
+                                  continue;
+                              }
+
+                              // 4. Разбор построчной таблицы Дневника (где в строке есть дата, предмет/тема и клетка оценки/посещения)
+                              String foundDate = "";
+                              for (String c : cells) {
+                                  Matcher dm = dateRegex.matcher(c);
+                                  if (dm.find()) {
+                                      foundDate = dm.group(1);
+                                      break;
+                                  }
+                              }
+
+                              if (!foundDate.isEmpty() && cells.size() >= 3) {
+                                  String subjName = !rowSubj.isEmpty() ? rowSubj : (!currentSectionSubject.isEmpty() ? currentSectionSubject : "Дисциплина");
+                                  String lastCell = cells.get(cells.size() - 1).trim();
+                                  String prevCell = cells.size() >= 4 ? cells.get(cells.size() - 2).trim() : "";
+                                  String combinedVal = (!lastCell.isEmpty() && !lastCell.equals(foundDate)) ? lastCell : prevCell;
+
+                                  if (!combinedVal.isEmpty() && !"-".equals(combinedVal) && !combinedVal.equals(subjName)) {
+                                      String cellKey = subjName + "||" + foundDate + "||" + cells.get(0);
+                                      String oldVal = oldSnap.optString(cellKey, "");
+                                      newSnap.put(cellKey, combinedVal);
+
+                                      JSONObject entry = new JSONObject();
+                                      entry.put("subject", subjName);
+                                      entry.put("date", foundDate);
+                                      entry.put("value", combinedVal);
+                                      recentEntries.add(entry);
+
+                                      if (hadBaseline && !combinedVal.equals(oldVal)) {
+                                          newAlerts.add("Предмет: " + subjName + " • Число: " + foundDate + " • В клетке: «" + combinedVal + "»");
+                                      }
+                                  }
+                              }
+                          }
+                      }
+
+                      try (FileOutputStream fos = new FileOutputStream(snapFile)) {
+                          fos.write(newSnap.toString().getBytes("UTF-8"));
+                      }
+
+                      JSONArray recentJson = new JSONArray();
+                      int startIdx = Math.max(0, recentEntries.size() - 25);
+                      for (int i = recentEntries.size() - 1; i >= startIdx; i--) {
+                          recentJson.put(recentEntries.get(i));
+                      }
+                      diaryRecentArray = recentJson;
+                      saveSemesterCacheFiles();
+
+                      if (!newAlerts.isEmpty() && isNotifyDiaryEnabled()) {
+                          for (String alertText : newAlerts) {
+                              String title = "📊 Новая запись в Дневнике!";
+                              addLog(title + " " + alertText);
+                              sendCheckInAlertNotification(title, alertText);
+                          }
+                      } else if (manualTrigger) {
+                          addLog("📚 Дневник проверен (отслеживается ячеек: " + newSnap.length() + ", новых изменений: " + newAlerts.size() + ").");
+                      }
+                      saveStateFile();
+                  } catch (Exception e) {
+                      if (manualTrigger) {
+                          addLog("Ошибка проверки Дневника: " + e.getMessage());
+                          saveStateFile();
+                      }
+                  }
+              }
+
               private synchronized void saveSemesterCacheFiles() {
                   try {
-                      File fCat = new File(getFilesDir(), "smart_catalog_010302.json");
+                      File fCat = new File(getFilesDir(), "smart_catalog_010303.json");
                       try (FileOutputStream fos = new FileOutputStream(fCat)) {
                           fos.write(smartCatalogArray.toString().getBytes("UTF-8"));
                       }
-                      File fDays = new File(getFilesDir(), "semester_days_010302.json");
+                      File fDays = new File(getFilesDir(), "semester_days_010303.json");
                       try (FileOutputStream fos = new FileOutputStream(fDays)) {
                           fos.write(semesterDaysArray.toString().getBytes("UTF-8"));
+                      }
+                      File fDiary = new File(getFilesDir(), "diary_recent_010303.json");
+                      try (FileOutputStream fos = new FileOutputStream(fDiary)) {
+                          fos.write(diaryRecentArray.toString().getBytes("UTF-8"));
                       }
                   } catch (Exception ignored) {}
               }
 
               private synchronized void loadSemesterCacheFiles() {
                   try {
-                      File fCat = new File(getFilesDir(), "smart_catalog_010302.json");
+                      File fCat = new File(getFilesDir(), "smart_catalog_010303.json");
                       if (fCat.exists()) {
                           ByteArrayOutputStream baos = new ByteArrayOutputStream();
                           try (FileInputStream fis = new FileInputStream(fCat)) {
@@ -561,7 +879,7 @@ jobs:
                           }
                           smartCatalogArray = new JSONArray(new String(baos.toByteArray(), "UTF-8"));
                       }
-                      File fDays = new File(getFilesDir(), "semester_days_010302.json");
+                      File fDays = new File(getFilesDir(), "semester_days_010303.json");
                       if (fDays.exists()) {
                           ByteArrayOutputStream baos = new ByteArrayOutputStream();
                           try (FileInputStream fis = new FileInputStream(fDays)) {
@@ -572,22 +890,29 @@ jobs:
                           semesterDaysArray = new JSONArray(new String(baos.toByteArray(), "UTF-8"));
                           recalculateTodayIndex();
                       }
+                      File fDiary = new File(getFilesDir(), "diary_recent_010303.json");
+                      if (fDiary.exists()) {
+                          ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                          try (FileInputStream fis = new FileInputStream(fDiary)) {
+                              byte[] buf = new byte[4096];
+                              int n;
+                              while ((n = fis.read(buf)) != -1) baos.write(buf, 0, n);
+                          }
+                          diaryRecentArray = new JSONArray(new String(baos.toByteArray(), "UTF-8"));
+                      }
                   } catch (Exception ignored) {}
               }
 
-              // Берем ТОЛЬКО реальные пары сегодняшнего дня (и только те, которые не выключены в Умной отметке)
               private synchronized void syncTodayRealStartTimes() {
                   String todayStr = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
                   synchronized (todayRealStartTimes) {
                       todayRealStartTimes.clear();
-                      hasTodayScheduleLoaded = false;
                       if (semesterDaysArray == null || semesterDaysArray.length() == 0) {
                           return;
                       }
                       for (int i = 0; i < semesterDaysArray.length(); i++) {
                           JSONObject d = semesterDaysArray.optJSONObject(i);
                           if (d != null && todayStr.equals(d.optString("dateStr", ""))) {
-                              hasTodayScheduleLoaded = true;
                               JSONArray lessons = d.optJSONArray("lessons");
                               if (lessons != null) {
                                   for (int k = 0; k < lessons.length(); k++) {
@@ -629,7 +954,6 @@ jobs:
                           return;
                       }
                   }
-                  // Если сегодня воскресенье — выбираем ближайший понедельник (следующий учебный день)
                   Calendar cal = Calendar.getInstance();
                   cal.set(Calendar.HOUR_OF_DAY, 0);
                   cal.set(Calendar.MINUTE, 0);
@@ -663,7 +987,7 @@ jobs:
                       obj.put("startMillis", serviceStartMillis);
                       obj.put("todayDayIdx", todayDayIdx);
                       obj.put("logs", new JSONArray(logs));
-                      File f = new File(getFilesDir(), "bg_state_010302.json");
+                      File f = new File(getFilesDir(), "bg_state_010303.json");
                       try (FileOutputStream fos = new FileOutputStream(f)) {
                           fos.write(obj.toString().getBytes("UTF-8"));
                       }
@@ -672,7 +996,7 @@ jobs:
 
               private synchronized void loadPersistedState() {
                   try {
-                      File f = new File(getFilesDir(), "bg_state_010302.json");
+                      File f = new File(getFilesDir(), "bg_state_010303.json");
                       if (!f.exists()) return;
                       ByteArrayOutputStream baos = new ByteArrayOutputStream();
                       try (FileInputStream fis = new FileInputStream(f)) {
@@ -879,7 +1203,6 @@ jobs:
                               }
                           }
 
-                          // Строим ТОЛЬКО 6 учебных дней недели (0=Пн .. 5=Сб, без воскресенья!)
                           if (anyDateInWeek != null) {
                               Calendar cal = Calendar.getInstance();
                               cal.setTime(anyDateInWeek);
@@ -900,7 +1223,7 @@ jobs:
 
                                   JSONObject dayJson = new JSONObject();
                                   dayJson.put("weekNum", week);
-                                  dayJson.put("dowIdx", dIdx); // 0=Пн .. 5=Сб
+                                  dayJson.put("dowIdx", dIdx);
                                   dayJson.put("shortDow", RU_DAYS_SHORT[dIdx]);
                                   dayJson.put("shortDate", dShortDate);
                                   dayJson.put("dateStr", dStr);
@@ -954,7 +1277,6 @@ jobs:
                   }
               }
 
-              // Ищем следующую неотмеченную пару СТРОГО по реальному расписанию сегодняшнего дня (без ложных 09:00)
               private String findNextUnmarkedLessonTime() {
                   syncTodayRealStartTimes();
                   Calendar now = Calendar.getInstance();
@@ -1032,7 +1354,7 @@ jobs:
 
                       NotificationChannel alertChannel = new NotificationChannel(
                           CHANNEL_ALERT,
-                          "Уведомления об отметке на паре",
+                          "Уведомления (Отметки, Дневник и Пары)",
                           NotificationManager.IMPORTANCE_HIGH
                       );
                       nm.createNotificationChannel(alertChannel);
@@ -1084,6 +1406,7 @@ jobs:
                               : new Notification.Builder(this);
                           builder.setContentTitle(title)
                                  .setContentText(message)
+                                 .setStyle(new Notification.BigTextStyle().bigText(message))
                                  .setSmallIcon(android.R.drawable.stat_sys_upload_done)
                                  .setAutoCancel(true);
                           nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
@@ -1134,11 +1457,11 @@ jobs:
                   byte[] bytes = baos.toByteArray();
                   String utf8 = new String(bytes, Charset.forName("UTF-8"));
                   String lower = utf8.toLowerCase(Locale.ROOT);
-                  if (lower.contains("расписание") || lower.contains("занят") || lower.contains("присутств") || lower.contains("понедельник") || lower.contains("вторник") || utf8.trim().equals("1")) {
+                  if (lower.contains("расписание") || lower.contains("занят") || lower.contains("присутств") || lower.contains("понедельник") || lower.contains("вторник") || lower.contains("дневник") || lower.contains("оценк") || utf8.trim().equals("1")) {
                       return utf8;
                   }
                   String cp1251 = new String(bytes, Charset.forName("windows-1251"));
-                  if (cp1251.toLowerCase(Locale.ROOT).contains("расписание") || cp1251.toLowerCase(Locale.ROOT).contains("занят")) {
+                  if (cp1251.toLowerCase(Locale.ROOT).contains("расписание") || cp1251.toLowerCase(Locale.ROOT).contains("занят") || cp1251.toLowerCase(Locale.ROOT).contains("дневник")) {
                       return cp1251;
                   }
                   return utf8;
@@ -1272,6 +1595,17 @@ jobs:
                                                || lowerRow.contains("присутствует");
 
                           if (!allowedBySmart) {
+                              // Если на паре появилась кнопка, но автоотметка выключена — при включенном тумблере 2 присылаем уведомление
+                              if (raspId != null && isNotifySkippedLessonsEnabled() && todayStr.equals(curDateStr)) {
+                                  String btnNotifyKey = "btn_" + todayStr + "_" + startTime + "_" + structured.ruleKey;
+                                  if (!notifiedSkippedToday.contains(btnNotifyKey)) {
+                                      notifiedSkippedToday.add(btnNotifyKey);
+                                      String title = "🔔 Открылась отметка на паре (" + startTime + ")";
+                                      String msg = structured.subject + " (" + structured.normType + ") — кнопка появилась в ЛК, но автоотметка для этой пары выключена.";
+                                      addLog(title + ": " + msg);
+                                      sendCheckInAlertNotification(title, msg);
+                                  }
+                              }
                               if (currentWindowStart != null && currentWindowStart.equals(startTime)) {
                                   completedWindowsToday.add(startTime);
                                   checkInTimeByStart.put(startTime, "пропуск 🤖");
@@ -1324,7 +1658,6 @@ jobs:
                           }
                       }
 
-                      // Обновляем 6 учебных дней текущей недели (Пн..Сб)
                       if (anyDateInWeek != null) {
                           Calendar cal = Calendar.getInstance();
                           cal.setTime(anyDateInWeek);
@@ -1400,7 +1733,6 @@ jobs:
                   String label;
               }
 
-              // Проверяем окно пары ТОЛЬКО по реальным парам сегодняшнего дня (todayRealStartTimes)
               private WindowState getCurrentWindowState(String mode) {
                   syncTodayRealStartTimes();
                   int windowMin = "first_30".equals(mode) ? 30 : 95;
@@ -1529,18 +1861,18 @@ jobs:
               public class WebBridge {
                   @JavascriptInterface
                   public String getSavedConfig() {
-                      return readFileAsString("user_config_010302.json", "{\"interval\":\"1\",\"mode\":\"full_lesson\"}");
+                      return readFileAsString("user_config_010303.json", "{\"interval\":\"1\",\"mode\":\"full_lesson\"}");
                   }
 
                   @JavascriptInterface
                   public String getSmartRules() {
-                      return readFileAsString("smart_rules_010302.json", "{}");
+                      return readFileAsString("smart_rules_010303.json", "{}");
                   }
 
                   @JavascriptInterface
                   public void saveSmartRules(String rulesJsonStr) {
                       try {
-                          File f = new File(getFilesDir(), "smart_rules_010302.json");
+                          File f = new File(getFilesDir(), "smart_rules_010303.json");
                           try (FileOutputStream fos = new FileOutputStream(f)) {
                               fos.write((rulesJsonStr != null ? rulesJsonStr : "{}").getBytes("UTF-8"));
                           }
@@ -1549,20 +1881,40 @@ jobs:
                   }
 
                   @JavascriptInterface
+                  public String getNotifPrefs() {
+                      return readFileAsString("notif_prefs_010303.json", "{\"notifyDiary\":true,\"notifySkippedLessons\":true}");
+                  }
+
+                  @JavascriptInterface
+                  public void saveNotifPrefs(String prefsJsonStr) {
+                      try {
+                          File f = new File(getFilesDir(), "notif_prefs_010303.json");
+                          try (FileOutputStream fos = new FileOutputStream(f)) {
+                              fos.write((prefsJsonStr != null ? prefsJsonStr : "{}").getBytes("UTF-8"));
+                          }
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
                   public String getCachedSemesterDays() {
-                      return readFileAsString("semester_days_010302.json", "[]");
+                      return readFileAsString("semester_days_010303.json", "[]");
                   }
 
                   @JavascriptInterface
                   public String getCachedSmartCatalog() {
-                      return readFileAsString("smart_catalog_010302.json", "[]");
+                      return readFileAsString("smart_catalog_010303.json", "[]");
+                  }
+
+                  @JavascriptInterface
+                  public String getCachedDiaryRecent() {
+                      return readFileAsString("diary_recent_010303.json", "[]");
                   }
 
                   @JavascriptInterface
                   public String getState() {
                       try {
                           File enabledFlag = new File(getFilesDir(), "daemon_enabled.flag");
-                          String raw = readFileAsString("bg_state_010302.json", "");
+                          String raw = readFileAsString("bg_state_010303.json", "");
                           if (raw.isEmpty()) {
                               JSONObject empty = new JSONObject();
                               empty.put("active", enabledFlag.exists());
@@ -1571,10 +1923,12 @@ jobs:
                           }
                           JSONObject state = new JSONObject(raw);
                           state.put("active", enabledFlag.exists() && state.optBoolean("active", false));
-                          File fDays = new File(getFilesDir(), "semester_days_010302.json");
-                          File fCat = new File(getFilesDir(), "smart_catalog_010302.json");
+                          File fDays = new File(getFilesDir(), "semester_days_010303.json");
+                          File fCat = new File(getFilesDir(), "smart_catalog_010303.json");
+                          File fDiary = new File(getFilesDir(), "diary_recent_010303.json");
                           state.put("daysMtime", fDays.exists() ? fDays.lastModified() : 0L);
                           state.put("catMtime", fCat.exists() ? fCat.lastModified() : 0L);
+                          state.put("diaryMtime", fDiary.exists() ? fDiary.lastModified() : 0L);
                           return state.toString();
                       } catch (Exception e) {
                           return "{}";
@@ -1604,6 +1958,17 @@ jobs:
                   }
 
                   @JavascriptInterface
+                  public void checkDiaryNow(String login, String password, String intervalStr, String mode) {
+                      writeConfigFile(login, password, intervalStr, mode);
+                      sendDaemonCommand("check_diary_now");
+                  }
+
+                  @JavascriptInterface
+                  public void testNotifNow() {
+                      sendDaemonCommand("test_notif");
+                  }
+
+                  @JavascriptInterface
                   public void scanSemesterNow(String login, String password, String intervalStr, String mode) {
                       writeConfigFile(login, password, intervalStr, mode);
                       sendDaemonCommand("scan_semester");
@@ -1617,7 +1982,7 @@ jobs:
                       cfg.put("password", pass != null ? pass.trim() : "");
                       cfg.put("interval", (interval != null && !interval.isEmpty()) ? interval : "1");
                       cfg.put("mode", (mode != null && !mode.isEmpty()) ? mode : "full_lesson");
-                      File f = new File(getFilesDir(), "user_config_010302.json");
+                      File f = new File(getFilesDir(), "user_config_010303.json");
                       try (FileOutputStream fos = new FileOutputStream(f)) {
                           fos.write(cfg.toString().getBytes("UTF-8"));
                       }
@@ -1645,15 +2010,13 @@ jobs:
                       + ".log{background:#05080f;border:1px solid #1e293b;border-radius:8px;padding:8px;font-family:monospace;font-size:11px;height:120px;overflow-y:auto;white-space:pre-wrap;color:#cbd5e1;}"
                       + ".ver-footer{margin-top:14px;padding:10px;border-top:1px solid #1e293b;text-align:center;font-size:12px;font-weight:800;color:#f97316;letter-spacing:0.5px;user-select:none;cursor:pointer;}"
 
-                      // TIKTOK-ЛЕНТА РАСПИСАНИЯ (4 ПАРЫ НА ВЕСЬ ЭКРАН + РАЗНЫЕ ЦВЕТА ЛЕКЦИЙ/ПРАКТИК/ЛАБ + ПАРЯЩИЕ КНОПКИ ПОВЕРХ)
+                      // TIKTOK-ЛЕНТА РАСПИСАНИЯ
                       + "#tab_schedule{display:none;position:relative;height:calc(100vh - 62px);width:100vw;overflow:hidden;}"
                       + ".tiktok-feed{height:calc(100vh - 62px);width:100%;overflow-y:scroll;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;}"
                       + ".tiktok-feed::-webkit-scrollbar{display:none;}"
                       + ".day-slide{height:calc(100vh - 62px);width:100%;scroll-snap-align:start;scroll-snap-stop:always;box-sizing:border-box;padding:10px 12px 14px 12px;display:flex;flex-direction:column;}"
                       + ".slide-hdr{background:#111827;border:1px solid #1e293b;border-radius:14px;padding:10px 60px 10px 14px;margin-bottom:10px;flex-shrink:0;}"
                       + ".slide-body{flex:1;display:flex;flex-direction:column;gap:10px;height:100%;box-sizing:border-box;overflow-y:auto;}"
-
-                      // КАРТОЧКИ ПАР: 4 ПАРЫ ЗАНИМАЮТ РОВНО ВЕСЬ ЭКРАН, ЦВЕТА РАЗЛИЧАЮТСЯ ПО ТИПУ ЗАНЯТИЯ
                       + ".lesson-card{flex:0 0 calc((100% - 30px) / 4);min-height:112px;box-sizing:border-box;border-radius:16px;padding:12px 62px 12px 15px;display:flex;flex-direction:column;justify-content:space-between;position:relative;box-shadow:0 6px 18px rgba(0,0,0,0.35);}"
                       + ".lesson-card.type-lec{background:linear-gradient(135deg,#2e1065 0%,#1e1b4b 100%);border:1px solid #7c3aed;border-left:6px solid #a855f7;}"
                       + ".lesson-card.type-prac{background:linear-gradient(135deg,#082f49 0%,#0f172a 100%);border:1px solid #0284c7;border-left:6px solid #38bdf8;}"
@@ -1669,7 +2032,7 @@ jobs:
                       + ".les-title{font-size:16px;font-weight:900;color:#f8fafc;line-height:1.25;margin:4px 0;}"
                       + ".les-meta{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#cbd5e1;font-weight:600;gap:6px;flex-wrap:wrap;}"
 
-                      // ПЛАВАЮЩАЯ ПОВЕРХ РАСПИСАНИЯ TIKTOK-ПАНЕЛЬ ДНЕЙ НЕДЕЛИ (6 ДНЕЙ + СТРЕЛКИ НЕДЕЛЬ ▲ / ▼)
+                      // ПЛАВАЮЩАЯ TIKTOK-ПАНЕЛЬ ДНЕЙ
                       + ".tiktok-rail{position:fixed;right:10px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;z-index:920;pointer-events:auto;}"
                       + ".rail-arrow{width:44px;height:34px;border-radius:999px;border:1px solid rgba(255,255,255,0.18);background:rgba(15,23,42,0.68);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fb923c;font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,0.45);}"
                       + ".rail-day{width:46px;height:46px;border-radius:14px;border:1px solid rgba(255,255,255,0.14);background:rgba(15,23,42,0.58);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#f1f5f9;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:12px;font-weight:900;padding:0;box-shadow:0 4px 12px rgba(0,0,0,0.4);transition:transform 0.15s;}"
@@ -1688,9 +2051,22 @@ jobs:
                       + ".type-btn.on{background:#064e3b;border-color:#10b981;color:#34d399;}"
                       + ".type-btn.zero{opacity:0.35;}"
 
-                      // НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ
+                      // ВКЛАДКА УВЕДОМЛЕНИЙ И ТУМБЛЕРЫ
+                      + ".toggle-card{background:#0f172a;border:1px solid #1e293b;border-radius:16px;padding:14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;}"
+                      + ".toggle-card.active{border-color:#10b981;background:linear-gradient(135deg,#06281e 0%,#0f172a 100%);}"
+                      + ".toggle-info{flex:1;}"
+                      + ".toggle-title{font-size:14px;font-weight:800;color:#f8fafc;margin-bottom:4px;}"
+                      + ".toggle-desc{font-size:11px;color:#94a3b8;line-height:1.4;}"
+                      + ".switch-pill{width:50px;height:28px;border-radius:999px;background:#334155;position:relative;flex-shrink:0;transition:background 0.2s;}"
+                      + ".switch-pill.on{background:#10b981;}"
+                      + ".switch-knob{width:22px;height:22px;border-radius:50%;background:#ffffff;position:absolute;top:3px;left:3px;transition:transform 0.2s;box-shadow:0 2px 5px rgba(0,0,0,0.4);}"
+                      + ".switch-pill.on .switch-knob{transform:translateX(22px);}"
+                      + ".diary-cell-row{background:#1e293b;border-left:4px solid #38bdf8;border-radius:10px;padding:10px 12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;gap:8px;}"
+                      + ".diary-badge{background:#0284c7;color:#fff;font-weight:900;font-size:12px;padding:4px 9px;border-radius:8px;white-space:nowrap;}"
+
+                      // НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (4 ВКЛАДКИ)
                       + ".bottom-nav{position:fixed;bottom:0;left:0;right:0;height:62px;background:#0f172a;border-top:1px solid #1e293b;display:flex;z-index:999;}"
-                      + ".tab-btn{flex:1;border:none;background:none;color:#64748b;font-size:11px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;}"
+                      + ".tab-btn{flex:1;border:none;background:none;color:#64748b;font-size:10px;font-weight:700;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:0 2px;}"
                       + ".tab-btn.active{color:#f97316;background:#1e293b44;}"
                       + "</style></head><body>"
 
@@ -1721,10 +2097,10 @@ jobs:
                       + "  <div class='dev-hdr'><span>🔧 ПАНЕЛЬ РАЗРАБОТЧИКА</span><span id='uptime' style='color:#34d399;'></span></div>"
                       + "  <div id='logs' class='log'>Загрузка логов...</div>"
                       + "</div>"
-                      + "<div id='ver_box' class='ver-footer' onclick='onVerTap()'>Версия: 01.03.02</div>"
+                      + "<div id='ver_box' class='ver-footer' onclick='onVerTap()'>Версия: 01.03.03</div>"
                       + "</div></div>"
 
-                      // ВКЛАДКА 1: РАСПИСАНИЕ (TIKTOK-ЛЕНТА + ПАРЯЩИЕ КНОПКИ ДНЕЙ И НЕДЕЛЬ ПОВЕРХ)
+                      // ВКЛАДКА 1: РАСПИСАНИЕ
                       + "<div id='tab_schedule'>"
                       + "  <div id='tiktok_feed' class='tiktok-feed' onscroll='onFeedScroll()'></div>"
                       + "  <div id='week_sidebar' class='tiktok-rail'></div>"
@@ -1743,20 +2119,51 @@ jobs:
                       + "  <button class='chip' onclick='onlyPracticeAndLabs()'>🛠 Выключить все лекции</button>"
                       + "</div>"
                       + "<div id='smart_list'></div>"
-                      + "<div class='ver-footer'>Версия: 01.03.02</div>"
+                      + "<div class='ver-footer'>Версия: 01.03.03</div>"
                       + "</div></div>"
 
-                      // НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ
+                      // ВКЛАДКА 3: УВЕДОМЛЕНИЯ (ДНЕВНИК И ПАРЫ С ВЫКЛЮЧЕННОЙ АВТООТМЕТКОЙ)
+                      + "<div id='tab_notif' class='page-pad' style='display:none;'><div class='card'>"
+                      + "<div style='font-size:18px;font-weight:800;margin-bottom:4px;'>🔔 Настройка уведомлений</div>"
+                      + "<div style='font-size:12px;color:#94a3b8;margin-bottom:12px;'>Выберите, какие пуш-уведомления должны приходить на телефон в фоновом режиме.</div>"
+
+                      + "<div id='card_toggle_diary' class='toggle-card active' onclick='toggleNotifPref(\"notifyDiary\")'>"
+                      + "  <div class='toggle-info'>"
+                      + "    <div class='toggle-title'>📊 Оценки и посещения (Дневник)</div>"
+                      + "    <div class='toggle-desc'>Мониторит таблицу «Учеба → Дневник». Присылает пуш, когда в клетке появляется оценка или посещение (что появилось, предмет и за какое число).</div>"
+                      + "  </div>"
+                      + "  <div id='pill_diary' class='switch-pill on'><div class='switch-knob'></div></div>"
+                      + "</div>"
+
+                      + "<div id='card_toggle_skipped' class='toggle-card active' onclick='toggleNotifPref(\"notifySkippedLessons\")'>"
+                      + "  <div class='toggle-info'>"
+                      + "    <div class='toggle-title'>⏳ Пары без автоотметки</div>"
+                      + "    <div class='toggle-desc'>Уведомляет о начале пары и появлении кнопки ТОЛЬКО по тем предметам, на которые выключена автоотметка во вкладке 🤖.</div>"
+                      + "  </div>"
+                      + "  <div id='pill_skipped' class='switch-pill on'><div class='switch-knob'></div></div>"
+                      + "</div>"
+
+                      + "<button class='btn-sec' style='border-color:#38bdf8;color:#38bdf8;margin-top:4px;' onclick='checkDiaryNow()'>🔄 Проверить «Учеба → Дневник» сейчас</button>"
+                      + "<button class='btn-sec' onclick='AndroidBridge.testNotifNow()'>🔔 Отправить тестовое уведомление</button>"
+
+                      + "<div style='font-size:13px;font-weight:800;color:#cbd5e1;margin:14px 0 8px;'>Последние ячейки из таблицы Дневника:</div>"
+                      + "<div id='diary_list'></div>"
+                      + "<div class='ver-footer'>Версия: 01.03.03</div>"
+                      + "</div></div>"
+
+                      // НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ (4 КНОПКИ)
                       + "<div class='bottom-nav'>"
-                      + "  <button id='nav_0' class='tab-btn active' onclick='switchTab(0)'><span style='font-size:18px;'>🏠</span><span>Главная</span></button>"
-                      + "  <button id='nav_1' class='tab-btn' onclick='switchTab(1)'><span style='font-size:18px;'>📅</span><span>Расписание</span></button>"
-                      + "  <button id='nav_2' class='tab-btn' onclick='switchTab(2)'><span style='font-size:18px;'>🤖</span><span>Умная отметка</span></button>"
+                      + "  <button id='nav_0' class='tab-btn active' onclick='switchTab(0)'><span style='font-size:17px;'>🏠</span><span>Главная</span></button>"
+                      + "  <button id='nav_1' class='tab-btn' onclick='switchTab(1)'><span style='font-size:17px;'>📅</span><span>Расписание</span></button>"
+                      + "  <button id='nav_2' class='tab-btn' onclick='switchTab(2)'><span style='font-size:17px;'>🤖</span><span>Умная отметка</span></button>"
+                      + "  <button id='nav_3' class='tab-btn' onclick='switchTab(3)'><span style='font-size:17px;'>🔔</span><span>Уведомления</span></button>"
                       + "</div>"
 
                       + "<script>"
-                      + "var semesterDays=[];var catalogCache=[];var smartRules={};"
+                      + "var semesterDays=[];var catalogCache=[];var diaryCache=[];var smartRules={};"
+                      + "var notifPrefs={notifyDiary:true,notifySkippedLessons:true};"
                       + "var todaySlideIdx=0;var currentSlideIdx=0;var activeTab=0;"
-                      + "var lastDaysMtime=-1;var lastCatMtime=-1;var initialJumpDone=false;"
+                      + "var lastDaysMtime=-1;var lastCatMtime=-1;var lastDiaryMtime=-1;var initialJumpDone=false;"
                       + "var verTapCount=0;var verTapTimer=null;var devOpen=false;"
 
                       + "function switchTab(idx){"
@@ -1764,15 +2171,18 @@ jobs:
                       + "  document.getElementById('tab_main').style.display=idx===0?'block':'none';"
                       + "  document.getElementById('tab_schedule').style.display=idx===1?'block':'none';"
                       + "  document.getElementById('tab_robot').style.display=idx===2?'block':'none';"
+                      + "  document.getElementById('tab_notif').style.display=idx===3?'block':'none';"
                       + "  document.getElementById('nav_0').className=idx===0?'tab-btn active':'tab-btn';"
                       + "  document.getElementById('nav_1').className=idx===1?'tab-btn active':'tab-btn';"
                       + "  document.getElementById('nav_2').className=idx===2?'tab-btn active':'tab-btn';"
+                      + "  document.getElementById('nav_3').className=idx===3?'tab-btn active':'tab-btn';"
                       + "  if(idx===1){"
                       + "    renderTikTokSchedule();"
                       + "    if(!initialJumpDone){setTimeout(function(){jumpToSlide(todaySlideIdx,false);initialJumpDone=true;},60);}"
                       + "    else{updateSidebarAndTodayBtn();}"
                       + "  }"
                       + "  if(idx===2)renderSmartCatalog();"
+                      + "  if(idx===3){renderNotifToggles();renderDiaryList();}"
                       + "}"
 
                       + "function onVerTap(){"
@@ -1782,7 +2192,7 @@ jobs:
                       + "    verTapCount=0;"
                       + "    devOpen=!devOpen;"
                       + "    document.getElementById('dev_panel').style.display=devOpen?'block':'none';"
-                      + "    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.03.02 (Dev ON)':'Версия: 01.03.02';"
+                      + "    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.03.03 (Dev ON)':'Версия: 01.03.03';"
                       + "  }else{"
                       + "    verTapTimer=setTimeout(function(){verTapCount=0;},1500);"
                       + "  }"
@@ -1797,9 +2207,45 @@ jobs:
                       + "    if(c.interval)document.getElementById('interval').value=c.interval;"
                       + "    if(c.mode)document.getElementById('mode').value=c.mode;"
                       + "    smartRules=JSON.parse(AndroidBridge.getSmartRules()||'{}');"
+                      + "    notifPrefs=JSON.parse(AndroidBridge.getNotifPrefs()||'{\"notifyDiary\":true,\"notifySkippedLessons\":true}');"
                       + "    semesterDays=JSON.parse(AndroidBridge.getCachedSemesterDays()||'[]');"
                       + "    catalogCache=JSON.parse(AndroidBridge.getCachedSmartCatalog()||'[]');"
+                      + "    diaryCache=JSON.parse(AndroidBridge.getCachedDiaryRecent()||'[]');"
+                      + "    renderNotifToggles();"
                       + "  }catch(e){}"
+                      + "}"
+
+                      + "function toggleNotifPref(key){"
+                      + "  notifPrefs[key]=!Boolean(notifPrefs[key]);"
+                      + "  AndroidBridge.saveNotifPrefs(JSON.stringify(notifPrefs));"
+                      + "  renderNotifToggles();"
+                      + "}"
+
+                      + "function renderNotifToggles(){"
+                      + "  var dOn=notifPrefs.notifyDiary!==false;"
+                      + "  var sOn=notifPrefs.notifySkippedLessons!==false;"
+                      + "  document.getElementById('card_toggle_diary').className='toggle-card'+(dOn?' active':'');"
+                      + "  document.getElementById('pill_diary').className='switch-pill'+(dOn?' on':'');"
+                      + "  document.getElementById('card_toggle_skipped').className='toggle-card'+(sOn?' active':'');"
+                      + "  document.getElementById('pill_skipped').className='switch-pill'+(sOn?' on':'');"
+                      + "}"
+
+                      + "function renderDiaryList(){"
+                      + "  var box=document.getElementById('diary_list');"
+                      + "  if(!diaryCache || !diaryCache.length){"
+                      + "    box.innerHTML=\"<div style='font-size:12px;color:#94a3b8;background:#0f172a;padding:12px;border-radius:12px;border:1px solid #1e293b;'>Нажмите «Проверить Учеба → Дневник сейчас», чтобы загрузить таблицу оценок и посещений.</div>\";"
+                      + "    return;"
+                      + "  }"
+                      + "  var h='';"
+                      + "  for(var i=0;i<diaryCache.length;i++){"
+                      + "    var x=diaryCache[i];"
+                      + "    h+=\"<div class='diary-cell-row'>\""
+                      + "      +\"<div><div style='font-size:12px;font-weight:800;color:#f8fafc;'>\"+(x.subject||'Предмет')+\"</div>\""
+                      + "      +\"<div style='font-size:11px;color:#94a3b8;margin-top:2px;'>📅 Число: <b>\"+(x.date||'—')+\"</b></div></div>\""
+                      + "      +\"<div class='diary-badge'>\"+(x.value||'ОК')+\"</div>\""
+                      + "      +\"</div>\";"
+                      + "  }"
+                      + "  box.innerHTML=h;"
                       + "}"
 
                       + "function isRuleOn(key){return smartRules[key]===undefined?true:Boolean(smartRules[key]);}"
@@ -1865,7 +2311,6 @@ jobs:
                       + "  listEl.innerHTML=h;"
                       + "}"
 
-                      // РЕНДЕР TIKTOK-РАСПИСАНИЯ: 4 КАРТОЧКИ НА ЭКРАН + ЦВЕТОВОЕ РАЗДЕЛЕНИЕ ЛЕКЦИЙ, ПРАКТИК И ЛАБ
                       + "function renderTikTokSchedule(){"
                       + "  var feed=document.getElementById('tiktok_feed');"
                       + "  if(!semesterDays || !semesterDays.length){"
@@ -1926,7 +2371,6 @@ jobs:
                       + "  }"
                       + "}"
 
-                      // БОКОВАЯ TIKTOK-ПАНЕЛЬ ПОВЕРХ РАСПИСАНИЯ (СТРЕЛКА ▲ НЕДЕЛЯ НАЗАД + 6 ДНЕЙ ПН..СБ + СТРЕЛКА ▼ НЕДЕЛЯ ВПЕРЕД)
                       + "function updateSidebarAndTodayBtn(){"
                       + "  var btnToday=document.getElementById('btn_today');"
                       + "  if(activeTab===1 && semesterDays.length>0 && currentSlideIdx!==todaySlideIdx){"
@@ -1979,6 +2423,7 @@ jobs:
                       + "function saveCfg(){AndroidBridge.saveSettingsOnly(val('login'),val('password'),val('interval'),val('mode'));}"
                       + "function toggle(){AndroidBridge.toggleAutoCheck(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,400);}"
                       + "function checkNow(){AndroidBridge.checkNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,700);}"
+                      + "function checkDiaryNow(){AndroidBridge.checkDiaryNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,700);}"
                       + "function scanSemester(){AndroidBridge.scanSemesterNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,500);}"
 
                       + "function poll(){"
@@ -2017,6 +2462,11 @@ jobs:
                       + "      lastCatMtime=d.catMtime;"
                       + "      catalogCache=JSON.parse(AndroidBridge.getCachedSmartCatalog()||'[]');"
                       + "      if(activeTab===2)renderSmartCatalog();"
+                      + "    }"
+                      + "    if(d.diaryMtime && d.diaryMtime!==lastDiaryMtime){"
+                      + "      lastDiaryMtime=d.diaryMtime;"
+                      + "      diaryCache=JSON.parse(AndroidBridge.getCachedDiaryRecent()||'[]');"
+                      + "      if(activeTab===3)renderDiaryList();"
                       + "    }"
                       + "    if(d.scanningSemester && d.scanStatus && activeTab===2){"
                       + "      document.getElementById('smart_stats').innerText='🔄 '+d.scanStatus;"
@@ -2063,22 +2513,22 @@ jobs:
             --ks build/release.keystore \
             --ks-pass pass:android \
             --key-pass pass:android \
-            --out build/apk/BonchAutoCheck-01.03.02.apk \
+            --out build/apk/BonchAutoCheck-01.03.03.apk \
             build/aligned.apk
 
-          ls -lh build/apk/BonchAutoCheck-01.03.02.apk
+          ls -lh build/apk/BonchAutoCheck-01.03.03.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BonchAutoCheck-01.03.02-APK
-          path: build/apk/BonchAutoCheck-01.03.02.apk
+          name: BonchAutoCheck-01.03.03-APK
+          path: build/apk/BonchAutoCheck-01.03.03.apk
 
       - name: Publish Direct APK to GitHub Releases
         if: always()
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v01.03.02
-          name: "Bonch AutoCheck v01.03.02"
-          files: build/apk/BonchAutoCheck-01.03.02.apk
+          tag_name: v01.03.03
+          name: "Bonch AutoCheck v01.03.03"
+          files: build/apk/BonchAutoCheck-01.03.03.apk
