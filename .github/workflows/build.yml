@@ -1,4 +1,4 @@
-name: Build Modular Bonch APK 01.04.00
+name: Build Modular Bonch APK 01.04.01
 
 on:
   push:
@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -21,7 +23,7 @@ jobs:
           distribution: "temurin"
           java-version: "17"
 
-      - name: Compile Modular APK v01.04.00
+      - name: Update Changed Modules & Compile APK v01.04.01
         shell: bash
         run: |
           set -e
@@ -29,11 +31,734 @@ jobs:
           ANDROID_JAR=$(ls -d "$SDK_DIR"/platforms/android-* | sort -V | tail -n 1)/android.jar
           BUILD_TOOLS=$(ls -d "$SDK_DIR"/build-tools/* | sort -V | tail -n 1)
 
-          mkdir -p build/gen build/obj build/apk
+          mkdir -p src/ru/sut/bonch res/values assets build/gen build/obj build/apk
+
+          # 1. AndroidManifest.xml: убираем excludeFromRecents, чтобы вкладка не пропадала сама при сворачивании
+          cat <<'EOF' > AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+              package="ru.sut.bonch"
+              android:versionCode="115"
+              android:versionName="01.04.01">
+
+              <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              <uses-permission android:name="android.permission.WAKE_LOCK" />
+              <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+              <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+              <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+              <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+              <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+              <application
+                  android:label="@string/app_name"
+                  android:allowBackup="false"
+                  android:usesCleartextTraffic="false"
+                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
+
+                  <service
+                      android:name=".BonchBackgroundDaemon"
+                      android:process=":bg_daemon"
+                      android:enabled="true"
+                      android:exported="false"
+                      android:stopWithTask="false"
+                      android:foregroundServiceType="dataSync" />
+
+                  <receiver
+                      android:name=".BootReceiver"
+                      android:process=":bg_daemon"
+                      android:enabled="true"
+                      android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.BOOT_COMPLETED" />
+                          <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                          <action android:name="ru.sut.bonch.WATCHDOG_PING" />
+                      </intent-filter>
+                  </receiver>
+
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:launchMode="singleTop"
+                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          # 2. NotificationHelper.java: чистый билд без ошибки this -> ctx
+          cat <<'EOF' > src/ru/sut/bonch/NotificationHelper.java
+          package ru.sut.bonch;
+
+          import android.app.Notification;
+          import android.app.NotificationChannel;
+          import android.app.NotificationManager;
+          import android.app.PendingIntent;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+
+          public class NotificationHelper {
+              private static final String CHANNEL_BG = "bonch_mod_service_010401";
+              private static final String CHANNEL_ALERT = "bonch_mod_alert_010401";
+              public static final int FG_NOTIFICATION_ID = 2015;
+
+              public static void createChannels(Context ctx) {
+                  if (Build.VERSION.SDK_INT >= 26) {
+                      NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm == null) return;
+
+                      NotificationChannel bgChannel = new NotificationChannel(
+                          CHANNEL_BG,
+                          "Фоновая служба автоотметки",
+                          NotificationManager.IMPORTANCE_LOW
+                      );
+                      bgChannel.setShowBadge(false);
+                      bgChannel.enableVibration(false);
+                      bgChannel.setSound(null, null);
+                      nm.createNotificationChannel(bgChannel);
+
+                      NotificationChannel alertChannel = new NotificationChannel(
+                          CHANNEL_ALERT,
+                          "Уведомления (Отметки, Дневник и Пары)",
+                          NotificationManager.IMPORTANCE_HIGH
+                      );
+                      nm.createNotificationChannel(alertChannel);
+                  }
+              }
+
+              public static Notification buildForegroundNotification(Context ctx, String content) {
+                  int flags = Build.VERSION.SDK_INT >= 23
+                      ? (PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
+                      : PendingIntent.FLAG_UPDATE_CURRENT;
+
+                  Intent openIntent = new Intent(ctx, MainActivity.class);
+                  PendingIntent openPending = PendingIntent.getActivity(ctx, 0, openIntent, flags);
+
+                  Intent stopIntent = new Intent(ctx, BonchBackgroundDaemon.class);
+                  stopIntent.putExtra("action", "stop");
+                  PendingIntent stopPending = PendingIntent.getService(ctx, 1, stopIntent, flags);
+
+                  Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                      ? new Notification.Builder(ctx, CHANNEL_BG)
+                      : new Notification.Builder(ctx);
+
+                  builder.setContentTitle("Bonch AutoCheck")
+                         .setContentText(content)
+                         .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+                         .setContentIntent(openPending)
+                         .setOngoing(true)
+                         .setShowWhen(false);
+
+                  if (Build.VERSION.SDK_INT >= 21) {
+                      builder.setCategory(Notification.CATEGORY_SERVICE)
+                             .setVisibility(Notification.VISIBILITY_PUBLIC);
+                  }
+
+                  Notification.Action stopAction = new Notification.Action.Builder(
+                      0, "ОТКЛЮЧИТЬСЯ", stopPending
+                  ).build();
+                  builder.addAction(stopAction);
+
+                  return builder.build();
+              }
+
+              public static void updateForeground(Context ctx, String content) {
+                  NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                  if (nm != null) {
+                      nm.notify(FG_NOTIFICATION_ID, buildForegroundNotification(ctx, content));
+                  }
+              }
+
+              public static void sendAlert(Context ctx, String title, String message) {
+                  try {
+                      NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
+                      if (nm != null) {
+                          Notification.Builder builder = Build.VERSION.SDK_INT >= 26
+                              ? new Notification.Builder(ctx, CHANNEL_ALERT)
+                              : new Notification.Builder(ctx);
+                          builder.setContentTitle(title)
+                                 .setContentText(message)
+                                 .setStyle(new Notification.BigTextStyle().bigText(message))
+                                 .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+                                 .setAutoCancel(true);
+                          nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
+                      }
+                  } catch (Exception ignored) {}
+              }
+          }
+          EOF
+
+          # 3. SutApiClient.java: таймаут чтения 40 сек + до 3 автоповторов при Read timed out
+          cat <<'EOF' > src/ru/sut/bonch/SutApiClient.java
+          package ru.sut.bonch;
+
+          import java.io.ByteArrayOutputStream;
+          import java.io.InputStream;
+          import java.io.OutputStream;
+          import java.net.CookieHandler;
+          import java.net.CookieManager;
+          import java.net.CookiePolicy;
+          import java.net.CookieStore;
+          import java.net.HttpURLConnection;
+          import java.net.SocketTimeoutException;
+          import java.net.URL;
+          import java.net.URLEncoder;
+          import java.nio.charset.Charset;
+          import java.util.Locale;
+
+          public class SutApiClient {
+              public static final String BASE_URL = "https://lk.sut.ru/cabinet";
+              public static final String LOGIN_PAGE_URL = BASE_URL + "/?login=yes";
+              public static final String AUTH_URL = BASE_URL + "/lib/autentificationok.php";
+              public static final String INI_URL = BASE_URL + "/ini.php";
+              public static final String SCHEDULE_URL = BASE_URL + "/project/cabinet/forms/raspisanie.php";
+              public static final String[] DIARY_URLS = {
+                  BASE_URL + "/project/cabinet/forms/dnevnik.php",
+                  BASE_URL + "/project/cabinet/forms/jurnal.php",
+                  BASE_URL + "/project/cabinet/forms/usp.php"
+              };
+
+              private CookieManager cookieManager;
+              private volatile boolean authenticated = false;
+              private String lastLogin = "";
+              private String lastPass = "";
+
+              public SutApiClient() {
+                  resetCookies();
+              }
+
+              public synchronized void resetCookies() {
+                  try {
+                      if (cookieManager != null) {
+                          CookieStore store = cookieManager.getCookieStore();
+                          if (store != null) store.removeAll();
+                      }
+                      cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+                      CookieHandler.setDefault(cookieManager);
+                  } catch (Exception ignored) {}
+              }
+
+              public boolean isAuthenticated() {
+                  return authenticated;
+              }
+
+              public void invalidateSession() {
+                  authenticated = false;
+                  resetCookies();
+              }
+
+              public void checkCredentialsChanged(String login, String pass) {
+                  if (!login.equals(lastLogin) || !pass.equals(lastPass)) {
+                      authenticated = false;
+                      lastLogin = login;
+                      lastPass = pass;
+                  }
+              }
+
+              public String httpRequest(String method, String urlStr, String postBody) throws Exception {
+                  Exception lastErr = null;
+                  for (int attempt = 1; attempt <= 3; attempt++) {
+                      try {
+                          return executeSingleRequest(method, urlStr, postBody);
+                      } catch (SocketTimeoutException te) {
+                          lastErr = te;
+                          try { Thread.sleep(1500L * attempt); } catch (InterruptedException ignored) {}
+                      } catch (Exception e) {
+                          lastErr = e;
+                          if (attempt < 2) {
+                              try { Thread.sleep(1200L); } catch (InterruptedException ignored) {}
+                          } else {
+                              break;
+                          }
+                      }
+                  }
+                  throw lastErr != null ? lastErr : new Exception("Ошибка соединения с lk.sut.ru");
+              }
+
+              private String executeSingleRequest(String method, String urlStr, String postBody) throws Exception {
+                  URL url = new URL(urlStr);
+                  HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                  conn.setRequestMethod(method);
+                  conn.setConnectTimeout(25000);
+                  conn.setReadTimeout(40000);
+                  conn.setInstanceFollowRedirects(false);
+                  conn.setRequestProperty("Connection", "close");
+                  conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/128.0.0.0 Mobile Safari/537.36");
+                  conn.setRequestProperty("Referer", LOGIN_PAGE_URL);
+                  conn.setRequestProperty("Origin", "https://lk.sut.ru");
+                  conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");
+
+                  if ("POST".equals(method)) {
+                      conn.setDoOutput(true);
+                      conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+                      byte[] out = (postBody != null ? postBody : "").getBytes("UTF-8");
+                      try (OutputStream os = conn.getOutputStream()) {
+                          os.write(out);
+                      }
+                  }
+
+                  int code = conn.getResponseCode();
+                  if (code >= 300 && code < 400) {
+                      conn.disconnect();
+                      return "";
+                  }
+
+                  InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+                  if (is == null) {
+                      conn.disconnect();
+                      return "";
+                  }
+                  ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                  byte[] buf = new byte[4096];
+                  int n;
+                  while ((n = is.read(buf)) != -1) {
+                      baos.write(buf, 0, n);
+                  }
+                  conn.disconnect();
+
+                  byte[] bytes = baos.toByteArray();
+                  String utf8 = new String(bytes, Charset.forName("UTF-8"));
+                  String lower = utf8.toLowerCase(Locale.ROOT);
+                  if (lower.contains("расписание") || lower.contains("занят") || lower.contains("присутств")
+                      || lower.contains("понедельник") || lower.contains("вторник") || lower.contains("дневник")
+                      || lower.contains("оценк") || utf8.trim().equals("1")) {
+                      return utf8;
+                  }
+                  String cp1251 = new String(bytes, Charset.forName("windows-1251"));
+                  if (cp1251.toLowerCase(Locale.ROOT).contains("расписание")
+                      || cp1251.toLowerCase(Locale.ROOT).contains("занят")
+                      || cp1251.toLowerCase(Locale.ROOT).contains("дневник")) {
+                      return cp1251;
+                  }
+                  return utf8;
+              }
+
+              public synchronized boolean authenticate(String login, String password, AppStorage storage) {
+                  try {
+                      resetCookies();
+                      httpRequest("GET", LOGIN_PAGE_URL, null);
+                      String data = "users=" + URLEncoder.encode(login, "UTF-8")
+                                  + "&parole=" + URLEncoder.encode(password, "UTF-8");
+                      String resp = httpRequest("POST", AUTH_URL + "?" + data, data);
+                      if (resp.trim().equals("1") || resp.contains("1")) {
+                          httpRequest("GET", INI_URL, null);
+                          httpRequest("GET", LOGIN_PAGE_URL, null);
+                          authenticated = true;
+                          storage.addLog("Вход в ЛК выполнен (" + login + ")");
+                          return true;
+                      }
+                      authenticated = false;
+                      storage.addLog("Неверный логин или пароль от lk.sut.ru");
+                      return false;
+                  } catch (Exception e) {
+                      invalidateSession();
+                      storage.addLog("Сервер ЛК долго отвечает (" + e.getMessage() + "), повтор...");
+                      return false;
+                  }
+              }
+
+              public boolean sendAndVerifyOpenZan(String raspId, String weekId) {
+                  try {
+                      String payload = "open=1&rasp=" + raspId + "&week=" + weekId;
+                      httpRequest("POST", SCHEDULE_URL + "?" + payload, payload);
+                      String verifyHtml = httpRequest("POST", SCHEDULE_URL, "").toLowerCase(Locale.ROOT);
+                      return verifyHtml.contains("присутств")
+                          || verifyHtml.contains("отмечен")
+                          || verifyHtml.contains("занятие началось")
+                          || !verifyHtml.contains("open_zan(" + raspId);
+                  } catch (Exception e) {
+                      return false;
+                  }
+              }
+          }
+          EOF
+
+          # 4. BonchBackgroundDaemon.java: не запускает сканер 18 недель во время активного окна пары + защита при смахивании вкладки
+          cat <<'EOF' > src/ru/sut/bonch/BonchBackgroundDaemon.java
+          package ru.sut.bonch;
+
+          import android.app.AlarmManager;
+          import android.app.PendingIntent;
+          import android.app.Service;
+          import android.content.Context;
+          import android.content.Intent;
+          import android.os.Build;
+          import android.os.IBinder;
+          import android.os.PowerManager;
+          import android.os.SystemClock;
+          import org.json.JSONObject;
+
+          public class BonchBackgroundDaemon extends Service {
+              private AppStorage storage;
+              private SutApiClient apiClient;
+              private ScheduleManager scheduleManager;
+              private DiaryMonitor diaryMonitor;
+
+              private PowerManager.WakeLock wakeLock;
+              private Thread workerThread;
+
+              private volatile boolean active = false;
+              private volatile boolean scanningSemester = false;
+              private volatile String scanStatusText = "";
+              private volatile String statusText = "Отключено";
+              private volatile long serviceStartMillis = 0L;
+
+              @Override
+              public void onCreate() {
+                  super.onCreate();
+                  storage = new AppStorage(this);
+                  apiClient = new SutApiClient();
+                  scheduleManager = new ScheduleManager();
+                  diaryMonitor = new DiaryMonitor();
+
+                  PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                  if (pm != null) {
+                      wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "BonchDaemon::ModularWakeLock");
+                  }
+                  NotificationHelper.createChannels(this);
+                  storage.loadLogsFromDisk();
+                  scheduleManager.loadCachedFromStorage(storage);
+              }
+
+              public void onScanProgress(boolean scanning, String msg) {
+                  this.scanningSemester = scanning;
+                  this.scanStatusText = msg;
+                  flushState();
+              }
+
+              private void flushState() {
+                  storage.saveRuntimeState(
+                      active,
+                      statusText,
+                      scanningSemester,
+                      scanStatusText,
+                      serviceStartMillis,
+                      scheduleManager.getTodayDayIdx()
+                  );
+              }
+
+              @Override
+              public int onStartCommand(Intent intent, int flags, int startId) {
+                  JSONObject cfg = storage.getUserConfig();
+                  String action = intent != null ? intent.getStringExtra("action") : null;
+                  if (action == null) {
+                      action = storage.isDaemonEnabled() ? "start" : "stop";
+                  }
+
+                  if ("stop".equals(action)) {
+                      storage.setDaemonEnabled(false);
+                      stopDaemon();
+                      return START_NOT_STICKY;
+                  }
+
+                  if ("refresh_rules".equals(action)) {
+                      scheduleManager.syncTodayRealStartTimes(storage);
+                      flushState();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
+
+                  if ("test_notif".equals(action)) {
+                      NotificationHelper.sendAlert(
+                          this,
+                          "🔔 Тест уведомлений Bonch AutoCheck",
+                          "Модульная архитектура v" + AppStorage.APP_VERSION + " работает отлично!"
+                      );
+                      storage.addLog("Отправлено тестовое уведомление.");
+                      flushState();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
+
+                  final String login = cfg.optString("login", "").trim();
+                  final String pass = cfg.optString("password", "").trim();
+                  final String mode = cfg.optString("mode", "full_lesson");
+
+                  if ("check_diary_now".equals(action)) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (login.isEmpty() || pass.isEmpty()) {
+                                  storage.addLog("Введите логин и пароль для проверки Дневника!");
+                                  flushState();
+                                  return;
+                              }
+                              storage.addLog("📚 Проверка раздела «Учеба -> Дневник»...");
+                              flushState();
+                              diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, pass, true);
+                              flushState();
+                          }
+                      }).start();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
+
+                  if ("scan_semester".equals(action)) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (login.isEmpty() || pass.isEmpty()) {
+                                  storage.addLog("Введите логин и пароль для анализа семестра!");
+                                  flushState();
+                                  return;
+                              }
+                              if (scanningSemester) return;
+                              scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, pass);
+                              flushState();
+                          }
+                      }).start();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
+
+                  if ("check_once".equals(action)) {
+                      new Thread(new Runnable() {
+                          @Override
+                          public void run() {
+                              if (login.isEmpty() || pass.isEmpty()) {
+                                  storage.addLog("Сначала введите логин и пароль!");
+                                  flushState();
+                                  return;
+                              }
+                              storage.addLog("Проверка текущей недели...");
+                              flushState();
+                              String[] win = scheduleManager.getCurrentWindowState(mode, storage);
+                              scheduleManager.pollCurrentWeekAndCheckIn(
+                                  BonchBackgroundDaemon.this, apiClient, storage, login, pass, win != null ? win[0] : null
+                              );
+                              flushState();
+                              if (win == null && scheduleManager.needsSemesterScan() && !scanningSemester) {
+                                  scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, pass);
+                                  flushState();
+                              }
+                          }
+                      }).start();
+                      return active ? START_STICKY : START_NOT_STICKY;
+                  }
+
+                  if (login.isEmpty() || pass.isEmpty()) {
+                      statusText = "Введите логин и пароль от lk.sut.ru!";
+                      storage.addLog(statusText);
+                      storage.setDaemonEnabled(false);
+                      flushState();
+                      stopSelf();
+                      return START_NOT_STICKY;
+                  }
+
+                  storage.setDaemonEnabled(true);
+                  if (serviceStartMillis == 0L) {
+                      serviceStartMillis = System.currentTimeMillis();
+                  }
+
+                  startForeground(
+                      NotificationHelper.FG_NOTIFICATION_ID,
+                      NotificationHelper.buildForegroundNotification(this, "Подключено • Умный режим")
+                  );
+                  scheduleWatchdogAlarm(25000L);
+                  apiClient.checkCredentialsChanged(login, pass);
+
+                  if (!active || workerThread == null || !workerThread.isAlive()) {
+                      startWorkerLoop();
+                  }
+                  flushState();
+                  return START_STICKY;
+              }
+
+              private void scheduleWatchdogAlarm(long delayMs) {
+                  try {
+                      Intent restartIntent = new Intent(getApplicationContext(), BootReceiver.class);
+                      restartIntent.setAction("ru.sut.bonch.WATCHDOG_PING");
+                      int pFlags = Build.VERSION.SDK_INT >= 23
+                          ? (PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
+                          : PendingIntent.FLAG_UPDATE_CURRENT;
+                      PendingIntent pi = PendingIntent.getBroadcast(getApplicationContext(), 99, restartIntent, pFlags);
+                      AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
+                      if (am != null) {
+                          long triggerAt = SystemClock.elapsedRealtime() + delayMs;
+                          if (Build.VERSION.SDK_INT >= 23) {
+                              am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi);
+                          } else {
+                              am.setExact(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi);
+                          }
+                      }
+                  } catch (Exception ignored) {}
+              }
+
+              @Override
+              public void onTaskRemoved(Intent rootIntent) {
+                  if (storage.isDaemonEnabled()) {
+                      storage.addLog("Вкладка смахнута — фоновая служба продолжает работу.");
+                      flushState();
+                      scheduleWatchdogAlarm(2000L);
+                  }
+                  super.onTaskRemoved(rootIntent);
+              }
+
+              @Override
+              public void onDestroy() {
+                  if (storage.isDaemonEnabled()) {
+                      scheduleWatchdogAlarm(2000L);
+                  }
+                  super.onDestroy();
+              }
+
+              private void startWorkerLoop() {
+                  active = true;
+                  if (wakeLock != null && !wakeLock.isHeld()) {
+                      wakeLock.acquire();
+                  }
+
+                  workerThread = new Thread(new Runnable() {
+                      @Override
+                      public void run() {
+                          storage.addLog("Служба v" + AppStorage.APP_VERSION + " запущена.");
+                          flushState();
+
+                          while (active) {
+                              if (!storage.isDaemonEnabled()) break;
+                              scheduleWatchdogAlarm(25000L);
+
+                              JSONObject cfg = storage.getUserConfig();
+                              final String login = cfg.optString("login", "").trim();
+                              final String password = cfg.optString("password", "").trim();
+                              String intervalStr = cfg.optString("interval", "1");
+                              String mode = cfg.optString("mode", "full_lesson");
+
+                              double intervalMin = 1.0;
+                              try {
+                                  intervalMin = Double.parseDouble(intervalStr);
+                              } catch (Exception ignored) {}
+
+                              scheduleManager.checkNewDayReset(storage);
+
+                              if (!apiClient.isAuthenticated()) {
+                                  updateStatus("Подключение к lk.sut.ru...");
+                                  if (!apiClient.authenticate(login, password, storage)) {
+                                      updateStatus("Повтор подключения к lk.sut.ru через 10 сек...");
+                                      sleepQuietly(10000L);
+                                      continue;
+                                  }
+                                  String[] initWin = scheduleManager.getCurrentWindowState(mode, storage);
+                                  scheduleManager.pollCurrentWeekAndCheckIn(
+                                      BonchBackgroundDaemon.this, apiClient, storage, login, password, initWin != null ? initWin[0] : null
+                                  );
+                                  flushState();
+                                  // Не запускаем тяжелый анализ 18 недель, если прямо сейчас идет пара (чтобы не вызывать Read timed out)
+                                  if (initWin == null && scheduleManager.needsSemesterScan() && !scanningSemester) {
+                                      new Thread(new Runnable() {
+                                          @Override
+                                          public void run() {
+                                              scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, password);
+                                          }
+                                      }).start();
+                                  }
+                              }
+
+                              scheduleManager.checkAndNotifySkippedLessonsToday(BonchBackgroundDaemon.this, storage);
+
+                              String[] win = scheduleManager.getCurrentWindowState(mode, storage);
+
+                              // Проверяем Дневник только вне активной ловли кнопки (или когда на паре уже отмечены)
+                              boolean busyCatchingButton = (win != null && !scheduleManager.completedWindowsToday.contains(win[0]));
+                              if (!busyCatchingButton && storage.isNotifyDiaryEnabled() && diaryMonitor.isTimeForPeriodicPoll()) {
+                                  diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
+                                  flushState();
+                              }
+
+                              if (win == null) {
+                                  String nextLesson = scheduleManager.findNextUnmarkedLessonTime(storage);
+                                  if (nextLesson != null) {
+                                      updateStatus("Подключено • Ждем пару в " + nextLesson);
+                                  } else {
+                                      updateStatus("Подключено • На сегодня активных пар больше нет");
+                                  }
+                                  sleepQuietly(25000L);
+                                  continue;
+                              }
+
+                              String winStart = win[0];
+                              String winLabel = win[1];
+
+                              if (scheduleManager.completedWindowsToday.contains(winStart)) {
+                                  String tMarked = scheduleManager.checkInTimeByStart.get(winStart);
+                                  String nextLesson = scheduleManager.findNextLessonAfter(winStart, storage);
+                                  String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Пары на сегодня завершены";
+                                  updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
+                                  sleepQuietly(25000L);
+                                  continue;
+                              }
+
+                              updateStatus("Ловим кнопку • " + winLabel);
+                              scheduleManager.pollCurrentWeekAndCheckIn(
+                                  BonchBackgroundDaemon.this, apiClient, storage, login, password, winStart
+                              );
+
+                              if (scheduleManager.completedWindowsToday.contains(winStart)) {
+                                  String tMarked = scheduleManager.checkInTimeByStart.get(winStart);
+                                  String nextLesson = scheduleManager.findNextLessonAfter(winStart, storage);
+                                  String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Пары на сегодня завершены";
+                                  updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
+                                  sleepQuietly(25000L);
+                              } else {
+                                  sleepQuietly(Math.max(15000L, (long) (intervalMin * 60000L)));
+                              }
+                          }
+                      }
+                  });
+                  workerThread.start();
+              }
+
+              private void stopDaemon() {
+                  active = false;
+                  serviceStartMillis = 0L;
+                  statusText = "Отключено";
+                  if (wakeLock != null && wakeLock.isHeld()) {
+                      wakeLock.release();
+                  }
+                  if (workerThread != null) {
+                      workerThread.interrupt();
+                  }
+                  storage.addLog("Автоотметка отключена.");
+                  flushState();
+                  stopForeground(true);
+                  stopSelf();
+              }
+
+              private void updateStatus(String newStatus) {
+                  statusText = newStatus;
+                  flushState();
+                  if (active) {
+                      NotificationHelper.updateForeground(this, newStatus);
+                  }
+              }
+
+              private void sleepQuietly(long ms) {
+                  try {
+                      Thread.sleep(ms);
+                  } catch (InterruptedException ignored) {}
+              }
+
+              @Override
+              public IBinder onBind(Intent intent) {
+                  return null;
+              }
+          }
+          EOF
+
+          # Обновляем номер версии до 01.04.01 в AppStorage.java и assets/index.html
+          sed -i 's/01\.04\.00/01.04.01/g' src/ru/sut/bonch/AppStorage.java assets/index.html
           sed -i 's/^[[:space:]]*//' res/values/strings.xml AndroidManifest.xml
 
-          # Автоматически исправляем this -> ctx в NotificationHelper.java на строке 54
-          sed -i 's/Notification.Builder(this)/Notification.Builder(ctx)/g' src/ru/sut/bonch/NotificationHelper.java
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add AndroidManifest.xml src/ assets/
+          if ! git diff --cached --quiet; then
+            git commit -m "Update modular files to v01.04.01 [skip ci]" || true
+            git push origin HEAD:main || git push || true
+          fi
 
           "$BUILD_TOOLS/aapt2" compile --dir res -o build/res.zip
           "$BUILD_TOOLS/aapt2" link -o build/unaligned.apk \
@@ -64,22 +789,22 @@ jobs:
             --ks build/release.keystore \
             --ks-pass pass:android \
             --key-pass pass:android \
-            --out build/apk/BonchAutoCheck-01.04.00.apk \
+            --out build/apk/BonchAutoCheck-01.04.01.apk \
             build/aligned.apk
 
-          ls -lh build/apk/BonchAutoCheck-01.04.00.apk
+          ls -lh build/apk/BonchAutoCheck-01.04.01.apk
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BonchAutoCheck-01.04.00-APK
-          path: build/apk/BonchAutoCheck-01.04.00.apk
+          name: BonchAutoCheck-01.04.01-APK
+          path: build/apk/BonchAutoCheck-01.04.01.apk
 
       - name: Publish Direct APK to GitHub Releases
         if: always()
         continue-on-error: true
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v01.04.00
-          name: "Bonch AutoCheck v01.04.00 (Modular Architecture)"
-          files: build/apk/BonchAutoCheck-01.04.00.apk
+          tag_name: v01.04.01
+          name: "Bonch AutoCheck v01.04.01"
+          files: build/apk/BonchAutoCheck-01.04.01.apk
