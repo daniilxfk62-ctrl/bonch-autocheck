@@ -107,7 +107,7 @@
     <div class="dev-hdr"><span>🔧 МОДУЛЬНАЯ ПАНЕЛЬ РАЗРАБОТЧИКА</span><span id="uptime" style="color:#34d399;"></span></div>
     <div id="logs" class="log">Загрузка логов...</div>
   </div>
-  <div id="ver_box" class="ver-footer" onclick="onVerTap()">Версия: 01.04.00</div>
+  <div id="ver_box" class="ver-footer" onclick="onVerTap()">Версия: 01.04.01</div>
 </div></div>
 
 <div id="tab_schedule">
@@ -127,7 +127,7 @@
     <button class="chip" onclick="onlyPracticeAndLabs()">🛠 Выключить все лекции</button>
   </div>
   <div id="smart_list"></div>
-  <div class="ver-footer">Версия: 01.04.00</div>
+  <div class="ver-footer">Версия: 01.04.01</div>
 </div></div>
 
 <div id="tab_notif" class="page-pad" style="display:none;"><div class="card">
@@ -155,7 +155,7 @@
 
   <div style="font-size:13px;font-weight:800;color:#cbd5e1;margin:14px 0 8px;">Последние ячейки из таблицы Дневника:</div>
   <div id="diary_list"></div>
-  <div class="ver-footer">Версия: 01.04.00</div>
+  <div class="ver-footer">Версия: 01.04.01</div>
 </div></div>
 
 <div class="bottom-nav">
@@ -198,7 +198,7 @@ function onVerTap(){
     verTapCount=0;
     devOpen=!devOpen;
     document.getElementById('dev_panel').style.display=devOpen?'block':'none';
-    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.04.00 (Dev ON)':'Версия: 01.04.00';
+    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.04.01 (Dev ON)':'Версия: 01.04.01';
   }else{
     verTapTimer=setTimeout(function(){verTapCount=0;},1500);
   }

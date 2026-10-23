@@ -8,6 +8,7 @@ import java.net.CookieManager;
 import java.net.CookiePolicy;
 import java.net.CookieStore;
 import java.net.HttpURLConnection;
+import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.Charset;
@@ -63,12 +64,33 @@ public class SutApiClient {
     }
 
     public String httpRequest(String method, String urlStr, String postBody) throws Exception {
+        Exception lastErr = null;
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            try {
+                return executeSingleRequest(method, urlStr, postBody);
+            } catch (SocketTimeoutException te) {
+                lastErr = te;
+                try { Thread.sleep(1500L * attempt); } catch (InterruptedException ignored) {}
+            } catch (Exception e) {
+                lastErr = e;
+                if (attempt < 2) {
+                    try { Thread.sleep(1200L); } catch (InterruptedException ignored) {}
+                } else {
+                    break;
+                }
+            }
+        }
+        throw lastErr != null ? lastErr : new Exception("Ошибка соединения с lk.sut.ru");
+    }
+
+    private String executeSingleRequest(String method, String urlStr, String postBody) throws Exception {
         URL url = new URL(urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod(method);
-        conn.setConnectTimeout(15000);
-        conn.setReadTimeout(15000);
+        conn.setConnectTimeout(25000);
+        conn.setReadTimeout(40000);
         conn.setInstanceFollowRedirects(false);
+        conn.setRequestProperty("Connection", "close");
         conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/128.0.0.0 Mobile Safari/537.36");
         conn.setRequestProperty("Referer", LOGIN_PAGE_URL);
         conn.setRequestProperty("Origin", "https://lk.sut.ru");
@@ -138,7 +160,7 @@ public class SutApiClient {
             return false;
         } catch (Exception e) {
             invalidateSession();
-            storage.addLog("Ошибка сети: " + e.getMessage());
+            storage.addLog("Сервер ЛК долго отвечает (" + e.getMessage() + "), повтор...");
             return false;
         }
     }

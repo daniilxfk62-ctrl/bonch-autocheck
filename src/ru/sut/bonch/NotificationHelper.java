@@ -9,9 +9,9 @@ import android.content.Intent;
 import android.os.Build;
 
 public class NotificationHelper {
-    private static final String CHANNEL_BG = "bonch_mod_service_010400";
-    private static final String CHANNEL_ALERT = "bonch_mod_alert_010400";
-    public static final int FG_NOTIFICATION_ID = 2014;
+    private static final String CHANNEL_BG = "bonch_mod_service_010401";
+    private static final String CHANNEL_ALERT = "bonch_mod_alert_010401";
+    public static final int FG_NOTIFICATION_ID = 2015;
 
     public static void createChannels(Context ctx) {
         if (Build.VERSION.SDK_INT >= 26) {
@@ -51,7 +51,7 @@ public class NotificationHelper {
 
         Notification.Builder builder = Build.VERSION.SDK_INT >= 26
             ? new Notification.Builder(ctx, CHANNEL_BG)
-            : new Notification.Builder(this);
+            : new Notification.Builder(ctx);
 
         builder.setContentTitle("Bonch AutoCheck")
                .setContentText(content)

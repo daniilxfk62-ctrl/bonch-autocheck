@@ -145,11 +145,8 @@ public class BonchBackgroundDaemon extends Service {
                     scheduleManager.pollCurrentWeekAndCheckIn(
                         BonchBackgroundDaemon.this, apiClient, storage, login, pass, win != null ? win[0] : null
                     );
-                    if (storage.isNotifyDiaryEnabled()) {
-                        diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
-                    }
                     flushState();
-                    if (scheduleManager.needsSemesterScan() && !scanningSemester) {
+                    if (win == null && scheduleManager.needsSemesterScan() && !scanningSemester) {
                         scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, pass);
                         flushState();
                     }
@@ -176,7 +173,7 @@ public class BonchBackgroundDaemon extends Service {
             NotificationHelper.FG_NOTIFICATION_ID,
             NotificationHelper.buildForegroundNotification(this, "Подключено • Умный режим")
         );
-        scheduleWatchdogAlarm();
+        scheduleWatchdogAlarm(25000L);
         apiClient.checkCredentialsChanged(login, pass);
 
         if (!active || workerThread == null || !workerThread.isAlive()) {
@@ -186,7 +183,7 @@ public class BonchBackgroundDaemon extends Service {
         return START_STICKY;
     }
 
-    private void scheduleWatchdogAlarm() {
+    private void scheduleWatchdogAlarm(long delayMs) {
         try {
             Intent restartIntent = new Intent(getApplicationContext(), BootReceiver.class);
             restartIntent.setAction("ru.sut.bonch.WATCHDOG_PING");
@@ -196,7 +193,7 @@ public class BonchBackgroundDaemon extends Service {
             PendingIntent pi = PendingIntent.getBroadcast(getApplicationContext(), 99, restartIntent, pFlags);
             AlarmManager am = (AlarmManager) getSystemService(Context.ALARM_SERVICE);
             if (am != null) {
-                long triggerAt = SystemClock.elapsedRealtime() + 25000L;
+                long triggerAt = SystemClock.elapsedRealtime() + delayMs;
                 if (Build.VERSION.SDK_INT >= 23) {
                     am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, triggerAt, pi);
                 } else {
@@ -209,9 +206,9 @@ public class BonchBackgroundDaemon extends Service {
     @Override
     public void onTaskRemoved(Intent rootIntent) {
         if (storage.isDaemonEnabled()) {
-            storage.addLog("Окно закрыто — фоновый демон продолжает работу.");
+            storage.addLog("Вкладка смахнута — фоновая служба продолжает работу.");
             flushState();
-            scheduleWatchdogAlarm();
+            scheduleWatchdogAlarm(2000L);
         }
         super.onTaskRemoved(rootIntent);
     }
@@ -219,7 +216,7 @@ public class BonchBackgroundDaemon extends Service {
     @Override
     public void onDestroy() {
         if (storage.isDaemonEnabled()) {
-            scheduleWatchdogAlarm();
+            scheduleWatchdogAlarm(2000L);
         }
         super.onDestroy();
     }
@@ -233,12 +230,12 @@ public class BonchBackgroundDaemon extends Service {
         workerThread = new Thread(new Runnable() {
             @Override
             public void run() {
-                storage.addLog("Модульная служба v" + AppStorage.APP_VERSION + " запущена.");
+                storage.addLog("Служба v" + AppStorage.APP_VERSION + " запущена.");
                 flushState();
 
                 while (active) {
                     if (!storage.isDaemonEnabled()) break;
-                    scheduleWatchdogAlarm();
+                    scheduleWatchdogAlarm(25000L);
 
                     JSONObject cfg = storage.getUserConfig();
                     final String login = cfg.optString("login", "").trim();
@@ -256,19 +253,17 @@ public class BonchBackgroundDaemon extends Service {
                     if (!apiClient.isAuthenticated()) {
                         updateStatus("Подключение к lk.sut.ru...");
                         if (!apiClient.authenticate(login, password, storage)) {
-                            updateStatus("Ошибка входа (проверьте логин/пароль)");
-                            sleepQuietly(20000L);
+                            updateStatus("Повтор подключения к lk.sut.ru через 10 сек...");
+                            sleepQuietly(10000L);
                             continue;
                         }
                         String[] initWin = scheduleManager.getCurrentWindowState(mode, storage);
                         scheduleManager.pollCurrentWeekAndCheckIn(
                             BonchBackgroundDaemon.this, apiClient, storage, login, password, initWin != null ? initWin[0] : null
                         );
-                        if (storage.isNotifyDiaryEnabled()) {
-                            diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
-                        }
                         flushState();
-                        if (scheduleManager.needsSemesterScan() && !scanningSemester) {
+                        // Не запускаем тяжелый анализ 18 недель, если прямо сейчас идет пара (чтобы не вызывать Read timed out)
+                        if (initWin == null && scheduleManager.needsSemesterScan() && !scanningSemester) {
                             new Thread(new Runnable() {
                                 @Override
                                 public void run() {
@@ -280,12 +275,14 @@ public class BonchBackgroundDaemon extends Service {
 
                     scheduleManager.checkAndNotifySkippedLessonsToday(BonchBackgroundDaemon.this, storage);
 
-                    if (storage.isNotifyDiaryEnabled() && diaryMonitor.isTimeForPeriodicPoll()) {
+                    String[] win = scheduleManager.getCurrentWindowState(mode, storage);
+
+                    // Проверяем Дневник только вне активной ловли кнопки (или когда на паре уже отмечены)
+                    boolean busyCatchingButton = (win != null && !scheduleManager.completedWindowsToday.contains(win[0]));
+                    if (!busyCatchingButton && storage.isNotifyDiaryEnabled() && diaryMonitor.isTimeForPeriodicPoll()) {
                         diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
                         flushState();
                     }
-
-                    String[] win = scheduleManager.getCurrentWindowState(mode, storage);
 
                     if (win == null) {
                         String nextLesson = scheduleManager.findNextUnmarkedLessonTime(storage);

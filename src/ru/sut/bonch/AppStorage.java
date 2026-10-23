@@ -14,7 +14,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class AppStorage {
-    public static final String APP_VERSION = "01.04.00";
+    public static final String APP_VERSION = "01.04.01";
 
     public static final String FILE_CONFIG = "user_config_v4.json";
     public static final String FILE_SMART_RULES = "smart_rules_v4.json";
