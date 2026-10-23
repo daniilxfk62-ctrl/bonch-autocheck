@@ -347,7 +347,7 @@ function renderTikTokSchedule(){
         var pillLabel=(lType==='Лекция')?'🎓 ЛЕКЦИЯ':((lType==='Лаба')?'🧪 ЛАБА':'📘 ПРАКТИКА');
         var cardCls='lesson-card '+typeClass+(!allowed?' skip':(x.checked?' done':''));
         var waitHint=x.waitBtnTime?(' (в '+x.waitBtnTime+')'):'';
-        var stText=!allowed?'🚫 Выкл в 🤖':(x.checked?('✅ Отмечен '+(x.checkTime||'ОК')):('⏳ Ждем'+waitHint));
+var stText=!allowed?'🚫 Выкл в 🤖':(x.checked?('✅ Отмечен '+(x.checkTime||'ОК')):(x.waitingTeacher?'⏳ Ждем начала от преподавателя':('⏳ Ждем'+waitHint)));
         var stColor=!allowed?'#f87171':(x.checked?'#34d399':'#fde047');
         var roomInfo=x.room?('📍 '+x.room):'';
         h+="<div class='"+cardCls+"'>"
