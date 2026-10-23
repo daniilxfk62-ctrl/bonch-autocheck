@@ -398,6 +398,7 @@ public class ScheduleManager {
                 String btnAppearTime = wm.find() ? wm.group(1) : null;
 
                 String lowerRow = rowText.toLowerCase(Locale.ROOT);
+                boolean waitingForTeacher = lowerRow.contains("ждем начала от преподавателя") || lowerRow.contains("ждём начала от преподавателя");
                 boolean alreadyInHtml = lowerRow.contains("вы присутствуете")
                                      || lowerRow.contains("отмечен")
                                      || lowerRow.contains("присутствует");
@@ -454,6 +455,7 @@ public class ScheduleManager {
                     item.put("room", structured.room);
                     item.put("ruleKey", structured.ruleKey);
                     item.put("checked", isLessonDone);
+                    item.put("waitingTeacher", waitingForTeacher && !isLessonDone);
                     item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
                     item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
                     weekLessonsByDate.get(curDateStr).add(item);
