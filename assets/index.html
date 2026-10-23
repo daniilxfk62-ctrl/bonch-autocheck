@@ -194,7 +194,7 @@ function switchTab(idx){
 function onVerTap(){
   verTapCount++;
   if(verTapTimer)clearTimeout(verTapTimer);
-  if(verTapCount>=5){
+  if(verTapCount>=20){
     verTapCount=0;
     devOpen=!devOpen;
     document.getElementById('dev_panel').style.display=devOpen?'block':'none';
