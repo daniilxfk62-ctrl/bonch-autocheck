@@ -21,6 +21,7 @@ public class BonchBackgroundDaemon extends Service {
     private Thread workerThread;
 
     private volatile boolean active = false;
+    private volatile boolean singleCheckMode = false;
     private volatile boolean scanningSemester = false;
     private volatile String scanStatusText = "";
     private volatile String statusText = "Отключено";
@@ -69,6 +70,7 @@ public class BonchBackgroundDaemon extends Service {
         }
 
         if ("stop".equals(action)) {
+            singleCheckMode = false;
             storage.setDaemonEnabled(false);
             stopDaemon();
             return START_NOT_STICKY;
@@ -84,7 +86,7 @@ public class BonchBackgroundDaemon extends Service {
             NotificationHelper.sendAlert(
                 this,
                 "🔔 Тест уведомлений Bonch AutoCheck",
-                "Модульная архитектура v" + AppStorage.APP_VERSION + " работает отлично!"
+                "Уведомления работают отлично!"
             );
             storage.addLog("Отправлено тестовое уведомление.");
             flushState();
@@ -164,14 +166,16 @@ public class BonchBackgroundDaemon extends Service {
             return START_NOT_STICKY;
         }
 
+        singleCheckMode = "check_single".equals(action);
         storage.setDaemonEnabled(true);
         if (serviceStartMillis == 0L) {
             serviceStartMillis = System.currentTimeMillis();
         }
 
+        String fgTitle = singleCheckMode ? "⚡ Разовый режим (только 1 пара)" : "Подключено • Умный режим";
         startForeground(
             NotificationHelper.FG_NOTIFICATION_ID,
-            NotificationHelper.buildForegroundNotification(this, "Подключено • Умный режим")
+            NotificationHelper.buildForegroundNotification(this, fgTitle)
         );
         scheduleWatchdogAlarm(25000L);
         apiClient.checkCredentialsChanged(login, pass);
@@ -221,6 +225,21 @@ public class BonchBackgroundDaemon extends Service {
         super.onDestroy();
     }
 
+    private void finishSingleCheckMode(String markedInfo) {
+        singleCheckMode = false;
+        storage.setDaemonEnabled(false);
+        active = false;
+        serviceStartMillis = 0L;
+        statusText = "✅ Отмечен на 1 паре (" + markedInfo + ") • Отключено";
+        storage.addLog("⚡ Разовая отметка выполнена (" + markedInfo + "). Автоотключение.");
+        flushState();
+        if (wakeLock != null && wakeLock.isHeld()) {
+            wakeLock.release();
+        }
+        stopForeground(true);
+        stopSelf();
+    }
+
     private void startWorkerLoop() {
         active = true;
         if (wakeLock != null && !wakeLock.isHeld()) {
@@ -230,7 +249,7 @@ public class BonchBackgroundDaemon extends Service {
         workerThread = new Thread(new Runnable() {
             @Override
             public void run() {
-                storage.addLog("Служба v" + AppStorage.APP_VERSION + " запущена.");
+                storage.addLog(singleCheckMode ? "⚡ Запуск разовой отметки (на 1 пару)..." : "Служба запущена.");
                 flushState();
 
                 while (active) {
@@ -262,7 +281,10 @@ public class BonchBackgroundDaemon extends Service {
                             BonchBackgroundDaemon.this, apiClient, storage, login, password, initWin != null ? initWin[0] : null
                         );
                         flushState();
-                        // Не запускаем тяжелый анализ 18 недель, если прямо сейчас идет пара (чтобы не вызывать Read timed out)
+                        if (singleCheckMode && scheduleManager.lastPollMarkedAny) {
+                            finishSingleCheckMode("успешно");
+                            return;
+                        }
                         if (initWin == null && scheduleManager.needsSemesterScan() && !scanningSemester) {
                             new Thread(new Runnable() {
                                 @Override
@@ -277,7 +299,26 @@ public class BonchBackgroundDaemon extends Service {
 
                     String[] win = scheduleManager.getCurrentWindowState(mode, storage);
 
-                    // Проверяем Дневник только вне активной ловли кнопки (или когда на паре уже отмечены)
+                    // Если включен разовый режим на 1 пару — проверяем ЛК даже если окно пары еще не началось
+                    if (singleCheckMode && win == null) {
+                        updateStatus("⚡ Разовая отметка • Проверка открытой кнопки в ЛК...");
+                        scheduleManager.pollCurrentWeekAndCheckIn(
+                            BonchBackgroundDaemon.this, apiClient, storage, login, password, null
+                        );
+                        if (scheduleManager.lastPollMarkedAny) {
+                            finishSingleCheckMode("ОК");
+                            return;
+                        }
+                        String nextLesson = scheduleManager.findNextUnmarkedLessonTime(storage);
+                        if (nextLesson != null) {
+                            updateStatus("⚡ Разовый режим (1 пара) • Ждем пару в " + nextLesson);
+                        } else {
+                            updateStatus("⚡ Разовый режим (1 пара) • Ожидание кнопки в ЛК...");
+                        }
+                        sleepQuietly(Math.max(15000L, (long) (intervalMin * 60000L)));
+                        continue;
+                    }
+
                     boolean busyCatchingButton = (win != null && !scheduleManager.completedWindowsToday.contains(win[0]));
                     if (!busyCatchingButton && storage.isNotifyDiaryEnabled() && diaryMonitor.isTimeForPeriodicPoll()) {
                         diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
@@ -300,6 +341,10 @@ public class BonchBackgroundDaemon extends Service {
 
                     if (scheduleManager.completedWindowsToday.contains(winStart)) {
                         String tMarked = scheduleManager.checkInTimeByStart.get(winStart);
+                        if (singleCheckMode) {
+                            finishSingleCheckMode(tMarked != null ? tMarked : winStart);
+                            return;
+                        }
                         String nextLesson = scheduleManager.findNextLessonAfter(winStart, storage);
                         String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Пары на сегодня завершены";
                         updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
@@ -307,18 +352,31 @@ public class BonchBackgroundDaemon extends Service {
                         continue;
                     }
 
-                    updateStatus("Ловим кнопку • " + winLabel);
+                    String prefix = singleCheckMode ? "⚡ [1 ПАРА] " : "";
+                    if (scheduleManager.waitingTeacherToday.contains(winStart)) {
+                        updateStatus(prefix + "⏳ Ждем начала от преподавателя • " + winLabel);
+                    } else {
+                        updateStatus(prefix + "Ловим кнопку • " + winLabel);
+                    }
+
                     scheduleManager.pollCurrentWeekAndCheckIn(
                         BonchBackgroundDaemon.this, apiClient, storage, login, password, winStart
                     );
 
-                    if (scheduleManager.completedWindowsToday.contains(winStart)) {
+                    if (scheduleManager.lastPollMarkedAny || scheduleManager.completedWindowsToday.contains(winStart)) {
                         String tMarked = scheduleManager.checkInTimeByStart.get(winStart);
+                        if (singleCheckMode) {
+                            finishSingleCheckMode(tMarked != null ? tMarked : "ОК");
+                            return;
+                        }
                         String nextLesson = scheduleManager.findNextLessonAfter(winStart, storage);
                         String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Пары на сегодня завершены";
                         updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
                         sleepQuietly(25000L);
                     } else {
+                        if (scheduleManager.waitingTeacherToday.contains(winStart)) {
+                            updateStatus(prefix + "⏳ Ждем начала от преподавателя • " + winLabel);
+                        }
                         sleepQuietly(Math.max(15000L, (long) (intervalMin * 60000L)));
                     }
                 }
@@ -329,6 +387,7 @@ public class BonchBackgroundDaemon extends Service {
 
     private void stopDaemon() {
         active = false;
+        singleCheckMode = false;
         serviceStartMillis = 0L;
         statusText = "Отключено";
         if (wakeLock != null && wakeLock.isHeld()) {
