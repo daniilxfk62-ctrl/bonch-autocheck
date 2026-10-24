@@ -12,6 +12,8 @@
   input, select { width:100%; box-sizing:border-box; padding:11px; margin:4px 0 10px; border-radius:10px; border:1px solid #334155; background:#1e293b; color:#fff; font-size:14px; }
   .btn { width:100%; padding:15px; border-radius:12px; border:none; background:#2563eb; color:#fff; font-weight:800; font-size:15px; margin-top:6px; }
   .btn.on { background:#dc2626; }
+  .btn-once { width:100%; padding:13px; border-radius:12px; border:1px solid #f59e0b; background:linear-gradient(135deg,#78350f 0%,#451a03 100%); color:#fde68a; font-weight:800; font-size:13px; margin-top:8px; }
+  .btn-once.on { background:#dc2626; border-color:#f87171; color:#fff; }
   .btn-sec { width:100%; padding:11px; border-radius:12px; border:1px solid #334155; background:#1e293b; color:#cbd5e1; font-weight:600; font-size:12px; margin-top:7px; }
   .status-card { margin:12px 0 6px; padding:12px 14px; background:#0f172a; border:1px solid #334155; border-left:4px solid #64748b; border-radius:12px; }
   .status-card.on { border-left-color:#34d399; background:#06281e; border-color:#059669; }
@@ -22,27 +24,34 @@
   .log { background:#05080f; border:1px solid #1e293b; border-radius:8px; padding:8px; font-family:monospace; font-size:11px; height:120px; overflow-y:auto; white-space:pre-wrap; color:#cbd5e1; }
   .ver-footer { margin-top:14px; padding:10px; border-top:1px solid #1e293b; text-align:center; font-size:12px; font-weight:800; color:#f97316; letter-spacing:0.5px; user-select:none; cursor:pointer; }
 
+  /* TIKTOK-ЛЕНТА РАСПИСАНИЯ */
   #tab_schedule { display:none; position:relative; height:calc(100vh - 62px); width:100vw; overflow:hidden; }
   .tiktok-feed { height:calc(100vh - 62px); width:100%; overflow-y:scroll; scroll-snap-type:y mandatory; -webkit-overflow-scrolling:touch; scroll-behavior:smooth; }
   .tiktok-feed::-webkit-scrollbar { display:none; }
   .day-slide { height:calc(100vh - 62px); width:100%; scroll-snap-align:start; scroll-snap-stop:always; box-sizing:border-box; padding:10px 12px 14px 12px; display:flex; flex-direction:column; }
   .slide-hdr { background:#111827; border:1px solid #1e293b; border-radius:14px; padding:10px 60px 10px 14px; margin-bottom:10px; flex-shrink:0; }
   .slide-body { flex:1; display:flex; flex-direction:column; gap:10px; height:100%; box-sizing:border-box; overflow-y:auto; }
-  .lesson-card { flex:0 0 calc((100% - 30px) / 4); min-height:112px; box-sizing:border-box; border-radius:16px; padding:12px 62px 12px 15px; display:flex; flex-direction:column; justify-content:space-between; position:relative; box-shadow:0 6px 18px rgba(0,0,0,0.35); }
-  .lesson-card.type-lec { background:linear-gradient(135deg,#2e1065 0%,#1e1b4b 100%); border:1px solid #7c3aed; border-left:6px solid #a855f7; }
-  .lesson-card.type-prac { background:linear-gradient(135deg,#082f49 0%,#0f172a 100%); border:1px solid #0284c7; border-left:6px solid #38bdf8; }
-  .lesson-card.type-lab { background:linear-gradient(135deg,#4c0519 0%,#1f1224 100%); border:1px solid #e11d48; border-left:6px solid #fb7185; }
-  .lesson-card.done { border-color:#10b981; box-shadow:0 0 18px rgba(16,185,129,0.22); }
-  .lesson-card.skip { background:#111827; border:1px dashed #ef4444; border-left:6px solid #ef4444; opacity:0.55; }
+
+  /* ЦВЕТА ПАР: ЛЕКЦИЯ = ГОЛУБОЙ, ПРАКТИКА = ЗЕЛЁНЫЙ, ЛАБА = КРАСНЫЙ */
+  .lesson-card { flex:0 0 calc((100% - 30px) / 4); min-height:115px; box-sizing:border-box; border-radius:16px; padding:11px 62px 11px 14px; display:flex; flex-direction:column; justify-content:space-between; position:relative; box-shadow:0 6px 18px rgba(0,0,0,0.35); cursor:pointer; transition:transform 0.12s; }
+  .lesson-card:active { transform:scale(0.98); }
+  .lesson-card.type-lec { background:linear-gradient(135deg,#082f49 0%,#0c4a6e 100%); border:1px solid #0284c7; border-left:6px solid #38bdf8; }
+  .lesson-card.type-prac { background:linear-gradient(135deg,#052e16 0%,#064e3b 100%); border:1px solid #16a34a; border-left:6px solid #4ade80; }
+  .lesson-card.type-lab { background:linear-gradient(135deg,#450a0a 0%,#7f1d1d 100%); border:1px solid #dc2626; border-left:6px solid #f87171; }
+  .lesson-card.done { box-shadow:0 0 0 2px #fde047, 0 6px 18px rgba(0,0,0,0.4); }
+  .lesson-card.skip { background:#111827; border:1px dashed #64748b; border-left:6px solid #64748b; opacity:0.55; }
+
   .les-top { display:flex; align-items:center; justify-content:space-between; gap:6px; flex-wrap:wrap; }
   .les-time { font-size:14px; font-weight:900; color:#ffffff; letter-spacing:0.3px; }
   .type-pill { font-size:11px; font-weight:900; padding:3px 9px; border-radius:999px; text-transform:uppercase; letter-spacing:0.5px; }
-  .pill-lec { background:#a855f7; color:#090d16; }
-  .pill-prac { background:#38bdf8; color:#090d16; }
-  .pill-lab { background:#fb7185; color:#090d16; }
-  .les-title { font-size:16px; font-weight:900; color:#f8fafc; line-height:1.25; margin:4px 0; }
-  .les-meta { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#cbd5e1; font-weight:600; gap:6px; flex-wrap:wrap; }
+  .pill-lec { background:#38bdf8; color:#082f49; }
+  .pill-prac { background:#4ade80; color:#052e16; }
+  .pill-lab { background:#f87171; color:#450a0a; }
+  .les-title { font-size:15px; font-weight:900; color:#f8fafc; line-height:1.22; margin:3px 0; }
+  .les-teacher { font-size:12px; font-weight:700; color:#e2e8f0; margin-bottom:2px; }
+  .les-meta { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#cbd5e1; font-weight:700; gap:6px; flex-wrap:wrap; }
 
+  /* БОКОВАЯ ПАНЕЛЬ ДНЕЙ */
   .tiktok-rail { position:fixed; right:10px; top:50%; transform:translateY(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; z-index:920; pointer-events:auto; }
   .rail-arrow { width:44px; height:34px; border-radius:999px; border:1px solid rgba(255,255,255,0.18); background:rgba(15,23,42,0.68); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#fb923c; font-size:14px; font-weight:900; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 12px rgba(0,0,0,0.45); }
   .rail-day { width:46px; height:46px; border-radius:14px; border:1px solid rgba(255,255,255,0.14); background:rgba(15,23,42,0.58); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); color:#f1f5f9; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:12px; font-weight:900; padding:0; box-shadow:0 4px 12px rgba(0,0,0,0.4); transition:transform 0.15s; }
@@ -50,6 +59,18 @@
   .rail-day.today-ring { border:2px solid #34d399; }
   .today-float-btn { display:none; position:fixed; bottom:76px; left:50%; transform:translateX(-50%); z-index:950; background:rgba(249,115,22,0.95); backdrop-filter:blur(6px); color:#090d16; border:none; border-radius:999px; padding:11px 22px; font-size:13px; font-weight:900; box-shadow:0 8px 24px rgba(249,115,22,0.5); }
 
+  /* МОДАЛЬНОЕ ОКНО ВСЕХ ПАР ПРЕДМЕТА */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(5,8,15,0.82); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:2000; padding:16px; box-sizing:border-box; align-items:center; justify-content:center; }
+  .modal-card { background:#111827; border:1px solid #334155; border-radius:20px; width:100%; max-width:440px; max-height:82vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,0.65); }
+  .modal-hdr { padding:14px 16px; background:#0f172a; border-bottom:1px solid #1e293b; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .modal-close { background:#1e293b; border:1px solid #334155; color:#f8fafc; width:34px; height:34px; border-radius:10px; font-size:16px; font-weight:900; flex-shrink:0; }
+  .modal-body { padding:12px 14px; overflow-y:auto; flex:1; }
+  .subj-occurrence { padding:10px 12px; border-radius:12px; margin-bottom:8px; background:#1e293b; border-left:5px solid #38bdf8; cursor:pointer; }
+  .subj-occurrence.occ-lec { border-left-color:#38bdf8; }
+  .subj-occurrence.occ-prac { border-left-color:#4ade80; }
+  .subj-occurrence.occ-lab { border-left-color:#f87171; }
+
+  /* УМНАЯ ОТМЕТКА И УВЕДОМЛЕНИЯ */
   .stat-box { background:#0f172a; border:1px solid #334155; border-radius:12px; padding:12px; margin-bottom:10px; font-size:12px; line-height:1.5; }
   .chip-row { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
   .chip { flex:1; padding:8px; border-radius:8px; border:1px solid #334155; background:#1e293b; color:#cbd5e1; font-size:11px; font-weight:700; text-align:center; }
@@ -98,6 +119,7 @@
     <option value="always">Постоянно 24/7</option>
   </select>
   <button id="btn" class="btn" onclick="toggle()">ВКЛЮЧИТЬ АВТООТМЕТКУ</button>
+  <button id="btn_once" class="btn-once" onclick="checkSingleLesson()">⚡ ОТМЕТИТЬСЯ НА ПАРЕ (ТОЛЬКО 1 ПАРА)</button>
   <button class="btn-sec" onclick="checkNow()">Обновить текущую неделю</button>
   <div id="status_box" class="status-card">
     <div class="status-title">Статус на данный момент</div>
@@ -107,13 +129,27 @@
     <div class="dev-hdr"><span>🔧 МОДУЛЬНАЯ ПАНЕЛЬ РАЗРАБОТЧИКА</span><span id="uptime" style="color:#34d399;"></span></div>
     <div id="logs" class="log">Загрузка логов...</div>
   </div>
-  <div id="ver_box" class="ver-footer" onclick="onVerTap()">Версия: 01.04.01</div>
+  <div id="ver_box" class="ver-footer" onclick="onVerTap()">Версия: 01.04.03</div>
 </div></div>
 
 <div id="tab_schedule">
   <div id="tiktok_feed" class="tiktok-feed" onscroll="onFeedScroll()"></div>
   <div id="week_sidebar" class="tiktok-rail"></div>
   <button id="btn_today" class="today-float-btn" onclick="jumpToToday()">🎯 Сегодня</button>
+</div>
+
+<!-- МОДАЛЬНОЕ ОКНО ВСЕХ ПАР ВЫБРАННОГО ПРЕДМЕТА -->
+<div id="subj_modal" class="modal-overlay" onclick="closeSubjectModal(event)">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-hdr">
+      <div>
+        <div id="modal_subj_title" style="font-size:15px;font-weight:900;color:#f8fafc;">Предмет</div>
+        <div id="modal_subj_sub" style="font-size:11px;color:#94a3b8;margin-top:3px;">Все пары за семестр</div>
+      </div>
+      <button class="modal-close" onclick="closeSubjectModal()">✕</button>
+    </div>
+    <div id="modal_subj_list" class="modal-body"></div>
+  </div>
 </div>
 
 <div id="tab_robot" class="page-pad" style="display:none;"><div class="card">
@@ -127,7 +163,7 @@
     <button class="chip" onclick="onlyPracticeAndLabs()">🛠 Выключить все лекции</button>
   </div>
   <div id="smart_list"></div>
-  <div class="ver-footer">Версия: 01.04.01</div>
+  <div class="ver-footer">Версия: 01.04.03</div>
 </div></div>
 
 <div id="tab_notif" class="page-pad" style="display:none;"><div class="card">
@@ -155,7 +191,7 @@
 
   <div style="font-size:13px;font-weight:800;color:#cbd5e1;margin:14px 0 8px;">Последние ячейки из таблицы Дневника:</div>
   <div id="diary_list"></div>
-  <div class="ver-footer">Версия: 01.04.01</div>
+  <div class="ver-footer">Версия: 01.04.03</div>
 </div></div>
 
 <div class="bottom-nav">
@@ -171,6 +207,25 @@ var notifPrefs={notifyDiary:true,notifySkippedLessons:true};
 var todaySlideIdx=0;var currentSlideIdx=0;var activeTab=0;
 var lastDaysMtime=-1;var lastCatMtime=-1;var lastDiaryMtime=-1;var initialJumpDone=false;
 var verTapCount=0;var verTapTimer=null;var devOpen=false;
+
+// Убираем Б22 и оставляем номер кабинета слитно с /х (например: "504; Б22/1" -> "504/1")
+function formatRoom(raw){
+  if(!raw)return '';
+  var s=String(raw).trim();
+  s=s.replace(/[;,\s]*[БбBb]22\s*\/\s*(\d+)/g,'/$1');
+  s=s.replace(/[;,\s]*[БбBb]22/g,'').replace(/\s+/g,' ').trim();
+  return s;
+}
+
+function findTeacherForSubject(subjName,rawTeacher){
+  if(rawTeacher && rawTeacher.trim())return rawTeacher.trim();
+  for(var i=0;i<catalogCache.length;i++){
+    if(catalogCache[i].subject===subjName && catalogCache[i].teachers && catalogCache[i].teachers!=='Не указан'){
+      return catalogCache[i].teachers;
+    }
+  }
+  return 'Не указан';
+}
 
 function switchTab(idx){
   activeTab=idx;
@@ -194,13 +249,13 @@ function switchTab(idx){
 function onVerTap(){
   verTapCount++;
   if(verTapTimer)clearTimeout(verTapTimer);
-  if(verTapCount>=20){
+  if(verTapCount>=15){
     verTapCount=0;
     devOpen=!devOpen;
     document.getElementById('dev_panel').style.display=devOpen?'block':'none';
-    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.04.01 (Dev ON)':'Версия: 01.04.01';
+    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.04.03 (Dev ON)':'Версия: 01.04.03';
   }else{
-    verTapTimer=setTimeout(function(){verTapCount=0;},1500);
+    verTapTimer=setTimeout(function(){verTapCount=0;},2000);
   }
 }
 
@@ -304,7 +359,7 @@ function renderSmartCatalog(){
     var bOn=isRuleOn(sName+'||Лаба');
     h+="<div class='subj-group'>"
       +"<div class='subj-hdr'><span>"+sName+"</span><span style='font-size:11px;color:#fb923c;white-space:nowrap;'>"+(it.total||0)+" пар</span></div>"
-      +"<div style='font-size:11px;color:#94a3b8;'>👤 "+(it.teachers||'Не указан')+"</div>"
+      +"<div style='font-size:11px;color:#94a3b8;'>👨‍🏫 "+(it.teachers||'Не указан')+"</div>"
       +"<div class='type-grid'>"
         +"<div class='type-btn "+(lOn?'on':'')+" "+((it.lecCount||0)===0?'zero':'')+"' onclick=\"toggleSubjectType('"+safeSubj+"','Лекция')\">"
           +"<span>"+(lOn?'☑':'☐')+" Лекция</span><span style='font-size:10px;'>"+(it.lecCount||0)+" пар</span></div>"
@@ -315,6 +370,66 @@ function renderSmartCatalog(){
       +"</div></div>";
   }
   listEl.innerHTML=h;
+}
+
+// Открытие модального окна со всеми парами выбранного предмета за семестр
+function openSubjectModal(subjName){
+  if(!subjName)return;
+  var modal=document.getElementById('subj_modal');
+  document.getElementById('modal_subj_title').innerText=subjName;
+  var listBox=document.getElementById('modal_subj_list');
+  var matches=[];
+  var lecC=0,pracC=0,labC=0,doneC=0;
+  for(var i=0;i<semesterDays.length;i++){
+    var d=semesterDays[i];
+    var lessons=d.lessons||[];
+    for(var k=0;k<lessons.length;k++){
+      var x=lessons[k];
+      var sTitle=x.subjectTitle||x.subject||'';
+      if(sTitle===subjName){
+        matches.push({slideIdx:i,dayTitle:d.title,weekNum:d.weekNum,lesson:x});
+        var lt=x.lessonType||'Практика';
+        if(lt==='Лекция')lecC++;
+        else if(lt==='Лаба')labC++;
+        else pracC++;
+        if(x.checked)doneC++;
+      }
+    }
+  }
+  document.getElementById('modal_subj_sub').innerHTML=
+    'Всего пар: <b>'+matches.length+'</b> (Лек: '+lecC+' • Прак: '+pracC+' • Лаб: '+labC+' • Отмечено: '+doneC+')';
+  var h='';
+  for(var m=0;m<matches.length;m++){
+    var item=matches[m];
+    var les=item.lesson;
+    var lt=les.lessonType||'Практика';
+    var occCls=(lt==='Лекция')?'occ-lec':((lt==='Лаба')?'occ-lab':'occ-prac');
+    var pillCls=(lt==='Лекция')?'pill-lec':((lt==='Лаба')?'pill-lab':'pill-prac');
+    var cleanR=formatRoom(les.room||'');
+    var teach=findTeacherForSubject(subjName,les.teacher);
+    var stBadge=les.checked?("✅ "+(les.checkTime||'ОК')):(les.waitingTeacher?'⏳ Ждем препода':'🗓 По расписанию');
+    h+="<div class='subj-occurrence "+occCls+"' onclick='jumpFromModal("+item.slideIdx+")'>"
+      +"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+      +"<b style='font-size:13px;color:#fb923c;'>📅 "+item.dayTitle+(item.weekNum?(' (Нед. #'+item.weekNum+')'):'')+"</b>"
+      +"<span class='type-pill "+pillCls+"'>"+lt+"</span></div>"
+      +"<div style='font-size:13px;font-weight:800;color:#fff;margin-top:4px;'>🕐 "+les.time+(cleanR?(' • 📍 Каб. '+cleanR):'')+"</div>"
+      +"<div style='display:flex;justify-content:space-between;font-size:11px;color:#cbd5e1;margin-top:4px;'>"
+      +"<span>👨‍🏫 "+teach+"</span><span style='color:"+(les.checked?'#4ade80':'#94a3b8')+";font-weight:800;'>"+stBadge+"</span></div>"
+      +"</div>";
+  }
+  listBox.innerHTML=h||"<div style='color:#94a3b8;font-size:13px;'>Пары не найдены.</div>";
+  modal.style.display='flex';
+}
+
+function jumpFromModal(slideIdx){
+  document.getElementById('subj_modal').style.display='none';
+  jumpToSlide(slideIdx,true);
+}
+
+function closeSubjectModal(ev){
+  if(!ev || ev.target.id==='subj_modal'){
+    document.getElementById('subj_modal').style.display='none';
+  }
 }
 
 function renderTikTokSchedule(){
@@ -328,7 +443,7 @@ function renderTikTokSchedule(){
   for(var i=0;i<semesterDays.length;i++){
     var d=semesterDays[i];
     var isToday=(i===todaySlideIdx);
-    var wBadge=d.weekNum?('Неделя #'+d.weekNum):'Текущая неделя';
+    var wBadge=d.weekNum?('Неделя #'+d.weekNum+' • Нажмите на пару для всех дат предмета'):'Текущая неделя';
     var tBadge=isToday?" <span style='color:#34d399;'>• СЕГОДНЯ</span>":'';
     h+="<div class='day-slide' id='slide_"+i+"'>"
       +"<div class='slide-hdr'><div style='font-size:16px;font-weight:900;color:#fb923c;'>"+d.title+tBadge+"</div>"
@@ -340,6 +455,8 @@ function renderTikTokSchedule(){
     }else{
       for(var k=0;k<list.length;k++){
         var x=list[k];
+        var sTitle=x.subjectTitle||x.subject||'Предмет';
+        var safeTitle=sTitle.replace(/'/g,"\\'").replace(/"/g,'&quot;');
         var allowed=x.ruleKey?isRuleOn(x.ruleKey):true;
         var lType=x.lessonType||'Практика';
         var typeClass=(lType==='Лекция')?'type-lec':((lType==='Лаба')?'type-lab':'type-prac');
@@ -347,14 +464,21 @@ function renderTikTokSchedule(){
         var pillLabel=(lType==='Лекция')?'🎓 ЛЕКЦИЯ':((lType==='Лаба')?'🧪 ЛАБА':'📘 ПРАКТИКА');
         var cardCls='lesson-card '+typeClass+(!allowed?' skip':(x.checked?' done':''));
         var waitHint=x.waitBtnTime?(' (в '+x.waitBtnTime+')'):'';
-var stText=!allowed?'🚫 Выкл в 🤖':(x.checked?('✅ Отмечен '+(x.checkTime||'ОК')):(x.waitingTeacher?'⏳ Ждем начала от преподавателя':('⏳ Ждем'+waitHint)));
-        var stColor=!allowed?'#f87171':(x.checked?'#34d399':'#fde047');
-        var roomInfo=x.room?('📍 '+x.room):'';
-        h+="<div class='"+cardCls+"'>"
+        var stText=!allowed
+          ? '🚫 Выкл в 🤖'
+          : (x.checked
+              ? ('✅ Отмечен '+(x.checkTime||'ОК'))
+              : (x.waitingTeacher ? '⏳ Ждем начала от преподавателя' : ('⏳ Ждем'+waitHint)));
+        var stColor=!allowed?'#cbd5e1':(x.checked?'#fde047':(x.waitingTeacher?'#fb923c':'#fde047'));
+        var cleanRoom=formatRoom(x.room||'');
+        var roomInfo=cleanRoom?('📍 Каб. '+cleanRoom):'📍 Аудитория не указана';
+        var teacherName=findTeacherForSubject(sTitle,x.teacher);
+        h+="<div class='"+cardCls+"' onclick=\"openSubjectModal('"+safeTitle+"')\">"
           +"<div class='les-top'><span class='les-time'>🕐 "+x.time+"</span><span class='type-pill "+pillClass+"'>"+pillLabel+"</span></div>"
-          +"<div class='les-title'>"+(x.subjectTitle||x.subject)+"</div>"
-          +"<div class='les-meta'><span>👤 "+(x.teacher||'Преподаватель')+(roomInfo?(' • '+roomInfo):'')+"</span>"
-          +"<span style='color:"+stColor+";font-weight:800;'>"+stText+"</span></div>"
+          +"<div class='les-title'>"+sTitle+"</div>"
+          +"<div class='les-teacher'>👨‍🏫 "+teacherName+"</div>"
+          +"<div class='les-meta'><span>"+roomInfo+"</span>"
+          +"<span style='color:"+stColor+";font-weight:900;'>"+stText+"</span></div>"
           +"</div>";
       }
     }
@@ -428,6 +552,7 @@ function jumpToSlide(idx,smooth){
 function jumpToToday(){jumpToSlide(todaySlideIdx,true);}
 function saveCfg(){AndroidBridge.saveSettingsOnly(val('login'),val('password'),val('interval'),val('mode'));}
 function toggle(){AndroidBridge.toggleAutoCheck(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,400);}
+function checkSingleLesson(){AndroidBridge.checkSingleNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,400);}
 function checkNow(){AndroidBridge.checkNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,700);}
 function checkDiaryNow(){AndroidBridge.checkDiaryNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,700);}
 function scanSemester(){AndroidBridge.scanSemesterNow(val('login'),val('password'),val('interval'),val('mode'));setTimeout(poll,500);}
