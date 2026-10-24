@@ -55,7 +55,7 @@ public class MainActivity extends Activity {
     private void sendDaemonCommand(String action) {
         Intent svc = new Intent(MainActivity.this, BonchBackgroundDaemon.class);
         svc.putExtra("action", action);
-        if ("start".equals(action) && Build.VERSION.SDK_INT >= 26) {
+        if (("start".equals(action) || "check_single".equals(action)) && Build.VERSION.SDK_INT >= 26) {
             startForegroundService(svc);
         } else {
             startService(svc);
@@ -135,6 +135,12 @@ public class MainActivity extends Activity {
             } else {
                 sendDaemonCommand("start");
             }
+        }
+
+        @JavascriptInterface
+        public void checkSingleNow(String login, String password, String intervalStr, String mode) {
+            storage.saveUserConfig(login, password, intervalStr, mode);
+            sendDaemonCommand("check_single");
         }
 
         @JavascriptInterface
