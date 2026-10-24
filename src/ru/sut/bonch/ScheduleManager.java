@@ -30,10 +30,12 @@ public class ScheduleManager {
     };
 
     public final Set<String> completedWindowsToday = new HashSet<>();
+    public final Set<String> waitingTeacherToday = new HashSet<>();
     public final Set<String> markedRaspIdsToday = new HashSet<>();
     public final Set<String> notifiedSkippedToday = new HashSet<>();
     public final Map<String, String> checkInTimeByStart = new HashMap<>();
     public final Set<String> todayRealStartTimes = new HashSet<>();
+    public volatile boolean lastPollMarkedAny = false;
 
     private JSONArray semesterDaysArray = new JSONArray();
     private JSONArray smartCatalogArray = new JSONArray();
@@ -59,6 +61,7 @@ public class ScheduleManager {
         if (!today.equals(currentDayStamp)) {
             currentDayStamp = today;
             completedWindowsToday.clear();
+            waitingTeacherToday.clear();
             markedRaspIdsToday.clear();
             notifiedSkippedToday.clear();
             checkInTimeByStart.clear();
@@ -83,14 +86,18 @@ public class ScheduleManager {
                             String st = les.optString("startTime", "");
                             String rk = les.optString("ruleKey", "");
                             boolean checked = les.optBoolean("checked", false);
+                            boolean waitT = les.optBoolean("waitingTeacher", false);
                             if (!st.isEmpty() && storage.isRuleAllowed(rk)) {
                                 todayRealStartTimes.add(st);
                                 if (checked) {
                                     completedWindowsToday.add(st);
+                                    waitingTeacherToday.remove(st);
                                     String ct = les.optString("checkTime", "");
                                     if (!ct.isEmpty() && !checkInTimeByStart.containsKey(st)) {
                                         checkInTimeByStart.put(st, ct);
                                     }
+                                } else if (waitT) {
+                                    waitingTeacherToday.add(st);
                                 }
                             }
                         }
@@ -258,6 +265,15 @@ public class ScheduleManager {
         }
     }
 
+    public static String formatRoomClean(String rawRoom) {
+        if (rawRoom == null) return "";
+        return rawRoom
+            .replaceAll("(?i)[;,\\s]*[БбBb]22\\s*/\\s*(\\d+)", "/$1")
+            .replaceAll("(?i)[;,\\s]*[БбBb]22", "")
+            .replaceAll("\\s+", " ")
+            .trim();
+    }
+
     public static class ParsedRowDetails {
         public String subject = "Предмет";
         public String normType = "Практика";
@@ -300,19 +316,38 @@ public class ScheduleManager {
                 .replace(timeRange, "")
                 .replaceAll("(?i)(Лабораторная работа|Практические занятия|Лекция|Зачет|Экзамен|Консультация).*", "")
                 .replaceAll("(?i)занятие\\s+началось.*", "")
+                .replaceAll("(?i)ждем\\s+начала\\s+от\\s+преподавателя.*", "")
+                .replaceAll("(?i)ждём\\s+начала\\s+от\\s+преподавателя.*", "")
                 .replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "")
                 .trim();
             if (!cleaned.isEmpty()) info.subject = cleaned;
         }
 
-        String teacherClean = rawTeacherCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+        String teacherClean = rawTeacherCell
+            .replaceAll("<[^>]+>", " ")
+            .replaceAll("&nbsp;", " ")
+            .replaceAll("(?i)(занятие\\s+началось.*|ждем\\s+начала.*|ждём\\s+начала.*|кнопка\\s+появится.*|начать\\s+занятие.*|обновить.*|вы\\s+присутствуете.*)", "")
+            .replaceAll("\\s+", " ")
+            .trim();
+
         if (teacherClean.isEmpty()) {
-            Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.)");
-            Matcher fioMat = fioPat.matcher(cellPlain);
-            if (fioMat.find()) teacherClean = fioMat.group(1);
+            String fullRowPlain = trInner.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+            Pattern fioShortPat = Pattern.compile("([А-ЯЁ][а-яё]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.)");
+            Matcher mShort = fioShortPat.matcher(fullRowPlain);
+            if (mShort.find()) {
+                teacherClean = mShort.group(1);
+            } else {
+                Pattern fioFullPat = Pattern.compile("([А-ЯЁ][а-яё]{2,}\\s+[А-ЯЁ][а-яё]{2,}\\s+[А-ЯЁ][а-яё]{2,}(?:вич|вна|ична))");
+                Matcher mFull = fioFullPat.matcher(fullRowPlain);
+                if (mFull.find()) {
+                    teacherClean = mFull.group(1);
+                }
+            }
         }
+
         info.teacher = teacherClean;
-        info.room = rawRoomCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+        String cleanRoom = rawRoomCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+        info.room = formatRoomClean(cleanRoom);
         info.ruleKey = info.subject + "||" + info.normType;
         return info;
     }
@@ -325,6 +360,7 @@ public class ScheduleManager {
         String password,
         String currentWindowStart
     ) {
+        lastPollMarkedAny = false;
         if (!api.isAuthenticated() && !api.authenticate(login, password, storage)) {
             return;
         }
@@ -398,7 +434,8 @@ public class ScheduleManager {
                 String btnAppearTime = wm.find() ? wm.group(1) : null;
 
                 String lowerRow = rowText.toLowerCase(Locale.ROOT);
-                boolean waitingForTeacher = lowerRow.contains("ждем начала от преподавателя") || lowerRow.contains("ждём начала от преподавателя");
+                boolean waitingForTeacher = lowerRow.contains("ждем начала от преподавателя")
+                                         || lowerRow.contains("ждём начала от преподавателя");
                 boolean alreadyInHtml = lowerRow.contains("вы присутствуете")
                                      || lowerRow.contains("отмечен")
                                      || lowerRow.contains("присутствует");
@@ -416,6 +453,7 @@ public class ScheduleManager {
                     }
                     if (currentWindowStart != null && currentWindowStart.equals(startTime)) {
                         completedWindowsToday.add(startTime);
+                        waitingTeacherToday.remove(startTime);
                         checkInTimeByStart.put(startTime, "пропуск 🤖");
                     }
                 } else if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
@@ -424,12 +462,15 @@ public class ScheduleManager {
                         markedRaspIdsToday.add(raspId);
                         checkInTimeByStart.put(startTime, nowStr);
                         completedWindowsToday.add(startTime);
+                        waitingTeacherToday.remove(startTime);
                         alreadyInHtml = true;
+                        waitingForTeacher = false;
+                        lastPollMarkedAny = true;
                         newlyChecked.add(structured.subject + " (" + structured.normType + ", отметка в " + nowStr + ")");
                     }
                 }
 
-                boolean hasTimeAppeared = (startedAt != null && raspId == null);
+                boolean hasTimeAppeared = (startedAt != null && raspId == null && !waitingForTeacher);
                 boolean isLessonDone = alreadyInHtml
                                     || hasTimeAppeared
                                     || (raspId != null && markedRaspIdsToday.contains(raspId));
@@ -440,9 +481,16 @@ public class ScheduleManager {
                     displayCheckTime = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
                 }
 
-                if (isLessonDone && todayStr.equals(curDateStr)) {
-                    completedWindowsToday.add(startTime);
-                    if (displayCheckTime != null) checkInTimeByStart.put(startTime, displayCheckTime);
+                if (todayStr.equals(curDateStr)) {
+                    if (isLessonDone) {
+                        completedWindowsToday.add(startTime);
+                        waitingTeacherToday.remove(startTime);
+                        if (displayCheckTime != null) checkInTimeByStart.put(startTime, displayCheckTime);
+                    } else if (waitingForTeacher) {
+                        waitingTeacherToday.add(startTime);
+                    } else {
+                        waitingTeacherToday.remove(startTime);
+                    }
                 }
 
                 if (curDateStr != null) {
@@ -625,10 +673,12 @@ public class ScheduleManager {
                         Matcher wm = waitBtnPattern.matcher(rowText);
                         String waitBtn = wm.find() ? wm.group(1) : "";
                         String lowerRow = rowText.toLowerCase(Locale.ROOT);
+                        boolean waitingT = lowerRow.contains("ждем начала от преподавателя")
+                                        || lowerRow.contains("ждём начала от преподавателя");
                         boolean done = lowerRow.contains("вы присутствуете")
                                     || lowerRow.contains("отмечен")
                                     || lowerRow.contains("присутствует")
-                                    || !startedAt.isEmpty();
+                                    || (!startedAt.isEmpty() && !waitingT);
 
                         JSONObject lesObj = new JSONObject();
                         lesObj.put("time", timeRange);
@@ -639,6 +689,7 @@ public class ScheduleManager {
                         lesObj.put("room", det.room);
                         lesObj.put("ruleKey", det.ruleKey);
                         lesObj.put("checked", done);
+                        lesObj.put("waitingTeacher", waitingT && !done);
                         lesObj.put("checkTime", startedAt);
                         lesObj.put("waitBtnTime", waitBtn);
                         weekLessonsByDate.get(curDateStr).add(lesObj);
