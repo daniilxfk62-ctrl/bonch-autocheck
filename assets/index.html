@@ -5,11 +5,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
 <title>Bonch AutoCheck</title>
 <style>
+  * { -webkit-tap-highlight-color: transparent; }
   body { margin:0; background:#090d16; color:#f8fafc; font-family:system-ui,-apple-system,sans-serif; overflow-x:hidden; }
   .page-pad { padding:12px 12px 76px 12px; }
-  .card { background:#111827; border:1px solid #1e293b; border-radius:20px; padding:16px; max-width:450px; margin:0 auto; }
+  .card { background:#111827; border:1px solid #1e293b; border-radius:20px; padding:16px; max-width:460px; margin:0 auto; }
   .lbl { font-size:11px; color:#94a3b8; margin-top:4px; display:block; }
-  input, select { width:100%; box-sizing:border-box; padding:11px; margin:4px 0 10px; border-radius:10px; border:1px solid #334155; background:#1e293b; color:#fff; font-size:14px; }
+  input, select { width:100%; box-sizing:border-box; padding:11px; margin:4px 0 10px; border-radius:10px; border:1px solid #334155; background:#1e293b; color:#fff; font-size:14px; outline:none; }
   .btn { width:100%; padding:15px; border-radius:12px; border:none; background:#2563eb; color:#fff; font-weight:800; font-size:15px; margin-top:6px; }
   .btn.on { background:#dc2626; }
   .btn-once { width:100%; padding:13px; border-radius:12px; border:1px solid #f59e0b; background:linear-gradient(135deg,#78350f 0%,#451a03 100%); color:#fde68a; font-weight:800; font-size:13px; margin-top:8px; }
@@ -22,7 +23,31 @@
   .dev-panel { display:none; margin-top:12px; padding:12px; background:#090d16; border:1px dashed #f97316; border-radius:12px; }
   .dev-hdr { font-size:11px; font-weight:800; color:#f97316; margin-bottom:6px; display:flex; justify-content:space-between; }
   .log { background:#05080f; border:1px solid #1e293b; border-radius:8px; padding:8px; font-family:monospace; font-size:11px; height:120px; overflow-y:auto; white-space:pre-wrap; color:#cbd5e1; }
-  .ver-footer { margin-top:14px; padding:10px; border-top:1px solid #1e293b; text-align:center; font-size:12px; font-weight:800; color:#f97316; letter-spacing:0.5px; user-select:none; cursor:pointer; }
+
+  /* Секретная кнопка версии: никаких визуальных изменений или подсветки при нажатии */
+  .ver-footer {
+    margin-top:14px;
+    padding:10px;
+    border-top:1px solid #1e293b;
+    text-align:center;
+    font-size:12px;
+    font-weight:800;
+    color:#f97316;
+    letter-spacing:0.5px;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-tap-highlight-color:transparent !important;
+    outline:none !important;
+    background:transparent !important;
+    cursor:default;
+  }
+  .ver-footer:active, .ver-footer:focus, .ver-footer:hover {
+    color:#f97316 !important;
+    background:transparent !important;
+    opacity:1 !important;
+    transform:none !important;
+    outline:none !important;
+  }
 
   /* TIKTOK-ЛЕНТА РАСПИСАНИЯ */
   #tab_schedule { display:none; position:relative; height:calc(100vh - 62px); width:100vw; overflow:hidden; }
@@ -32,7 +57,7 @@
   .slide-hdr { background:#111827; border:1px solid #1e293b; border-radius:14px; padding:10px 60px 10px 14px; margin-bottom:10px; flex-shrink:0; }
   .slide-body { flex:1; display:flex; flex-direction:column; gap:10px; height:100%; box-sizing:border-box; overflow-y:auto; }
 
-  /* ЦВЕТА ПАР: ЛЕКЦИЯ = ГОЛУБОЙ, ПРАКТИКА = ЗЕЛЁНЫЙ, ЛАБА = КРАСНЫЙ */
+  /* ЦВЕТА ПАР */
   .lesson-card { flex:0 0 calc((100% - 30px) / 4); min-height:115px; box-sizing:border-box; border-radius:16px; padding:11px 62px 11px 14px; display:flex; flex-direction:column; justify-content:space-between; position:relative; box-shadow:0 6px 18px rgba(0,0,0,0.35); cursor:pointer; transition:transform 0.12s; }
   .lesson-card:active { transform:scale(0.98); }
   .lesson-card.type-lec { background:linear-gradient(135deg,#082f49 0%,#0c4a6e 100%); border:1px solid #0284c7; border-left:6px solid #38bdf8; }
@@ -59,9 +84,9 @@
   .rail-day.today-ring { border:2px solid #34d399; }
   .today-float-btn { display:none; position:fixed; bottom:76px; left:50%; transform:translateX(-50%); z-index:950; background:rgba(249,115,22,0.95); backdrop-filter:blur(6px); color:#090d16; border:none; border-radius:999px; padding:11px 22px; font-size:13px; font-weight:900; box-shadow:0 8px 24px rgba(249,115,22,0.5); }
 
-  /* МОДАЛЬНОЕ ОКНО ВСЕХ ПАР ПРЕДМЕТА */
-  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(5,8,15,0.82); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:2000; padding:16px; box-sizing:border-box; align-items:center; justify-content:center; }
-  .modal-card { background:#111827; border:1px solid #334155; border-radius:20px; width:100%; max-width:440px; max-height:82vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,0.65); }
+  /* МОДАЛЬНЫЕ ОКНА */
+  .modal-overlay { display:none; position:fixed; inset:0; background:rgba(5,8,15,0.85); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); z-index:2000; padding:16px; box-sizing:border-box; align-items:center; justify-content:center; }
+  .modal-card { background:#111827; border:1px solid #334155; border-radius:20px; width:100%; max-width:440px; max-height:84vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,0.65); }
   .modal-hdr { padding:14px 16px; background:#0f172a; border-bottom:1px solid #1e293b; display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
   .modal-close { background:#1e293b; border:1px solid #334155; color:#f8fafc; width:34px; height:34px; border-radius:10px; font-size:16px; font-weight:900; flex-shrink:0; }
   .modal-body { padding:12px 14px; overflow-y:auto; flex:1; }
@@ -69,6 +94,10 @@
   .subj-occurrence.occ-lec { border-left-color:#38bdf8; }
   .subj-occurrence.occ-prac { border-left-color:#4ade80; }
   .subj-occurrence.occ-lab { border-left-color:#f87171; }
+
+  /* КАРТОЧКИ ВЫБОРА ПОДГРУППЫ */
+  .group-opt-btn { width:100%; text-align:left; background:#1e293b; border:2px solid #334155; border-radius:14px; padding:12px 14px; margin-bottom:8px; color:#f8fafc; cursor:pointer; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .group-opt-btn.selected { border-color:#f97316; background:#1f1610; }
 
   /* УМНАЯ ОТМЕТКА И УВЕДОМЛЕНИЯ */
   .stat-box { background:#0f172a; border:1px solid #334155; border-radius:12px; padding:12px; margin-bottom:10px; font-size:12px; line-height:1.5; }
@@ -93,13 +122,40 @@
   .diary-cell-row { background:#1e293b; border-left:4px solid #38bdf8; border-radius:10px; padding:10px 12px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; gap:8px; }
   .diary-badge { background:#0284c7; color:#fff; font-weight:900; font-size:12px; padding:4px 9px; border-radius:8px; white-space:nowrap; }
 
+  /* ВКЛАДКА ДНЕВНИК (ТАБЛИЦА 3 СТОЛБЦА + СТРАНИЦА ПРЕДМЕТА) */
+  .diary-table { width:100%; border-collapse:separate; border-spacing:0 6px; margin-top:6px; }
+  .diary-table th { font-size:11px; color:#94a3b8; text-transform:uppercase; font-weight:800; padding:6px 8px; text-align:center; }
+  .diary-table th:first-child { text-align:left; }
+  .diary-tr { background:#0f172a; }
+  .diary-td-subj { padding:12px 10px; border-radius:12px 0 0 12px; border:1px solid #1e293b; border-right:none; font-size:13px; font-weight:800; color:#f8fafc; line-height:1.25; cursor:pointer; }
+  .diary-td-sem { width:72px; padding:8px 6px; border-top:1px solid #1e293b; border-bottom:1px solid #1e293b; text-align:center; vertical-align:middle; cursor:pointer; }
+  .diary-td-sem.last { border-right:1px solid #1e293b; border-radius:0 12px 12px 0; }
+  .avg-cell-box { display:inline-flex; align-items:center; justify-content:center; min-width:52px; height:36px; border-radius:10px; font-size:14px; font-weight:900; background:#1e293b; color:#94a3b8; border:1px solid #334155; }
+  .avg-cell-box.good { background:#064e3b; color:#34d399; border-color:#10b981; }
+  .avg-cell-box.mid { background:#78350f; color:#fde68a; border-color:#f59e0b; }
+  .avg-cell-box.low { background:#7f1d1d; color:#fca5a5; border-color:#ef4444; }
+
+  .stat-grid-4 { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+  .stat-tile { background:#0f172a; border:1px solid #1e293b; border-radius:14px; padding:12px; text-align:center; }
+  .stat-tile-val { font-size:20px; font-weight:900; color:#f8fafc; margin-top:4px; }
+  .stat-tile-lbl { font-size:11px; color:#94a3b8; font-weight:700; }
+
+  .marks-scroll-row { display:flex; gap:8px; overflow-x:auto; padding:6px 2px 10px 2px; }
+  .big-mark-card { min-width:64px; background:#0f172a; border:1px solid #0284c7; border-top:4px solid #38bdf8; border-radius:14px; padding:10px 8px; display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0; }
+  .big-mark-card.n-card { border-color:#dc2626; border-top-color:#f87171; background:#2a0a0a; }
+  .big-mark-val { font-size:24px; font-weight:900; color:#38bdf8; line-height:1.1; }
+  .big-mark-card.n-card .big-mark-val { color:#f87171; }
+  .big-mark-date { font-size:10px; font-weight:800; color:#cbd5e1; margin-top:6px; white-space:nowrap; }
+
+  /* НИЖНЯЯ НАВИГАЦИЯ (6 ВКЛАДОК) */
   .bottom-nav { position:fixed; bottom:0; left:0; right:0; height:62px; background:#0f172a; border-top:1px solid #1e293b; display:flex; z-index:999; }
-  .tab-btn { flex:1; border:none; background:none; color:#64748b; font-size:10px; font-weight:700; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:0 2px; }
+  .tab-btn { flex:1; border:none; background:none; color:#64748b; font-size:9.5px; font-weight:700; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:0 1px; }
   .tab-btn.active { color:#f97316; background:#1e293b44; }
 </style>
 </head>
 <body>
 
+<!-- ВКЛАДКА 0: ГЛАВНАЯ -->
 <div id="tab_main" class="page-pad"><div class="card">
   <div style="font-size:18px;font-weight:800;margin-bottom:6px;">Bonch AutoCheck</div>
   <span class="lbl">Логин / Email от lk.sut.ru</span>
@@ -129,9 +185,10 @@
     <div class="dev-hdr"><span>🔧 МОДУЛЬНАЯ ПАНЕЛЬ РАЗРАБОТЧИКА</span><span id="uptime" style="color:#34d399;"></span></div>
     <div id="logs" class="log">Загрузка логов...</div>
   </div>
-  <div id="ver_box" class="ver-footer" onclick="onVerTap()">Версия: 01.04.03</div>
+  <div id="ver_box" class="ver-footer" onclick="onVerTap()">Версия: 01.04.04</div>
 </div></div>
 
+<!-- ВКЛАДКА 1: РАСПИСАНИЕ -->
 <div id="tab_schedule">
   <div id="tiktok_feed" class="tiktok-feed" onscroll="onFeedScroll()"></div>
   <div id="week_sidebar" class="tiktok-rail"></div>
@@ -152,6 +209,22 @@
   </div>
 </div>
 
+<!-- ВСПЛЫВАЮЩЕЕ ОКНО ВЫБОРА ПОДГРУППЫ (АНГЛИЙСКИЙ И ДР. ПРЕДМЕТЫ В ОДНО ВРЕМЯ) -->
+<div id="subgroup_modal" class="modal-overlay">
+  <div class="modal-card" onclick="event.stopPropagation()">
+    <div class="modal-hdr">
+      <div>
+        <div style="font-size:15px;font-weight:900;color:#fb923c;">👥 Настройка расписания подгрупп</div>
+        <div id="subgroup_modal_sub" style="font-size:11px;color:#cbd5e1;margin-top:4px;line-height:1.35;">
+          Обнаружен предмет, разделенный на группы в одно время. Выберите, к какому преподавателю и в какой кабинет вы ходите:
+        </div>
+      </div>
+    </div>
+    <div id="subgroup_modal_body" class="modal-body"></div>
+  </div>
+</div>
+
+<!-- ВКЛАДКА 2: УМНАЯ ОТМЕТКА -->
 <div id="tab_robot" class="page-pad" style="display:none;"><div class="card">
   <div style="font-size:18px;font-weight:800;margin-bottom:4px;">🤖 Умная автоотметка</div>
   <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">Нажмите на кнопку <b>Лекция</b>, <b>Практика</b> или <b>Лаба</b> у любого предмета, чтобы включить или выключить автоотметку.</div>
@@ -163,9 +236,59 @@
     <button class="chip" onclick="onlyPracticeAndLabs()">🛠 Выключить все лекции</button>
   </div>
   <div id="smart_list"></div>
-  <div class="ver-footer">Версия: 01.04.03</div>
+  <div class="ver-footer" onclick="onVerTap()">Версия: 01.04.04</div>
 </div></div>
 
+<!-- ВКЛАДКА 3: ДНЕВНИК (ТАБЛИЦА ПРЕДМЕТОВ И СРЕДНИХ БАЛЛОВ + СТРАНИЦА ПРЕДМЕТА) -->
+<div id="tab_diary" class="page-pad" style="display:none;"><div class="card">
+  <!-- ГЛАВНЫЙ ВИД ДНЕВНИКА: ТАБЛИЦА 3xN -->
+  <div id="diary_main_view">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+      <div style="font-size:18px;font-weight:800;">📖 Дневник</div>
+      <button onclick="checkDiaryNow()" style="background:#1e293b;border:1px solid #38bdf8;color:#38bdf8;border-radius:10px;padding:6px 10px;font-size:11px;font-weight:800;">🔄 Обновить</button>
+    </div>
+    <div style="font-size:12px;color:#94a3b8;margin-bottom:10px;">
+      Нажмите на средний балл или пустую клетку любого предмета, чтобы открыть полную статистику, оценки и пропуски (Н).
+    </div>
+    <div id="diary_table_box"></div>
+  </div>
+
+  <!-- ДЕТАЛЬНАЯ СТРАНИЦА ВЫБРАННОГО ПРЕДМЕТА -->
+  <div id="diary_detail_view" style="display:none;">
+    <button class="btn-sec" style="margin-top:0;margin-bottom:12px;text-align:left;color:#fb923c;border-color:#f97316;" onclick="closeDiarySubjectDetail()">← Назад ко всем предметам</button>
+    <div id="detail_subj_title" style="font-size:17px;font-weight:900;color:#f8fafc;line-height:1.3;">Предмет</div>
+    <div id="detail_subj_teacher" style="font-size:12px;color:#94a3b8;margin-top:4px;"></div>
+
+    <div class="stat-grid-4">
+      <div class="stat-tile">
+        <div class="stat-tile-lbl">Всего пар</div>
+        <div id="det_total_pairs" class="stat-tile-val">0</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-lbl">Средний балл</div>
+        <div id="det_avg_grade" class="stat-tile-val" style="color:#38bdf8;">—</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-lbl">Кол-во пропусков (Н)</div>
+        <div id="det_absences" class="stat-tile-val" style="color:#f87171;">0</div>
+      </div>
+      <div class="stat-tile">
+        <div class="stat-tile-lbl">Посещаемость</div>
+        <div id="det_attendance" class="stat-tile-val" style="color:#34d399;">100%</div>
+      </div>
+    </div>
+
+    <div style="font-size:13px;font-weight:800;color:#38bdf8;margin-top:12px;margin-bottom:4px;">⭐ Оценки и отметки (сверху оценка, снизу дата):</div>
+    <div id="det_grades_row" class="marks-scroll-row"></div>
+
+    <div style="font-size:13px;font-weight:800;color:#f87171;margin-top:12px;margin-bottom:4px;">🚫 Пропуски пар «Н» (сверху Н, снизу дата):</div>
+    <div id="det_absences_row" class="marks-scroll-row"></div>
+  </div>
+
+  <div class="ver-footer" onclick="onVerTap()">Версия: 01.04.04</div>
+</div></div>
+
+<!-- ВКЛАДКА 4: УВЕДОМЛЕНИЯ -->
 <div id="tab_notif" class="page-pad" style="display:none;"><div class="card">
   <div style="font-size:18px;font-weight:800;margin-bottom:4px;">🔔 Настройка уведомлений</div>
   <div style="font-size:12px;color:#94a3b8;margin-bottom:12px;">Выберите, какие пуш-уведомления должны приходить на телефон в фоновом режиме.</div>
@@ -191,34 +314,56 @@
 
   <div style="font-size:13px;font-weight:800;color:#cbd5e1;margin:14px 0 8px;">Последние ячейки из таблицы Дневника:</div>
   <div id="diary_list"></div>
-  <div class="ver-footer">Версия: 01.04.03</div>
+  <div class="ver-footer" onclick="onVerTap()">Версия: 01.04.04</div>
 </div></div>
 
+<!-- ВКЛАДКА 5: НАСТРОЙКИ (ВЫБОР ПОДГРУПП И ПРЕПОДАВАТЕЛЕЙ) -->
+<div id="tab_settings" class="page-pad" style="display:none;"><div class="card">
+  <div style="font-size:18px;font-weight:800;margin-bottom:4px;">⚙️ Настройки</div>
+  <div style="font-size:12px;color:#94a3b8;margin-bottom:12px;">
+    Здесь можно изменить выбранного преподавателя и кабинет для иностранного языка и любых других предметов, разделенных на подгруппы.
+  </div>
+  <div id="settings_subgroups_box"></div>
+  <button class="btn-sec" style="border-color:#f97316;color:#fb923c;margin-top:10px;" onclick="scanSemester()">🔄 Пересканировать расписание семестра</button>
+  <div class="ver-footer" onclick="onVerTap()">Версия: 01.04.04</div>
+</div></div>
+
+<!-- НИЖНЯЯ ПАНЕЛЬ НАВИГАЦИИ -->
 <div class="bottom-nav">
-  <button id="nav_0" class="tab-btn active" onclick="switchTab(0)"><span style="font-size:17px;">🏠</span><span>Главная</span></button>
-  <button id="nav_1" class="tab-btn" onclick="switchTab(1)"><span style="font-size:17px;">📅</span><span>Расписание</span></button>
-  <button id="nav_2" class="tab-btn" onclick="switchTab(2)"><span style="font-size:17px;">🤖</span><span>Умная отметка</span></button>
-  <button id="nav_3" class="tab-btn" onclick="switchTab(3)"><span style="font-size:17px;">🔔</span><span>Уведомления</span></button>
+  <button id="nav_0" class="tab-btn active" onclick="switchTab(0)"><span style="font-size:16px;">🏠</span><span>Главная</span></button>
+  <button id="nav_1" class="tab-btn" onclick="switchTab(1)"><span style="font-size:16px;">📅</span><span>Расписание</span></button>
+  <button id="nav_2" class="tab-btn" onclick="switchTab(2)"><span style="font-size:16px;">🤖</span><span>Автоотметка</span></button>
+  <button id="nav_3" class="tab-btn" onclick="switchTab(3)"><span style="font-size:16px;">📖</span><span>Дневник</span></button>
+  <button id="nav_4" class="tab-btn" onclick="switchTab(4)"><span style="font-size:16px;">🔔</span><span>Уведомл.</span></button>
+  <button id="nav_5" class="tab-btn" onclick="switchTab(5)"><span style="font-size:16px;">⚙️</span><span>Настройки</span></button>
 </div>
 
 <script>
-var semesterDays=[];var catalogCache=[];var diaryCache=[];var smartRules={};
+var semesterDays=[];var catalogCache=[];var diaryCache=[];var diaryAllCache=[];
+var smartRules={};var groupChoices={};
 var notifPrefs={notifyDiary:true,notifySkippedLessons:true};
 var todaySlideIdx=0;var currentSlideIdx=0;var activeTab=0;
 var lastDaysMtime=-1;var lastCatMtime=-1;var lastDiaryMtime=-1;var initialJumpDone=false;
 var verTapCount=0;var verTapTimer=null;var devOpen=false;
+var currentPromptSubj=null;
 
-// Убираем Б22 и оставляем номер кабинета слитно с /х (например: "504; Б22/1" -> "504/1")
+// Очистка номера аудитории: "112; Б22/1" -> "112/1"
 function formatRoom(raw){
   if(!raw)return '';
   var s=String(raw).trim();
-  s=s.replace(/[;,\s]*[БбBb]22\s*\/\s*(\d+)/g,'/$1');
-  s=s.replace(/[;,\s]*[БбBb]22/g,'').replace(/\s+/g,' ').trim();
+  s=s.replace(/\s*[;,\s]*\b(?:пр\.?\s*Большевиков[^,/]*|[БбBb]22)\s*\/\s*(\d+)/gi,'/$1');
+  s=s.replace(/\s*[;,\s]*\b(?:пр\.?\s*Большевиков[^,;]*|[БбBb]22)\b/gi,'');
+  s=s.replace(/^[;,\s]+|[;,\s]+$/g,'').replace(/\s+/g,' ').trim();
   return s;
 }
 
 function findTeacherForSubject(subjName,rawTeacher){
   if(rawTeacher && rawTeacher.trim())return rawTeacher.trim();
+  var chosen=groupChoices[subjName];
+  if(chosen && chosen.indexOf('||')!==-1){
+    var cp=chosen.split('||')[0];
+    if(cp)return cp;
+  }
   for(var i=0;i<catalogCache.length;i++){
     if(catalogCache[i].subject===subjName && catalogCache[i].teachers && catalogCache[i].teachers!=='Не указан'){
       return catalogCache[i].teachers;
@@ -227,23 +372,163 @@ function findTeacherForSubject(subjName,rawTeacher){
   return 'Не указан';
 }
 
+// Находит все предметы, которые стоят в один день и одно время с разными преподавателями или кабинетами
+function detectSubgroupSubjects(){
+  var map={};
+  for(var i=0;i<semesterDays.length;i++){
+    var d=semesterDays[i];
+    var list=d.lessons||[];
+    var bySlot={};
+    for(var k=0;k<list.length;k++){
+      var x=list[k];
+      var subj=x.subjectTitle||x.subject||'Предмет';
+      var slotKey=subj+'@@'+(x.startTime||x.time||'');
+      if(!bySlot[slotKey])bySlot[slotKey]=[];
+      bySlot[slotKey].push(x);
+    }
+    for(var sk in bySlot){
+      var arr=bySlot[sk];
+      if(arr.length>1){
+        var subjName=arr[0].subjectTitle||arr[0].subject||'Предмет';
+        if(!map[subjName])map[subjName]={};
+        for(var m=0;m<arr.length;m++){
+          var t=(arr[m].teacher||'').trim();
+          var r=formatRoom(arr[m].room||'');
+          if(!t && !r)continue;
+          var optKey=t+'||'+r;
+          if(!map[subjName][optKey]){
+            map[subjName][optKey]={teacher:t||'Преподаватель не указан',room:r||'Ауд. не указана',key:optKey,count:0};
+          }
+          map[subjName][optKey].count++;
+        }
+      }
+    }
+  }
+  return map;
+}
+
+// Проверяет, есть ли невыбранные подгруппы, и показывает всплывающее окно выбора
+function checkPendingSubgroupPrompts(){
+  if(currentPromptSubj)return;
+  var detected=detectSubgroupSubjects();
+  for(var subj in detected){
+    var optsObj=detected[subj];
+    var keys=Object.keys(optsObj);
+    if(keys.length>=2 && !groupChoices[subj]){
+      showSubgroupModal(subj,optsObj);
+      return;
+    }
+  }
+}
+
+function showSubgroupModal(subj,optsObj){
+  currentPromptSubj=subj;
+  var modal=document.getElementById('subgroup_modal');
+  var body=document.getElementById('subgroup_modal_body');
+  var h="<div style='font-size:14px;font-weight:900;color:#f8fafc;margin-bottom:10px;'>📚 "+subj+"</div>";
+  for(var k in optsObj){
+    var o=optsObj[k];
+    var safeSubj=subj.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    var safeKey=o.key.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    h+="<button class='group-opt-btn' onclick=\"selectSubgroupOption('"+safeSubj+"','"+safeKey+"')\">"
+      +"<div><div style='font-size:13px;font-weight:800;color:#38bdf8;'>👨‍🏫 "+o.teacher+"</div>"
+      +"<div style='font-size:12px;color:#cbd5e1;margin-top:3px;'>📍 Кабинет: <b>"+o.room+"</b></div></div>"
+      +"<span style='font-size:12px;font-weight:900;color:#fb923c;'>Выбрать →</span>"
+      +"</button>";
+  }
+  body.innerHTML=h;
+  modal.style.display='flex';
+}
+
+function selectSubgroupOption(subj,optKey){
+  groupChoices[subj]=optKey;
+  AndroidBridge.saveGroupChoices(JSON.stringify(groupChoices));
+  document.getElementById('subgroup_modal').style.display='none';
+  currentPromptSubj=null;
+  if(activeTab===1)renderTikTokSchedule();
+  if(activeTab===5)renderSettingsSubgroups();
+  setTimeout(checkPendingSubgroupPrompts,250);
+}
+
+// Фильтрует список пар одного дня с учетом выбранной подгруппы (чтобы не дублировались 2 группы английского)
+function filterDayLessonsBySubgroup(lessons){
+  if(!lessons || !lessons.length)return [];
+  var out=[];
+  var seenSlotSubj={};
+  for(var i=0;i<lessons.length;i++){
+    var x=lessons[i];
+    var subj=x.subjectTitle||x.subject||'Предмет';
+    var chosen=groupChoices[subj];
+    if(chosen && chosen!=='ALL'){
+      var parts=chosen.split('||');
+      var cTeach=(parts[0]||'').trim().toLowerCase();
+      var cRoom=formatRoom(parts[1]||'').toLowerCase();
+      var xTeach=(x.teacher||'').trim().toLowerCase();
+      var xRoom=formatRoom(x.room||'').toLowerCase();
+      var match=true;
+      if(cTeach && xTeach && cTeach!==xTeach)match=false;
+      else if(!cTeach && cRoom && xRoom && cRoom!==xRoom)match=false;
+      if(!match)continue;
+      var slotKey=subj+'@@'+(x.startTime||x.time||'');
+      if(seenSlotSubj[slotKey])continue;
+      seenSlotSubj[slotKey]=true;
+    }
+    out.push(x);
+  }
+  return out;
+}
+
+function renderSettingsSubgroups(){
+  var box=document.getElementById('settings_subgroups_box');
+  var detected=detectSubgroupSubjects();
+  var subjKeys=Object.keys(detected);
+  if(!subjKeys.length){
+    box.innerHTML="<div style='background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:14px;font-size:12px;color:#94a3b8;'>Предметов, идущих одновременно в разных подгруппах, пока не обнаружено. Нажмите «Пересканировать расписание семестра», если расписание еще не загружено.</div>";
+    return;
+  }
+  var h='';
+  for(var i=0;i<subjKeys.length;i++){
+    var subj=subjKeys[i];
+    var opts=detected[subj];
+    var curChoice=groupChoices[subj]||'';
+    var safeSubj=subj.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    h+="<div class='subj-group'><div class='subj-hdr'><span>📚 "+subj+"</span></div>"
+      +"<div style='font-size:11px;color:#94a3b8;margin-bottom:8px;'>Выберите вашу группу (преподавателя и кабинет):</div>";
+    for(var k in opts){
+      var o=opts[k];
+      var isSel=(curChoice===o.key);
+      var safeKey=o.key.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      h+="<button class='group-opt-btn "+(isSel?'selected':'')+"' onclick=\"selectSubgroupOption('"+safeSubj+"','"+safeKey+"')\">"
+        +"<div><div style='font-size:13px;font-weight:800;color:"+(isSel?'#fb923c':'#f8fafc')+";'>👨‍🏫 "+o.teacher+"</div>"
+        +"<div style='font-size:11px;color:#cbd5e1;margin-top:2px;'>📍 Кабинет: <b>"+o.room+"</b></div></div>"
+        +"<span style='font-size:13px;font-weight:900;color:"+(isSel?'#34d399':'#64748b')+";'>"+(isSel?'✅ Выбрано':'Выбрать')+"</span>"
+        +"</button>";
+    }
+    h+="</div>";
+  }
+  box.innerHTML=h;
+}
+
 function switchTab(idx){
   activeTab=idx;
   document.getElementById('tab_main').style.display=idx===0?'block':'none';
   document.getElementById('tab_schedule').style.display=idx===1?'block':'none';
   document.getElementById('tab_robot').style.display=idx===2?'block':'none';
-  document.getElementById('tab_notif').style.display=idx===3?'block':'none';
-  document.getElementById('nav_0').className=idx===0?'tab-btn active':'tab-btn';
-  document.getElementById('nav_1').className=idx===1?'tab-btn active':'tab-btn';
-  document.getElementById('nav_2').className=idx===2?'tab-btn active':'tab-btn';
-  document.getElementById('nav_3').className=idx===3?'tab-btn active':'tab-btn';
+  document.getElementById('tab_diary').style.display=idx===3?'block':'none';
+  document.getElementById('tab_notif').style.display=idx===4?'block':'none';
+  document.getElementById('tab_settings').style.display=idx===5?'block':'none';
+  for(var i=0;i<=5;i++){
+    document.getElementById('nav_'+i).className=(idx===i)?'tab-btn active':'tab-btn';
+  }
   if(idx===1){
     renderTikTokSchedule();
     if(!initialJumpDone){setTimeout(function(){jumpToSlide(todaySlideIdx,false);initialJumpDone=true;},60);}
     else{updateSidebarAndTodayBtn();}
   }
   if(idx===2)renderSmartCatalog();
-  if(idx===3){renderNotifToggles();renderDiaryList();}
+  if(idx===3)renderDiaryTableTab();
+  if(idx===4){renderNotifToggles();renderDiaryList();}
+  if(idx===5)renderSettingsSubgroups();
 }
 
 function onVerTap(){
@@ -253,7 +538,6 @@ function onVerTap(){
     verTapCount=0;
     devOpen=!devOpen;
     document.getElementById('dev_panel').style.display=devOpen?'block':'none';
-    document.getElementById('ver_box').innerText=devOpen?'Версия: 01.04.03 (Dev ON)':'Версия: 01.04.03';
   }else{
     verTapTimer=setTimeout(function(){verTapCount=0;},2000);
   }
@@ -268,11 +552,14 @@ function initApp(){
     if(c.interval)document.getElementById('interval').value=c.interval;
     if(c.mode)document.getElementById('mode').value=c.mode;
     smartRules=JSON.parse(AndroidBridge.getSmartRules()||'{}');
+    groupChoices=JSON.parse(AndroidBridge.getGroupChoices()||'{}');
     notifPrefs=JSON.parse(AndroidBridge.getNotifPrefs()||'{"notifyDiary":true,"notifySkippedLessons":true}');
     semesterDays=JSON.parse(AndroidBridge.getCachedSemesterDays()||'[]');
     catalogCache=JSON.parse(AndroidBridge.getCachedSmartCatalog()||'[]');
     diaryCache=JSON.parse(AndroidBridge.getCachedDiaryRecent()||'[]');
+    diaryAllCache=JSON.parse(AndroidBridge.getCachedDiaryAll()||'[]');
     renderNotifToggles();
+    setTimeout(checkPendingSubgroupPrompts,500);
   }catch(e){}
 }
 
@@ -309,6 +596,238 @@ function renderDiaryList(){
   box.innerHTML=h;
 }
 
+// =====================================================================
+// ЛОГИКА ВКЛАДКИ «📖 ДНЕВНИК» (ТАБЛИЦА 3xN + ДЕТАЛЬНАЯ СТРАНИЦА ПРЕДМЕТА)
+// =====================================================================
+function getAllScheduleSubjects(){
+  var map={};
+  for(var i=0;i<catalogCache.length;i++){
+    var s=catalogCache[i].subject;
+    if(s)map[s]={subject:s,total:catalogCache[i].total||0,teachers:catalogCache[i].teachers||''};
+  }
+  for(var d=0;d<semesterDays.length;d++){
+    var lessons=filterDayLessonsBySubgroup(semesterDays[d].lessons||[]);
+    for(var k=0;k<lessons.length;k++){
+      var st=lessons[k].subjectTitle||lessons[k].subject||'';
+      if(st && !map[st]){
+        map[st]={subject:st,total:0,teachers:lessons[k].teacher||''};
+      }
+    }
+  }
+  var entries=diaryAllCache.length?diaryAllCache:diaryCache;
+  for(var e=0;e<entries.length;e++){
+    var es=entries[e].subject||'';
+    if(es && !map[es]){
+      map[es]={subject:es,total:0,teachers:''};
+    }
+  }
+  // Пересчитываем точное число пар с учетом фильтра подгруппы
+  if(semesterDays.length>0){
+    var counts={};
+    for(var d2=0;d2<semesterDays.length;d2++){
+      var fl=filterDayLessonsBySubgroup(semesterDays[d2].lessons||[]);
+      for(var k2=0;k2<fl.length;k2++){
+        var sn=fl[k2].subjectTitle||fl[k2].subject||'';
+        counts[sn]=(counts[sn]||0)+1;
+      }
+    }
+    for(var key in counts){
+      if(map[key])map[key].total=counts[key];
+    }
+  }
+  return Object.keys(map).map(function(k){return map[k];});
+}
+
+function getSemesterNumberByDate(dateStr){
+  if(!dateStr)return 2;
+  var m=dateStr.match(/\d{2}\.(\d{2})/);
+  if(m){
+    var month=parseInt(m[1],10);
+    // Сентябрь (09) – Январь (01) -> 1 семестр; Февраль (02) – Август (08) -> 2 семестр
+    if(month>=9 || month===1)return 1;
+    return 2;
+  }
+  return 2;
+}
+
+function parseNumericGrade(valStr){
+  if(!valStr)return null;
+  var s=String(valStr).replace(',','.').trim();
+  // Игнорируем чисто текстовые отметки присутствия или Н
+  if(/^(н|н\/а|пр|зач|незач|присутств|отмечен|\+)$/i.test(s))return null;
+  var m=s.match(/^(\d+(?:\.\d+)?)$/);
+  if(m){
+    var num=parseFloat(m[1]);
+    if(!isNaN(num) && num>=1 && num<=100)return num;
+  }
+  return null;
+}
+
+function isAbsenceValue(valStr){
+  if(!valStr)return false;
+  var s=String(valStr).trim().toUpperCase();
+  return s==='Н' || s==='Н/Я' || s==='НЕЯВКА' || s==='ПРОПУСК' || s.indexOf('Н ')===0;
+}
+
+function matchSubjectName(a,b){
+  if(!a || !b)return false;
+  var na=a.toLowerCase().replace(/\s+/g,' ').trim();
+  var nb=b.toLowerCase().replace(/\s+/g,' ').trim();
+  return na===nb || na.indexOf(nb)!==-1 || nb.indexOf(na)!==-1;
+}
+
+function computeSubjectDiaryStats(subjName,totalPairsFromSched){
+  var entries=diaryAllCache.length?diaryAllCache:diaryCache;
+  var sem1Grades=[];
+  var sem2Grades=[];
+  var allGradesList=[];
+  var absencesList=[];
+
+  for(var i=0;i<entries.length;i++){
+    var item=entries[i];
+    if(!matchSubjectName(item.subject,subjName))continue;
+    var val=(item.value||'').trim();
+    var dt=item.date||'—';
+    if(!val)continue;
+
+    if(isAbsenceValue(val)){
+      absencesList.push({value:'Н',date:dt});
+    }else{
+      var num=parseNumericGrade(val);
+      if(num!==null){
+        var sem=getSemesterNumberByDate(dt);
+        if(sem===1)sem1Grades.push(num);
+        else sem2Grades.push(num);
+        allGradesList.push({value:String(val),date:dt,num:num});
+      }else{
+        allGradesList.push({value:String(val),date:dt,num:null});
+      }
+    }
+  }
+
+  function calcAvg(arr){
+    if(!arr.length)return null;
+    var sum=0;
+    for(var j=0;j<arr.length;j++)sum+=arr[j];
+    return (sum/arr.length).toFixed(2);
+  }
+
+  var avg1=calcAvg(sem1Grades);
+  var avg2=calcAvg(sem2Grades);
+  var allNums=sem1Grades.concat(sem2Grades);
+  var avgTotal=calcAvg(allNums);
+
+  var totalPairs=totalPairsFromSched||0;
+  if(totalPairs<allGradesList.length+absencesList.length){
+    totalPairs=allGradesList.length+absencesList.length;
+  }
+  var absCount=absencesList.length;
+  var attRatio=totalPairs>0?Math.max(0,((totalPairs-absCount)/totalPairs)*100):100;
+
+  return {
+    avg1:avg1,
+    avg2:avg2,
+    avgTotal:avgTotal,
+    totalPairs:totalPairs,
+    absencesCount:absCount,
+    attendancePct:Math.round(attRatio),
+    grades:allGradesList,
+    absences:absencesList
+  };
+}
+
+function formatAvgBadgeClass(avgVal){
+  if(!avgVal)return 'avg-cell-box';
+  var v=parseFloat(avgVal);
+  if(v>=4.0)return 'avg-cell-box good';
+  if(v>=3.0)return 'avg-cell-box mid';
+  return 'avg-cell-box low';
+}
+
+function renderDiaryTableTab(){
+  var box=document.getElementById('diary_table_box');
+  var subjects=getAllScheduleSubjects();
+  if(!subjects.length){
+    box.innerHTML="<div style='background:#0f172a;border:1px solid #1e293b;border-radius:14px;padding:16px;text-align:center;color:#94a3b8;font-size:13px;'>Список предметов пуст.<br>Обновите расписание семестра во вкладке 🤖 или нажмите «🔄 Обновить» выше.</div>";
+    return;
+  }
+  var h="<table class='diary-table'><thead><tr>"
+    +"<th>Предмет</th><th>1 семестр</th><th>2 семестр</th>"
+    +"</tr></thead><tbody>";
+
+  for(var i=0;i<subjects.length;i++){
+    var sObj=subjects[i];
+    var sName=sObj.subject;
+    var safeName=sName.replace(/'/g,"\\'").replace(/"/g,'&quot;');
+    var st=computeSubjectDiaryStats(sName,sObj.total);
+    var c1=formatAvgBadgeClass(st.avg1);
+    var c2=formatAvgBadgeClass(st.avg2);
+    h+="<tr class='diary-tr' onclick=\"openDiarySubjectDetail('"+safeName+"')\">"
+      +"<td class='diary-td-subj'>"+sName+"<div style='font-size:10px;color:#64748b;margin-top:3px;'>Пар: "+st.totalPairs+" • Пропусков: "+st.absencesCount+"</div></td>"
+      +"<td class='diary-td-sem'><div class='"+c1+"'>"+(st.avg1||'—')+"</div></td>"
+      +"<td class='diary-td-sem last'><div class='"+c2+"'>"+(st.avg2||'—')+"</div></td>"
+      +"</tr>";
+  }
+  h+="</tbody></table>";
+  box.innerHTML=h;
+}
+
+function openDiarySubjectDetail(subjName){
+  var subjects=getAllScheduleSubjects();
+  var sInfo={subject:subjName,total:0,teachers:''};
+  for(var i=0;i<subjects.length;i++){
+    if(subjects[i].subject===subjName){sInfo=subjects[i];break;}
+  }
+  var st=computeSubjectDiaryStats(subjName,sInfo.total);
+  document.getElementById('diary_main_view').style.display='none';
+  document.getElementById('diary_detail_view').style.display='block';
+
+  document.getElementById('detail_subj_title').innerText=subjName;
+  document.getElementById('detail_subj_teacher').innerText='👨‍🏫 '+findTeacherForSubject(subjName,sInfo.teachers);
+  document.getElementById('det_total_pairs').innerText=st.totalPairs;
+  document.getElementById('det_avg_grade').innerText=st.avgTotal||'—';
+  document.getElementById('det_absences').innerText=st.absencesCount;
+  document.getElementById('det_attendance').innerText=st.attendancePct+'%';
+
+  var gRow=document.getElementById('det_grades_row');
+  if(!st.grades.length){
+    gRow.innerHTML="<div style='font-size:12px;color:#64748b;padding:8px 0;'>Оценок пока нет</div>";
+  }else{
+    var gh='';
+    for(var g=0;g<st.grades.length;g++){
+      var gm=st.grades[g];
+      gh+="<div class='big-mark-card'>"
+        +"<div class='big-mark-val'>"+gm.value+"</div>"
+        +"<div class='big-mark-date'>"+gm.date+"</div>"
+        +"</div>";
+    }
+    gRow.innerHTML=gh;
+  }
+
+  var nRow=document.getElementById('det_absences_row');
+  if(!st.absences.length){
+    nRow.innerHTML="<div style='font-size:12px;color:#34d399;padding:8px 0;'>🎉 Пропусков (Н) нет!</div>";
+  }else{
+    var nh='';
+    for(var n=0;n<st.absences.length;n++){
+      var nm=st.absences[n];
+      nh+="<div class='big-mark-card n-card'>"
+        +"<div class='big-mark-val'>Н</div>"
+        +"<div class='big-mark-date'>"+nm.date+"</div>"
+        +"</div>";
+    }
+    nRow.innerHTML=nh;
+  }
+}
+
+function closeDiarySubjectDetail(){
+  document.getElementById('diary_detail_view').style.display='none';
+  document.getElementById('diary_main_view').style.display='block';
+}
+
+// =====================================================================
+// УМНАЯ ОТМЕТКА И РАСПИСАНИЕ
+// =====================================================================
 function isRuleOn(key){return smartRules[key]===undefined?true:Boolean(smartRules[key]);}
 function toggleSubjectType(subj,type){
   var key=subj+'||'+type;
@@ -357,9 +876,11 @@ function renderSmartCatalog(){
     var lOn=isRuleOn(sName+'||Лекция');
     var pOn=isRuleOn(sName+'||Практика');
     var bOn=isRuleOn(sName+'||Лаба');
+    var chosenSub=groupChoices[sName];
+    var subInfo=chosenSub?(" • Группа: "+chosenSub.replace('||',', каб. ')):'';
     h+="<div class='subj-group'>"
       +"<div class='subj-hdr'><span>"+sName+"</span><span style='font-size:11px;color:#fb923c;white-space:nowrap;'>"+(it.total||0)+" пар</span></div>"
-      +"<div style='font-size:11px;color:#94a3b8;'>👨‍🏫 "+(it.teachers||'Не указан')+"</div>"
+      +"<div style='font-size:11px;color:#94a3b8;'>👨‍🏫 "+(it.teachers||'Не указан')+subInfo+"</div>"
       +"<div class='type-grid'>"
         +"<div class='type-btn "+(lOn?'on':'')+" "+((it.lecCount||0)===0?'zero':'')+"' onclick=\"toggleSubjectType('"+safeSubj+"','Лекция')\">"
           +"<span>"+(lOn?'☑':'☐')+" Лекция</span><span style='font-size:10px;'>"+(it.lecCount||0)+" пар</span></div>"
@@ -372,7 +893,6 @@ function renderSmartCatalog(){
   listEl.innerHTML=h;
 }
 
-// Открытие модального окна со всеми парами выбранного предмета за семестр
 function openSubjectModal(subjName){
   if(!subjName)return;
   var modal=document.getElementById('subj_modal');
@@ -382,7 +902,7 @@ function openSubjectModal(subjName){
   var lecC=0,pracC=0,labC=0,doneC=0;
   for(var i=0;i<semesterDays.length;i++){
     var d=semesterDays[i];
-    var lessons=d.lessons||[];
+    var lessons=filterDayLessonsBySubgroup(d.lessons||[]);
     for(var k=0;k<lessons.length;k++){
       var x=lessons[k];
       var sTitle=x.subjectTitle||x.subject||'';
@@ -449,7 +969,7 @@ function renderTikTokSchedule(){
       +"<div class='slide-hdr'><div style='font-size:16px;font-weight:900;color:#fb923c;'>"+d.title+tBadge+"</div>"
       +"<div style='font-size:11px;color:#94a3b8;margin-top:2px;'>"+wBadge+"</div></div>"
       +"<div class='slide-body'>";
-    var list=d.lessons||[];
+    var list=filterDayLessonsBySubgroup(d.lessons||[]);
     if(!list.length){
       h+="<div style='background:#111827;border:1px solid #1e293b;border-radius:16px;padding:30px;text-align:center;color:#94a3b8;font-size:15px;font-weight:700;margin-top:10px;'>🎉 Пар нет • Свободный день</div>";
     }else{
@@ -587,17 +1107,23 @@ function poll(){
     if(d.daysMtime && d.daysMtime!==lastDaysMtime){
       lastDaysMtime=d.daysMtime;
       semesterDays=JSON.parse(AndroidBridge.getCachedSemesterDays()||'[]');
+      checkPendingSubgroupPrompts();
       if(activeTab===1)renderTikTokSchedule();
+      if(activeTab===3)renderDiaryTableTab();
+      if(activeTab===5)renderSettingsSubgroups();
     }
     if(d.catMtime && d.catMtime!==lastCatMtime){
       lastCatMtime=d.catMtime;
       catalogCache=JSON.parse(AndroidBridge.getCachedSmartCatalog()||'[]');
       if(activeTab===2)renderSmartCatalog();
+      if(activeTab===3)renderDiaryTableTab();
     }
     if(d.diaryMtime && d.diaryMtime!==lastDiaryMtime){
       lastDiaryMtime=d.diaryMtime;
       diaryCache=JSON.parse(AndroidBridge.getCachedDiaryRecent()||'[]');
-      if(activeTab===3)renderDiaryList();
+      diaryAllCache=JSON.parse(AndroidBridge.getCachedDiaryAll()||'[]');
+      if(activeTab===3)renderDiaryTableTab();
+      if(activeTab===4)renderDiaryList();
     }
     if(d.scanningSemester && d.scanStatus && activeTab===2){
       document.getElementById('smart_stats').innerText='🔄 '+d.scanStatus;
