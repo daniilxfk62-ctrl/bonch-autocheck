@@ -5,8 +5,10 @@ import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.json.JSONArray;
@@ -45,12 +47,23 @@ public class DiaryMonitor {
             }
 
             List<JSONObject> recentEntries = new ArrayList<>();
+            Map<String, JSONObject> uniqueAllEntries = new LinkedHashMap<>();
             List<String> newAlerts = new ArrayList<>();
+
+            // Подгружаем ранее сохраненные записи, чтобы не терять историю
+            JSONArray prevAllArr = storage.readJsonArray(AppStorage.FILE_DIARY_ALL);
+            for (int i = 0; i < prevAllArr.length(); i++) {
+                JSONObject obj = prevAllArr.optJSONObject(i);
+                if (obj != null) {
+                    String uk = obj.optString("key", obj.optString("subject") + "||" + obj.optString("date") + "||" + i);
+                    uniqueAllEntries.put(uk, obj);
+                }
+            }
 
             Pattern trPattern = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern cellPattern = Pattern.compile("<t[dh][^>]*>(.*?)</t[dh]>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern dateRegex = Pattern.compile("(\\d{2}\\.\\d{2}(?:\\.\\d{2,4})?)");
-            Pattern cyrillicSubjectRegex = Pattern.compile("[А-Яа-яЁё]{4,}");
+            Pattern cyrillicSubjectRegex = Pattern.compile("[А-Яа-яЁё]{3,}");
 
             String todayDateShort = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
 
@@ -90,7 +103,7 @@ public class DiaryMonitor {
                     }
 
                     if (cells.size() == 1 && cyrillicSubjectRegex.matcher(cells.get(0)).find()
-                        && cells.get(0).length() > 5 && cells.get(0).length() < 90) {
+                        && cells.get(0).length() > 4 && cells.get(0).length() < 90) {
                         currentSectionSubject = cells.get(0);
                         continue;
                     }
@@ -117,10 +130,12 @@ public class DiaryMonitor {
                             newSnap.put(cellKey, cellVal);
 
                             JSONObject entry = new JSONObject();
+                            entry.put("key", cellKey);
                             entry.put("subject", rowSubj);
                             entry.put("date", dateLabel);
                             entry.put("value", cellVal);
                             recentEntries.add(entry);
+                            uniqueAllEntries.put(cellKey, entry);
 
                             if (hadBaseline && !cellVal.equals(prevVal)) {
                                 newAlerts.add("Предмет: " + rowSubj + " • Число: " + dateLabel + " • В клетке: «" + cellVal + "»");
@@ -133,8 +148,8 @@ public class DiaryMonitor {
                     for (String c : cells) {
                         Matcher dm = dateRegex.matcher(c);
                         if (dm.find()) {
-                              foundDate = dm.group(1);
-                              break;
+                            foundDate = dm.group(1);
+                            break;
                         }
                     }
 
@@ -150,10 +165,12 @@ public class DiaryMonitor {
                             newSnap.put(cellKey, combinedVal);
 
                             JSONObject entry = new JSONObject();
+                            entry.put("key", cellKey);
                             entry.put("subject", subjName);
                             entry.put("date", foundDate);
                             entry.put("value", combinedVal);
                             recentEntries.add(entry);
+                            uniqueAllEntries.put(cellKey, entry);
 
                             if (hadBaseline && !combinedVal.equals(oldVal)) {
                                 newAlerts.add("Предмет: " + subjName + " • Число: " + foundDate + " • В клетке: «" + combinedVal + "»");
@@ -164,6 +181,12 @@ public class DiaryMonitor {
             }
 
             storage.writeText(AppStorage.FILE_DIARY_SNAPSHOT, newSnap.toString());
+
+            JSONArray allJson = new JSONArray();
+            for (JSONObject item : uniqueAllEntries.values()) {
+                allJson.put(item);
+            }
+            storage.writeText(AppStorage.FILE_DIARY_ALL, allJson.toString());
 
             JSONArray recentJson = new JSONArray();
             int startIdx = Math.max(0, recentEntries.size() - 25);
