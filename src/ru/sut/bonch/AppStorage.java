@@ -14,14 +14,16 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class AppStorage {
-    public static final String APP_VERSION = "01.04.01";
+    public static final String APP_VERSION = "01.04.04";
 
     public static final String FILE_CONFIG = "user_config_v4.json";
     public static final String FILE_SMART_RULES = "smart_rules_v4.json";
+    public static final String FILE_GROUP_CHOICES = "group_choices_v4.json";
     public static final String FILE_NOTIF_PREFS = "notif_prefs_v4.json";
     public static final String FILE_SEMESTER_DAYS = "semester_days_v4.json";
     public static final String FILE_SMART_CATALOG = "smart_catalog_v4.json";
     public static final String FILE_DIARY_RECENT = "diary_recent_v4.json";
+    public static final String FILE_DIARY_ALL = "diary_all_v4.json";
     public static final String FILE_DIARY_SNAPSHOT = "diary_snapshot_v4.json";
     public static final String FILE_BG_STATE = "bg_state_v4.json";
     public static final String FILE_ENABLED_FLAG = "daemon_enabled.flag";
@@ -120,6 +122,39 @@ public class AppStorage {
         JSONObject rules = readJson(FILE_SMART_RULES, "{}");
         if (!rules.has(ruleKey)) return true;
         return rules.optBoolean(ruleKey, true);
+    }
+
+    public JSONObject getGroupChoices() {
+        return readJson(FILE_GROUP_CHOICES, "{}");
+    }
+
+    /**
+     * Проверяет, подходит ли пара по выбранной пользователем подгруппе (преподавателю/кабинету).
+     * Формат сохраненного значения для предмета: "Преподаватель||Кабинет" или "Преподаватель".
+     */
+    public boolean isSubgroupAllowed(String subject, String teacher, String room) {
+        if (subject == null || subject.isEmpty()) return true;
+        JSONObject choices = getGroupChoices();
+        if (!choices.has(subject)) return true;
+        String chosen = choices.optString(subject, "").trim();
+        if (chosen.isEmpty() || "ALL".equals(chosen)) return true;
+
+        String tNorm = teacher != null ? teacher.trim() : "";
+        String rNorm = room != null ? room.trim() : "";
+        String combo = tNorm + "||" + rNorm;
+        if (chosen.equalsIgnoreCase(combo)) return true;
+
+        String[] parts = chosen.split("\\|\\|");
+        String chosenTeacher = parts.length > 0 ? parts[0].trim() : "";
+        String chosenRoom = parts.length > 1 ? parts[1].trim() : "";
+
+        if (!chosenTeacher.isEmpty() && !tNorm.isEmpty()) {
+            return chosenTeacher.equalsIgnoreCase(tNorm);
+        }
+        if (!chosenRoom.isEmpty() && !rNorm.isEmpty()) {
+            return chosenRoom.equalsIgnoreCase(rNorm);
+        }
+        return true;
     }
 
     public boolean isNotifyDiaryEnabled() {
