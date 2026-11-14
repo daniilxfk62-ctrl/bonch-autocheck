@@ -85,8 +85,16 @@ public class ScheduleManager {
                             if (les == null) continue;
                             String st = les.optString("startTime", "");
                             String rk = les.optString("ruleKey", "");
+                            String subj = les.optString("subjectTitle", "");
+                            String teach = les.optString("teacher", "");
+                            String rm = les.optString("room", "");
                             boolean checked = les.optBoolean("checked", false);
                             boolean waitT = les.optBoolean("waitingTeacher", false);
+
+                            if (!storage.isSubgroupAllowed(subj, teach, rm)) {
+                                continue;
+                            }
+
                             if (!st.isEmpty() && storage.isRuleAllowed(rk)) {
                                 todayRealStartTimes.add(st);
                                 if (checked) {
@@ -237,6 +245,9 @@ public class ScheduleManager {
                 String subj = les.optString("subjectTitle", "Пара");
                 String lType = les.optString("lessonType", "Занятие");
                 String teacher = les.optString("teacher", "");
+                String room = les.optString("room", "");
+
+                if (!storage.isSubgroupAllowed(subj, teacher, room)) continue;
 
                 if (!st.isEmpty() && !storage.isRuleAllowed(rk)) {
                     String uniqueKey = todayStr + "_" + st + "_" + rk;
@@ -265,13 +276,20 @@ public class ScheduleManager {
         }
     }
 
+    /**
+     * Приводит номер аудитории вида "112; Б22/1", "504, Б22/2", "300 Б22" к виду "112/1", "504/2", "300".
+     */
     public static String formatRoomClean(String rawRoom) {
         if (rawRoom == null) return "";
-        return rawRoom
-            .replaceAll("(?i)[;,\\s]*[БбBb]22\\s*/\\s*(\\d+)", "/$1")
-            .replaceAll("(?i)[;,\\s]*[БбBb]22", "")
-            .replaceAll("\\s+", " ")
-            .trim();
+        String s = rawRoom.trim();
+        // Если написано "112; Б22/1" или "112 Б22/1" -> превращаем в "112/1"
+        s = s.replaceAll("(?i)\\s*[;,\\s]*\\b(?:пр\\.?\\s*Большевиков[^,/]*|[БбBb]22)\\s*/\\s*(\\d+)", "/$1");
+        // Убираем оставшиеся упоминания Б22 без корпуса
+        s = s.replaceAll("(?i)\\s*[;,\\s]*\\b(?:пр\\.?\\s*Большевиков[^,;]*|[БбBb]22)\\b", "");
+        // Убираем висящие точки с запятой и запятые по краям
+        s = s.replaceAll("^[;,\\s]+|[;,\\s]+$", "");
+        s = s.replaceAll("\\s+", " ").trim();
+        return s;
     }
 
     public static class ParsedRowDetails {
@@ -291,63 +309,133 @@ public class ScheduleManager {
             tds.add(tdMat.group(1));
         }
 
-        String rawSubjectCell = tds.size() >= 2 ? tds.get(1) : trInner;
-        String rawRoomCell = tds.size() >= 3 ? tds.get(2) : "";
-        String rawTeacherCell = tds.size() >= 4 ? tds.get(3) : "";
+        Pattern boldPat = Pattern.compile("<(b|strong)[^>]*>(.*?)</\\1>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+        Pattern fioShortPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.)");
+        Pattern fioFullPat = Pattern.compile("([А-ЯЁ][а-яё\\-]{2,}\\s+[А-ЯЁ][а-яё]{2,}\\s+[А-ЯЁ][а-яё]{2,}(?:вич|вна|ична))");
+        Pattern roomHintPat = Pattern.compile("(?i)(?:[БбBb]22|\\b\\d{3}[а-яa-z]?\\b\\s*(?:;|/|\\b)|ауд\\.|каб\\.|дистанционно|спорт|зал)");
 
-        String cellPlain = rawSubjectCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
-        String lowerCell = cellPlain.toLowerCase(Locale.ROOT);
-        if (lowerCell.contains("лабораторн")) {
+        int subjectCellIdx = -1;
+        for (int i = 0; i < tds.size(); i++) {
+            String cellHtml = tds.get(i);
+            Matcher bm = boldPat.matcher(cellHtml);
+            while (bm.find()) {
+                String bText = bm.group(2).replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                if (bText.length() > 2 && !bText.matches("^[0-9:–\\-\\s]+$")) {
+                    info.subject = bText;
+                    subjectCellIdx = i;
+                    break;
+                }
+            }
+            if (subjectCellIdx != -1) break;
+        }
+
+        String fullRowPlain = trInner.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+        String lowerRow = fullRowPlain.toLowerCase(Locale.ROOT);
+        if (lowerRow.contains("лабораторн")) {
             info.normType = "Лаба";
-        } else if (lowerCell.contains("лекци")) {
+        } else if (lowerRow.contains("лекци")) {
             info.normType = "Лекция";
         } else {
             info.normType = "Практика";
         }
 
-        Pattern boldPat = Pattern.compile("<(b|strong)[^>]*>(.*?)</\\1>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-        Matcher boldMat = boldPat.matcher(rawSubjectCell);
-        if (boldMat.find()) {
-            String bText = boldMat.group(2).replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
-            if (!bText.isEmpty()) info.subject = bText;
-        }
         if ("Предмет".equals(info.subject)) {
-            String cleaned = cellPlain
-                .replace(timeRange, "")
-                .replaceAll("(?i)(Лабораторная работа|Практические занятия|Лекция|Зачет|Экзамен|Консультация).*", "")
-                .replaceAll("(?i)занятие\\s+началось.*", "")
-                .replaceAll("(?i)ждем\\s+начала\\s+от\\s+преподавателя.*", "")
-                .replaceAll("(?i)ждём\\s+начала\\s+от\\s+преподавателя.*", "")
-                .replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "")
-                .trim();
-            if (!cleaned.isEmpty()) info.subject = cleaned;
-        }
-
-        String teacherClean = rawTeacherCell
-            .replaceAll("<[^>]+>", " ")
-            .replaceAll("&nbsp;", " ")
-            .replaceAll("(?i)(занятие\\s+началось.*|ждем\\s+начала.*|ждём\\s+начала.*|кнопка\\s+появится.*|начать\\s+занятие.*|обновить.*|вы\\s+присутствуете.*)", "")
-            .replaceAll("\\s+", " ")
-            .trim();
-
-        if (teacherClean.isEmpty()) {
-            String fullRowPlain = trInner.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
-            Pattern fioShortPat = Pattern.compile("([А-ЯЁ][а-яё]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.)");
-            Matcher mShort = fioShortPat.matcher(fullRowPlain);
-            if (mShort.find()) {
-                teacherClean = mShort.group(1);
-            } else {
-                Pattern fioFullPat = Pattern.compile("([А-ЯЁ][а-яё]{2,}\\s+[А-ЯЁ][а-яё]{2,}\\s+[А-ЯЁ][а-яё]{2,}(?:вич|вна|ична))");
-                Matcher mFull = fioFullPat.matcher(fullRowPlain);
-                if (mFull.find()) {
-                    teacherClean = mFull.group(1);
+            for (int i = 0; i < tds.size(); i++) {
+                String cp = tds.get(i).replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                if (cp.contains(timeRange) || cp.matches("^\\d+$")) continue;
+                if (cp.length() > 4) {
+                    String cleaned = cp
+                        .replace(timeRange, "")
+                        .replaceAll("(?i)(Лабораторная работа|Практические занятия|Лекция|Зачет|Экзамен|Консультация).*", "")
+                        .replaceAll("(?i)(занятие\\s+началось.*|ждем\\s+начала.*|ждём\\s+начала.*)", "")
+                        .replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "")
+                        .trim();
+                    if (!cleaned.isEmpty()) {
+                        info.subject = cleaned;
+                        subjectCellIdx = i;
+                        break;
+                    }
                 }
             }
         }
 
-        info.teacher = teacherClean;
-        String cleanRoom = rawRoomCell.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
-        info.room = formatRoomClean(cleanRoom);
+        // Поиск преподавателя и кабинета по всем ячейкам таблицы
+        String foundTeacher = "";
+        String foundRoom = "";
+
+        for (int i = 0; i < tds.size(); i++) {
+            if (i == subjectCellIdx) continue;
+            String cellPlain = tds.get(i)
+                .replaceAll("<[^>]+>", " ")
+                .replaceAll("&nbsp;", " ")
+                .replaceAll("(?i)(занятие\\s+началось.*|ждем\\s+начала.*|ждём\\s+начала.*|кнопка\\s+появится.*|начать\\s+занятие.*|обновить.*|вы\\s+присутствуете.*|отметиться.*)", "")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+            if (cellPlain.isEmpty() || cellPlain.equals(timeRange) || cellPlain.matches("^\\d+\\s*\\(?\\s*\\)?$")) {
+                continue;
+            }
+            if (cellPlain.matches("^\\d+\\s+[0-9]{1,2}[:.][0-9]{2}.*")) {
+                continue;
+            }
+
+            // Проверяем, не ФИО ли это преподавателя
+            Matcher ms = fioShortPat.matcher(cellPlain);
+            Matcher mf = fioFullPat.matcher(cellPlain);
+            if (foundTeacher.isEmpty() && ms.find()) {
+                foundTeacher = ms.group(1).trim();
+                continue;
+            } else if (foundTeacher.isEmpty() && mf.find()) {
+                foundTeacher = mf.group(1).trim();
+                continue;
+            }
+
+            // Проверяем, не аудитория ли это
+            if (foundRoom.isEmpty() && (roomHintPat.matcher(cellPlain).find() || (subjectCellIdx != -1 && i == subjectCellIdx + 1))) {
+                // Убедимся, что в ячейке комнаты не записан случайно преподаватель
+                if (!fioShortPat.matcher(cellPlain).find() && !fioFullPat.matcher(cellPlain).find()) {
+                    foundRoom = formatRoomClean(cellPlain);
+                    continue;
+                }
+            }
+
+            // Если в ячейке осталась текстовая строка (например, должность + ФИО нестандартного формата)
+            if (foundTeacher.isEmpty() && subjectCellIdx != -1 && i > subjectCellIdx && cellPlain.matches(".*[А-Яа-яЁё]{3,}.*")) {
+                if (!cellPlain.toLowerCase(Locale.ROOT).contains("б22")) {
+                    foundTeacher = cellPlain;
+                }
+            }
+        }
+
+        // Если ФИО было внутри самой ячейки предмета или в нестандартном месте строки
+        if (foundTeacher.isEmpty()) {
+            Matcher ms = fioShortPat.matcher(fullRowPlain);
+            if (ms.find()) {
+                foundTeacher = ms.group(1).trim();
+            } else {
+                Matcher mf = fioFullPat.matcher(fullRowPlain);
+                if (mf.find()) {
+                    foundTeacher = mf.group(1).trim();
+                }
+            }
+        }
+
+        // Если аудитория не нашлась в отдельных ячейках, но в строке есть шаблон "XXX; Б22/Y"
+        if (foundRoom.isEmpty()) {
+            Pattern inlineRoomPat = Pattern.compile("(\\d{2,4}[а-яa-z]?\\s*;?\\s*[БбBb]22(?:\\s*/\\s*\\d+)?)");
+            Matcher rm = inlineRoomPat.matcher(fullRowPlain);
+            if (rm.find()) {
+                foundRoom = formatRoomClean(rm.group(1));
+            }
+        }
+
+        // Очищаем название предмета, если в него попал номер кабинета или ФИО
+        if (!foundTeacher.isEmpty() && info.subject.contains(foundTeacher)) {
+            info.subject = info.subject.replace(foundTeacher, "").trim();
+        }
+
+        info.teacher = foundTeacher;
+        info.room = foundRoom;
         info.ruleKey = info.subject + "||" + info.normType;
         return info;
     }
@@ -423,6 +511,7 @@ public class ScheduleManager {
 
                 ParsedRowDetails structured = extractStructuredLessonInfo(trInner, timeRange);
                 boolean allowedBySmart = storage.isRuleAllowed(structured.ruleKey);
+                boolean allowedBySubgroup = storage.isSubgroupAllowed(structured.subject, structured.teacher, structured.room);
 
                 Matcher zm = zanPattern.matcher(fullTrHtml);
                 String raspId = zm.find() ? zm.group(1) : null;
@@ -440,33 +529,35 @@ public class ScheduleManager {
                                      || lowerRow.contains("отмечен")
                                      || lowerRow.contains("присутствует");
 
-                if (!allowedBySmart) {
-                    if (raspId != null && storage.isNotifySkippedEnabled() && todayStr.equals(curDateStr)) {
-                        String btnNotifyKey = "btn_" + todayStr + "_" + startTime + "_" + structured.ruleKey;
-                        if (!notifiedSkippedToday.contains(btnNotifyKey)) {
-                            notifiedSkippedToday.add(btnNotifyKey);
-                            String title = "🔔 Открылась отметка на паре (" + startTime + ")";
-                            String msg = structured.subject + " (" + structured.normType + ") — кнопка появилась в ЛК, но автоотметка выключена.";
-                            storage.addLog(title + ": " + msg);
-                            NotificationHelper.sendAlert(ctx, title, msg);
+                if (allowedBySubgroup) {
+                    if (!allowedBySmart) {
+                        if (raspId != null && storage.isNotifySkippedEnabled() && todayStr.equals(curDateStr)) {
+                            String btnNotifyKey = "btn_" + todayStr + "_" + startTime + "_" + structured.ruleKey;
+                            if (!notifiedSkippedToday.contains(btnNotifyKey)) {
+                                notifiedSkippedToday.add(btnNotifyKey);
+                                String title = "🔔 Открылась отметка на паре (" + startTime + ")";
+                                String msg = structured.subject + " (" + structured.normType + ") — кнопка появилась в ЛК, но автоотметка выключена.";
+                                storage.addLog(title + ": " + msg);
+                                NotificationHelper.sendAlert(ctx, title, msg);
+                            }
                         }
-                    }
-                    if (currentWindowStart != null && currentWindowStart.equals(startTime)) {
-                        completedWindowsToday.add(startTime);
-                        waitingTeacherToday.remove(startTime);
-                        checkInTimeByStart.put(startTime, "пропуск 🤖");
-                    }
-                } else if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
-                    if (api.sendAndVerifyOpenZan(raspId, weekId)) {
-                        String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-                        markedRaspIdsToday.add(raspId);
-                        checkInTimeByStart.put(startTime, nowStr);
-                        completedWindowsToday.add(startTime);
-                        waitingTeacherToday.remove(startTime);
-                        alreadyInHtml = true;
-                        waitingForTeacher = false;
-                        lastPollMarkedAny = true;
-                        newlyChecked.add(structured.subject + " (" + structured.normType + ", отметка в " + nowStr + ")");
+                        if (currentWindowStart != null && currentWindowStart.equals(startTime)) {
+                            completedWindowsToday.add(startTime);
+                            waitingTeacherToday.remove(startTime);
+                            checkInTimeByStart.put(startTime, "пропуск 🤖");
+                        }
+                    } else if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
+                        if (api.sendAndVerifyOpenZan(raspId, weekId)) {
+                            String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                            markedRaspIdsToday.add(raspId);
+                            checkInTimeByStart.put(startTime, nowStr);
+                            completedWindowsToday.add(startTime);
+                            waitingTeacherToday.remove(startTime);
+                            alreadyInHtml = true;
+                            waitingForTeacher = false;
+                            lastPollMarkedAny = true;
+                            newlyChecked.add(structured.subject + " (" + structured.normType + ", отметка в " + nowStr + ")");
+                        }
                     }
                 }
 
@@ -481,7 +572,7 @@ public class ScheduleManager {
                     displayCheckTime = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
                 }
 
-                if (todayStr.equals(curDateStr)) {
+                if (todayStr.equals(curDateStr) && allowedBySubgroup) {
                     if (isLessonDone) {
                         completedWindowsToday.add(startTime);
                         waitingTeacherToday.remove(startTime);
