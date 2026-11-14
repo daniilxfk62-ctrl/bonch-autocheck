@@ -144,6 +144,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public void saveFullSettings(String login, String password, String intervalStr, String mode, String autoUpdateHours) {
+            storage.saveUserConfigFull(login, password, intervalStr, mode, autoUpdateHours);
+        }
+
+        @JavascriptInterface
         public void toggleAutoCheck(String login, String password, String intervalStr, String mode) {
             storage.saveUserConfig(login, password, intervalStr, mode);
             if (storage.isDaemonEnabled()) {
