@@ -29,6 +29,17 @@ public class ScheduleManager {
         "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"
     };
 
+    private static final Map<String, String> PAIR_NUM_TO_TIME = new HashMap<>();
+    static {
+        PAIR_NUM_TO_TIME.put("1", "09:00-10:35");
+        PAIR_NUM_TO_TIME.put("2", "10:45-12:20");
+        PAIR_NUM_TO_TIME.put("3", "13:00-14:35");
+        PAIR_NUM_TO_TIME.put("4", "14:45-16:20");
+        PAIR_NUM_TO_TIME.put("5", "16:30-18:05");
+        PAIR_NUM_TO_TIME.put("6", "18:15-19:50");
+        PAIR_NUM_TO_TIME.put("7", "20:00-21:35");
+    }
+
     public final Set<String> completedWindowsToday = new HashSet<>();
     public final Set<String> waitingTeacherToday = new HashSet<>();
     public final Set<String> markedRaspIdsToday = new HashSet<>();
@@ -78,6 +89,7 @@ public class ScheduleManager {
             for (int i = 0; i < semesterDaysArray.length(); i++) {
                 JSONObject d = semesterDaysArray.optJSONObject(i);
                 if (d != null && todayStr.equals(d.optString("dateStr", ""))) {
+                    int dowIdx = d.optInt("dowIdx", -1);
                     JSONArray lessons = d.optJSONArray("lessons");
                     if (lessons != null) {
                         for (int k = 0; k < lessons.length(); k++) {
@@ -91,7 +103,7 @@ public class ScheduleManager {
                             boolean checked = les.optBoolean("checked", false);
                             boolean waitT = les.optBoolean("waitingTeacher", false);
 
-                            if (!storage.isSubgroupAllowed(subj, teach, rm)) {
+                            if (!storage.isSubgroupAllowed(dowIdx, st, subj, teach, rm)) {
                                 continue;
                             }
 
@@ -234,6 +246,7 @@ public class ScheduleManager {
             JSONObject d = semesterDaysArray.optJSONObject(i);
             if (d == null || !todayStr.equals(d.optString("dateStr", ""))) continue;
 
+            int dowIdx = d.optInt("dowIdx", -1);
             JSONArray lessons = d.optJSONArray("lessons");
             if (lessons == null) break;
 
@@ -247,7 +260,7 @@ public class ScheduleManager {
                 String teacher = les.optString("teacher", "");
                 String room = les.optString("room", "");
 
-                if (!storage.isSubgroupAllowed(subj, teacher, room)) continue;
+                if (!storage.isSubgroupAllowed(dowIdx, st, subj, teacher, room)) continue;
 
                 if (!st.isEmpty() && !storage.isRuleAllowed(rk)) {
                     String uniqueKey = todayStr + "_" + st + "_" + rk;
@@ -276,17 +289,11 @@ public class ScheduleManager {
         }
     }
 
-    /**
-     * Приводит номер аудитории вида "112; Б22/1", "504, Б22/2", "300 Б22" к виду "112/1", "504/2", "300".
-     */
     public static String formatRoomClean(String rawRoom) {
         if (rawRoom == null) return "";
         String s = rawRoom.trim();
-        // Если написано "112; Б22/1" или "112 Б22/1" -> превращаем в "112/1"
         s = s.replaceAll("(?i)\\s*[;,\\s]*\\b(?:пр\\.?\\s*Большевиков[^,/]*|[БбBb]22)\\s*/\\s*(\\d+)", "/$1");
-        // Убираем оставшиеся упоминания Б22 без корпуса
         s = s.replaceAll("(?i)\\s*[;,\\s]*\\b(?:пр\\.?\\s*Большевиков[^,;]*|[БбBb]22)\\b", "");
-        // Убираем висящие точки с запятой и запятые по краям
         s = s.replaceAll("^[;,\\s]+|[;,\\s]+$", "");
         s = s.replaceAll("\\s+", " ").trim();
         return s;
@@ -300,8 +307,13 @@ public class ScheduleManager {
         public String ruleKey = "";
     }
 
-    public ParsedRowDetails extractStructuredLessonInfo(String trInner, String timeRange) {
-        ParsedRowDetails info = new ParsedRowDetails();
+    /**
+     * Извлекает один или несколько вариантов занятий из одной строки <tr>.
+     * Если в одной строке таблицы сразу указаны 2 преподавателя и 2 кабинета (например, 2 группы Иностранного языка),
+     * метод возвращает 2 объекта ParsedRowDetails, чтобы оба отобразились в выборе подгрупп!
+     */
+    public List<ParsedRowDetails> extractStructuredLessonsFromRow(String trInner, String timeRange) {
+        ParsedRowDetails base = new ParsedRowDetails();
         List<String> tds = new ArrayList<>();
         Pattern tdPat = Pattern.compile("<td[^>]*>(.*?)</td>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
         Matcher tdMat = tdPat.matcher(trInner);
@@ -314,32 +326,34 @@ public class ScheduleManager {
         Pattern fioFullPat = Pattern.compile("([А-ЯЁ][а-яё\\-]{2,}\\s+[А-ЯЁ][а-яё]{2,}\\s+[А-ЯЁ][а-яё]{2,}(?:вич|вна|ична))");
         Pattern roomHintPat = Pattern.compile("(?i)(?:[БбBb]22|\\b\\d{3}[а-яa-z]?\\b\\s*(?:;|/|\\b)|ауд\\.|каб\\.|дистанционно|спорт|зал)");
 
+        List<String> boldSubjects = new ArrayList<>();
         int subjectCellIdx = -1;
         for (int i = 0; i < tds.size(); i++) {
             String cellHtml = tds.get(i);
             Matcher bm = boldPat.matcher(cellHtml);
             while (bm.find()) {
                 String bText = bm.group(2).replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
-                if (bText.length() > 2 && !bText.matches("^[0-9:–\\-\\s]+$")) {
-                    info.subject = bText;
-                    subjectCellIdx = i;
-                    break;
+                if (bText.length() > 2 && !bText.matches("^[0-9:–\\-\\s()]+$")) {
+                    boldSubjects.add(bText);
+                    if (subjectCellIdx == -1) {
+                        base.subject = bText;
+                        subjectCellIdx = i;
+                    }
                 }
             }
-            if (subjectCellIdx != -1) break;
         }
 
         String fullRowPlain = trInner.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
         String lowerRow = fullRowPlain.toLowerCase(Locale.ROOT);
         if (lowerRow.contains("лабораторн")) {
-            info.normType = "Лаба";
+            base.normType = "Лаба";
         } else if (lowerRow.contains("лекци")) {
-            info.normType = "Лекция";
+            base.normType = "Лекция";
         } else {
-            info.normType = "Практика";
+            base.normType = "Практика";
         }
 
-        if ("Предмет".equals(info.subject)) {
+        if ("Предмет".equals(base.subject)) {
             for (int i = 0; i < tds.size(); i++) {
                 String cp = tds.get(i).replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
                 if (cp.contains(timeRange) || cp.matches("^\\d+$")) continue;
@@ -351,7 +365,7 @@ public class ScheduleManager {
                         .replaceFirst("^\\s*\\d+\\s*\\(\\s*\\)\\s*", "")
                         .trim();
                     if (!cleaned.isEmpty()) {
-                        info.subject = cleaned;
+                        base.subject = cleaned;
                         subjectCellIdx = i;
                         break;
                     }
@@ -359,13 +373,14 @@ public class ScheduleManager {
             }
         }
 
-        // Поиск преподавателя и кабинета по всем ячейкам таблицы
-        String foundTeacher = "";
-        String foundRoom = "";
+        List<String> foundTeachers = new ArrayList<>();
+        List<String> foundRooms = new ArrayList<>();
 
         for (int i = 0; i < tds.size(); i++) {
             if (i == subjectCellIdx) continue;
-            String cellPlain = tds.get(i)
+            String cellHtml = tds.get(i);
+            String cellPlain = cellHtml
+                .replaceAll("(?i)<br\\s*/?>", " | ")
                 .replaceAll("<[^>]+>", " ")
                 .replaceAll("&nbsp;", " ")
                 .replaceAll("(?i)(занятие\\s+началось.*|ждем\\s+начала.*|ждём\\s+начала.*|кнопка\\s+появится.*|начать\\s+занятие.*|обновить.*|вы\\s+присутствуете.*|отметиться.*)", "")
@@ -379,65 +394,100 @@ public class ScheduleManager {
                 continue;
             }
 
-            // Проверяем, не ФИО ли это преподавателя
+            // Ищем всех преподавателей в ячейке
             Matcher ms = fioShortPat.matcher(cellPlain);
-            Matcher mf = fioFullPat.matcher(cellPlain);
-            if (foundTeacher.isEmpty() && ms.find()) {
-                foundTeacher = ms.group(1).trim();
-                continue;
-            } else if (foundTeacher.isEmpty() && mf.find()) {
-                foundTeacher = mf.group(1).trim();
-                continue;
+            boolean matchedAnyFio = false;
+            while (ms.find()) {
+                String t = ms.group(1).trim();
+                if (!foundTeachers.contains(t)) foundTeachers.add(t);
+                matchedAnyFio = true;
             }
-
-            // Проверяем, не аудитория ли это
-            if (foundRoom.isEmpty() && (roomHintPat.matcher(cellPlain).find() || (subjectCellIdx != -1 && i == subjectCellIdx + 1))) {
-                // Убедимся, что в ячейке комнаты не записан случайно преподаватель
-                if (!fioShortPat.matcher(cellPlain).find() && !fioFullPat.matcher(cellPlain).find()) {
-                    foundRoom = formatRoomClean(cellPlain);
-                    continue;
+            if (!matchedAnyFio) {
+                Matcher mf = fioFullPat.matcher(cellPlain);
+                while (mf.find()) {
+                    String t = mf.group(1).trim();
+                    if (!foundTeachers.contains(t)) foundTeachers.add(t);
+                    matchedAnyFio = true;
                 }
             }
+            if (matchedAnyFio) continue;
 
-            // Если в ячейке осталась текстовая строка (например, должность + ФИО нестандартного формата)
-            if (foundTeacher.isEmpty() && subjectCellIdx != -1 && i > subjectCellIdx && cellPlain.matches(".*[А-Яа-яЁё]{3,}.*")) {
+            // Ищем аудитории (может быть несколько через <br> или |)
+            if (roomHintPat.matcher(cellPlain).find() || (subjectCellIdx != -1 && i == subjectCellIdx + 1)) {
+                String[] roomParts = cellPlain.split("\\|");
+                for (String rp : roomParts) {
+                    String cr = formatRoomClean(rp);
+                    if (!cr.isEmpty() && !foundRooms.contains(cr)) {
+                        foundRooms.add(cr);
+                    }
+                }
+                continue;
+            }
+
+            if (foundTeachers.isEmpty() && subjectCellIdx != -1 && i > subjectCellIdx && cellPlain.matches(".*[А-Яа-яЁё]{3,}.*")) {
                 if (!cellPlain.toLowerCase(Locale.ROOT).contains("б22")) {
-                    foundTeacher = cellPlain;
+                    foundTeachers.add(cellPlain);
                 }
             }
         }
 
-        // Если ФИО было внутри самой ячейки предмета или в нестандартном месте строки
-        if (foundTeacher.isEmpty()) {
+        if (foundTeachers.isEmpty()) {
             Matcher ms = fioShortPat.matcher(fullRowPlain);
-            if (ms.find()) {
-                foundTeacher = ms.group(1).trim();
-            } else {
+            while (ms.find()) {
+                String t = ms.group(1).trim();
+                if (!foundTeachers.contains(t)) foundTeachers.add(t);
+            }
+            if (foundTeachers.isEmpty()) {
                 Matcher mf = fioFullPat.matcher(fullRowPlain);
-                if (mf.find()) {
-                    foundTeacher = mf.group(1).trim();
+                while (mf.find()) {
+                    String t = mf.group(1).trim();
+                    if (!foundTeachers.contains(t)) foundTeachers.add(t);
                 }
             }
         }
 
-        // Если аудитория не нашлась в отдельных ячейках, но в строке есть шаблон "XXX; Б22/Y"
-        if (foundRoom.isEmpty()) {
+        if (foundRooms.isEmpty()) {
             Pattern inlineRoomPat = Pattern.compile("(\\d{2,4}[а-яa-z]?\\s*;?\\s*[БбBb]22(?:\\s*/\\s*\\d+)?)");
             Matcher rm = inlineRoomPat.matcher(fullRowPlain);
-            if (rm.find()) {
-                foundRoom = formatRoomClean(rm.group(1));
+            while (rm.find()) {
+                String cr = formatRoomClean(rm.group(1));
+                if (!cr.isEmpty() && !foundRooms.contains(cr)) foundRooms.add(cr);
             }
         }
 
-        // Очищаем название предмета, если в него попал номер кабинета или ФИО
-        if (!foundTeacher.isEmpty() && info.subject.contains(foundTeacher)) {
-            info.subject = info.subject.replace(foundTeacher, "").trim();
+        for (String ft : foundTeachers) {
+            if (base.subject.contains(ft)) {
+                base.subject = base.subject.replace(ft, "").trim();
+            }
         }
 
-        info.teacher = foundTeacher;
-        info.room = foundRoom;
-        info.ruleKey = info.subject + "||" + info.normType;
-        return info;
+        List<ParsedRowDetails> resultList = new ArrayList<>();
+        int countVariants = Math.max(1, Math.max(foundTeachers.size(), boldSubjects.size()));
+        if (countVariants > 1 && (foundTeachers.size() > 1 || foundRooms.size() > 1 || boldSubjects.size() > 1)) {
+            for (int v = 0; v < countVariants; v++) {
+                ParsedRowDetails item = new ParsedRowDetails();
+                item.subject = v < boldSubjects.size() ? boldSubjects.get(v) : base.subject;
+                item.normType = base.normType;
+                item.teacher = v < foundTeachers.size() ? foundTeachers.get(v) : (foundTeachers.isEmpty() ? "" : foundTeachers.get(0));
+                item.room = v < foundRooms.size() ? foundRooms.get(v) : (foundRooms.isEmpty() ? "" : foundRooms.get(0));
+                item.ruleKey = item.subject + "||" + item.normType;
+                resultList.add(item);
+            }
+        } else {
+            base.teacher = foundTeachers.isEmpty() ? "" : foundTeachers.get(0);
+            base.room = foundRooms.isEmpty() ? "" : foundRooms.get(0);
+            base.ruleKey = base.subject + "||" + base.normType;
+            resultList.add(base);
+        }
+        return resultList;
+    }
+
+    private int calcDowIdxFromDate(Date d) {
+        if (d == null) return 0;
+        Calendar c = Calendar.getInstance();
+        c.setTime(d);
+        int dow = c.get(Calendar.DAY_OF_WEEK);
+        return (dow == Calendar.SUNDAY) ? 6 : (dow - Calendar.MONDAY);
     }
 
     public synchronized void pollCurrentWeekAndCheckIn(
@@ -463,9 +513,11 @@ public class ScheduleManager {
             Pattern dayNamePattern = Pattern.compile("(Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье)", Pattern.CASE_INSENSITIVE);
             Pattern dateValPattern = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");
             Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)");
+            Pattern pairNumPattern = Pattern.compile("^\\s*([1-7])\\s*(?:пара|\\(\\s*\\))", Pattern.CASE_INSENSITIVE);
             Pattern zanPattern = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
             Pattern startedPattern = Pattern.compile("занятие\\s+началось\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
             Pattern waitBtnPattern = Pattern.compile("Кнопка\\s+появится\\s+в\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
+            Pattern boldCheckPat = Pattern.compile("<(b|strong)[^>]*>.*[А-Яа-яЁёA-Za-z]{3,}.*</\\1>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
             Matcher trMatcher = trPattern.matcher(html);
             SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy", Locale.US);
@@ -475,6 +527,9 @@ public class ScheduleManager {
             Map<String, List<JSONObject>> weekLessonsByDate = new LinkedHashMap<>();
             Date anyDateInWeek = null;
             String curDateStr = null;
+            int curDowIdx = 0;
+            String lastTimeRange = "";
+            String lastStartTime = "";
             List<String> newlyChecked = new ArrayList<>();
 
             while (trMatcher.find()) {
@@ -489,29 +544,47 @@ public class ScheduleManager {
                 Matcher dm = dayNamePattern.matcher(rowText);
                 Matcher dateM = dateValPattern.matcher(rowText);
 
-                if (!tm.find()) {
-                    if (dm.find() && dateM.find() && rowText.length() < 75) {
+                String timeRange = null;
+                String startTime = null;
+
+                if (tm.find()) {
+                    timeRange = tm.group(0);
+                    int startH = Integer.parseInt(tm.group(1));
+                    int startM = Integer.parseInt(tm.group(2));
+                    startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
+                    lastTimeRange = timeRange;
+                    lastStartTime = startTime;
+                } else {
+                    if (dm.find() && dateM.find() && rowText.length() < 80) {
                         curDateStr = dateM.group(1);
+                        lastTimeRange = "";
+                        lastStartTime = "";
                         if (!weekLessonsByDate.containsKey(curDateStr)) {
                             weekLessonsByDate.put(curDateStr, new ArrayList<JSONObject>());
                         }
-                        if (anyDateInWeek == null) {
-                            try {
-                                anyDateInWeek = df.parse(curDateStr);
-                            } catch (Exception ignored) {}
-                        }
+                        try {
+                            Date parsedD = df.parse(curDateStr);
+                            curDowIdx = calcDowIdxFromDate(parsedD);
+                            if (anyDateInWeek == null) anyDateInWeek = parsedD;
+                        } catch (Exception ignored) {}
+                        continue;
                     }
-                    continue;
+                    // Проверяем, не является ли эта строка второй подгруппой/предметом на то же самое время (rowspan без повтора времени)
+                    Matcher pm = pairNumPattern.matcher(rowText);
+                    if (pm.find() && PAIR_NUM_TO_TIME.containsKey(pm.group(1))) {
+                        timeRange = PAIR_NUM_TO_TIME.get(pm.group(1));
+                        startTime = timeRange.substring(0, 5);
+                        lastTimeRange = timeRange;
+                        lastStartTime = startTime;
+                    } else if (curDateStr != null && !lastStartTime.isEmpty() && boldCheckPat.matcher(trInner).find()) {
+                        timeRange = lastTimeRange;
+                        startTime = lastStartTime;
+                    } else {
+                        continue;
+                    }
                 }
 
-                String timeRange = tm.group(0);
-                int startH = Integer.parseInt(tm.group(1));
-                int startM = Integer.parseInt(tm.group(2));
-                String startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
-
-                ParsedRowDetails structured = extractStructuredLessonInfo(trInner, timeRange);
-                boolean allowedBySmart = storage.isRuleAllowed(structured.ruleKey);
-                boolean allowedBySubgroup = storage.isSubgroupAllowed(structured.subject, structured.teacher, structured.room);
+                List<ParsedRowDetails> variants = extractStructuredLessonsFromRow(trInner, timeRange);
 
                 Matcher zm = zanPattern.matcher(fullTrHtml);
                 String raspId = zm.find() ? zm.group(1) : null;
@@ -529,75 +602,81 @@ public class ScheduleManager {
                                      || lowerRow.contains("отмечен")
                                      || lowerRow.contains("присутствует");
 
-                if (allowedBySubgroup) {
-                    if (!allowedBySmart) {
-                        if (raspId != null && storage.isNotifySkippedEnabled() && todayStr.equals(curDateStr)) {
-                            String btnNotifyKey = "btn_" + todayStr + "_" + startTime + "_" + structured.ruleKey;
-                            if (!notifiedSkippedToday.contains(btnNotifyKey)) {
-                                notifiedSkippedToday.add(btnNotifyKey);
-                                String title = "🔔 Открылась отметка на паре (" + startTime + ")";
-                                String msg = structured.subject + " (" + structured.normType + ") — кнопка появилась в ЛК, но автоотметка выключена.";
-                                storage.addLog(title + ": " + msg);
-                                NotificationHelper.sendAlert(ctx, title, msg);
+                for (ParsedRowDetails structured : variants) {
+                    if ("Предмет".equals(structured.subject)) continue;
+                    boolean allowedBySmart = storage.isRuleAllowed(structured.ruleKey);
+                    boolean allowedBySubgroup = storage.isSubgroupAllowed(curDowIdx, startTime, structured.subject, structured.teacher, structured.room);
+
+                    if (allowedBySubgroup) {
+                        if (!allowedBySmart) {
+                            if (raspId != null && storage.isNotifySkippedEnabled() && todayStr.equals(curDateStr)) {
+                                String btnNotifyKey = "btn_" + todayStr + "_" + startTime + "_" + structured.ruleKey;
+                                if (!notifiedSkippedToday.contains(btnNotifyKey)) {
+                                    notifiedSkippedToday.add(btnNotifyKey);
+                                    String title = "🔔 Открылась отметка на паре (" + startTime + ")";
+                                    String msg = structured.subject + " (" + structured.normType + ") — кнопка появилась в ЛК, но автоотметка выключена.";
+                                    storage.addLog(title + ": " + msg);
+                                    NotificationHelper.sendAlert(ctx, title, msg);
+                                }
+                            }
+                            if (currentWindowStart != null && currentWindowStart.equals(startTime)) {
+                                completedWindowsToday.add(startTime);
+                                waitingTeacherToday.remove(startTime);
+                                checkInTimeByStart.put(startTime, "пропуск 🤖");
+                            }
+                        } else if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
+                            if (api.sendAndVerifyOpenZan(raspId, weekId)) {
+                                String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                                markedRaspIdsToday.add(raspId);
+                                checkInTimeByStart.put(startTime, nowStr);
+                                completedWindowsToday.add(startTime);
+                                waitingTeacherToday.remove(startTime);
+                                alreadyInHtml = true;
+                                waitingForTeacher = false;
+                                lastPollMarkedAny = true;
+                                newlyChecked.add(structured.subject + " (" + structured.normType + ", отметка в " + nowStr + ")");
                             }
                         }
-                        if (currentWindowStart != null && currentWindowStart.equals(startTime)) {
+                    }
+
+                    boolean hasTimeAppeared = (startedAt != null && raspId == null && !waitingForTeacher);
+                    boolean isLessonDone = alreadyInHtml
+                                        || hasTimeAppeared
+                                        || (raspId != null && markedRaspIdsToday.contains(raspId));
+
+                    String displayCheckTime = checkInTimeByStart.get(startTime);
+                    if (displayCheckTime == null && startedAt != null) displayCheckTime = startedAt;
+                    if (isLessonDone && displayCheckTime == null) {
+                        displayCheckTime = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
+                    }
+
+                    if (todayStr.equals(curDateStr) && allowedBySubgroup) {
+                        if (isLessonDone) {
                             completedWindowsToday.add(startTime);
                             waitingTeacherToday.remove(startTime);
-                            checkInTimeByStart.put(startTime, "пропуск 🤖");
-                        }
-                    } else if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
-                        if (api.sendAndVerifyOpenZan(raspId, weekId)) {
-                            String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-                            markedRaspIdsToday.add(raspId);
-                            checkInTimeByStart.put(startTime, nowStr);
-                            completedWindowsToday.add(startTime);
+                            if (displayCheckTime != null) checkInTimeByStart.put(startTime, displayCheckTime);
+                        } else if (waitingForTeacher) {
+                            waitingTeacherToday.add(startTime);
+                        } else {
                             waitingTeacherToday.remove(startTime);
-                            alreadyInHtml = true;
-                            waitingForTeacher = false;
-                            lastPollMarkedAny = true;
-                            newlyChecked.add(structured.subject + " (" + structured.normType + ", отметка в " + nowStr + ")");
                         }
                     }
-                }
 
-                boolean hasTimeAppeared = (startedAt != null && raspId == null && !waitingForTeacher);
-                boolean isLessonDone = alreadyInHtml
-                                    || hasTimeAppeared
-                                    || (raspId != null && markedRaspIdsToday.contains(raspId));
-
-                String displayCheckTime = checkInTimeByStart.get(startTime);
-                if (displayCheckTime == null && startedAt != null) displayCheckTime = startedAt;
-                if (isLessonDone && displayCheckTime == null) {
-                    displayCheckTime = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
-                }
-
-                if (todayStr.equals(curDateStr) && allowedBySubgroup) {
-                    if (isLessonDone) {
-                        completedWindowsToday.add(startTime);
-                        waitingTeacherToday.remove(startTime);
-                        if (displayCheckTime != null) checkInTimeByStart.put(startTime, displayCheckTime);
-                    } else if (waitingForTeacher) {
-                        waitingTeacherToday.add(startTime);
-                    } else {
-                        waitingTeacherToday.remove(startTime);
+                    if (curDateStr != null) {
+                        JSONObject item = new JSONObject();
+                        item.put("time", timeRange);
+                        item.put("startTime", startTime);
+                        item.put("subjectTitle", structured.subject);
+                        item.put("lessonType", structured.normType);
+                        item.put("teacher", structured.teacher);
+                        item.put("room", structured.room);
+                        item.put("ruleKey", structured.ruleKey);
+                        item.put("checked", isLessonDone);
+                        item.put("waitingTeacher", waitingForTeacher && !isLessonDone);
+                        item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
+                        item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
+                        weekLessonsByDate.get(curDateStr).add(item);
                     }
-                }
-
-                if (curDateStr != null) {
-                    JSONObject item = new JSONObject();
-                    item.put("time", timeRange);
-                    item.put("startTime", startTime);
-                    item.put("subjectTitle", structured.subject);
-                    item.put("lessonType", structured.normType);
-                    item.put("teacher", structured.teacher);
-                    item.put("room", structured.room);
-                    item.put("ruleKey", structured.ruleKey);
-                    item.put("checked", isLessonDone);
-                    item.put("waitingTeacher", waitingForTeacher && !isLessonDone);
-                    item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
-                    item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
-                    weekLessonsByDate.get(curDateStr).add(item);
                 }
             }
 
@@ -693,8 +772,10 @@ public class ScheduleManager {
             Pattern dayNamePattern = Pattern.compile("(Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье)", Pattern.CASE_INSENSITIVE);
             Pattern dateValPattern = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");
             Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)");
+            Pattern pairNumPattern = Pattern.compile("^\\s*([1-7])\\s*(?:пара|\\(\\s*\\))", Pattern.CASE_INSENSITIVE);
             Pattern startedPattern = Pattern.compile("занятие\\s+началось\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
             Pattern waitBtnPattern = Pattern.compile("Кнопка\\s+появится\\s+в\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
+            Pattern boldCheckPat = Pattern.compile("<(b|strong)[^>]*>.*[А-Яа-яЁёA-Za-z]{3,}.*</\\1>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
             SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy", Locale.US);
             SimpleDateFormat shortDateFmt = new SimpleDateFormat("dd.MM", Locale.US);
@@ -714,6 +795,8 @@ public class ScheduleManager {
                 Map<String, List<JSONObject>> weekLessonsByDate = new LinkedHashMap<>();
                 Date anyDateInWeek = null;
                 String curDateStr = null;
+                String lastTimeRange = "";
+                String lastStartTime = "";
 
                 while (trMatcher.find()) {
                     String trInner = trMatcher.group(2);
@@ -724,9 +807,21 @@ public class ScheduleManager {
                     Matcher dm = dayNamePattern.matcher(rowText);
                     Matcher dateM = dateValPattern.matcher(rowText);
 
-                    if (!tm.find()) {
-                        if (dm.find() && dateM.find() && rowText.length() < 75) {
+                    String timeRange = null;
+                    String startTime = null;
+
+                    if (tm.find()) {
+                        timeRange = tm.group(0);
+                        int startH = Integer.parseInt(tm.group(1));
+                        int startM = Integer.parseInt(tm.group(2));
+                        startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
+                        lastTimeRange = timeRange;
+                        lastStartTime = startTime;
+                    } else {
+                        if (dm.find() && dateM.find() && rowText.length() < 80) {
                             curDateStr = dateM.group(1);
+                            lastTimeRange = "";
+                            lastStartTime = "";
                             if (!weekLessonsByDate.containsKey(curDateStr)) {
                                 weekLessonsByDate.put(curDateStr, new ArrayList<JSONObject>());
                             }
@@ -735,55 +830,66 @@ public class ScheduleManager {
                                     anyDateInWeek = df.parse(curDateStr);
                                 } catch (Exception ignored) {}
                             }
+                            continue;
                         }
-                        continue;
+                        Matcher pm = pairNumPattern.matcher(rowText);
+                        if (pm.find() && PAIR_NUM_TO_TIME.containsKey(pm.group(1))) {
+                            timeRange = PAIR_NUM_TO_TIME.get(pm.group(1));
+                            startTime = timeRange.substring(0, 5);
+                            lastTimeRange = timeRange;
+                            lastStartTime = startTime;
+                        } else if (curDateStr != null && !lastStartTime.isEmpty() && boldCheckPat.matcher(trInner).find()) {
+                            timeRange = lastTimeRange;
+                            startTime = lastStartTime;
+                        } else {
+                            continue;
+                        }
                     }
 
-                    String timeRange = tm.group(0);
-                    int startH = Integer.parseInt(tm.group(1));
-                    int startM = Integer.parseInt(tm.group(2));
-                    String startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
+                    List<ParsedRowDetails> variants = extractStructuredLessonsFromRow(trInner, timeRange);
 
-                    ParsedRowDetails det = extractStructuredLessonInfo(trInner, timeRange);
+                    for (ParsedRowDetails det : variants) {
+                        if ("Предмет".equals(det.subject)) continue;
 
-                    SubjectAgg agg = subjectMap.get(det.subject);
-                    if (agg == null) {
-                        agg = new SubjectAgg();
-                        agg.subject = det.subject;
-                        subjectMap.put(det.subject, agg);
-                    }
-                    if ("Лекция".equals(det.normType)) agg.lecCount++;
-                    else if ("Лаба".equals(det.normType)) agg.labCount++;
-                    else agg.pracCount++;
+                        SubjectAgg agg = subjectMap.get(det.subject);
+                        if (agg == null) {
+                            agg = new SubjectAgg();
+                            agg.subject = det.subject;
+                            subjectMap.put(det.subject, agg);
+                        }
+                        if ("Лекция".equals(det.normType)) agg.lecCount++;
+                        else if ("Лаба".equals(det.normType)) agg.labCount++;
+                        else agg.pracCount++;
 
-                    if (!det.teacher.isEmpty()) agg.teachers.add(det.teacher);
+                        if (!det.teacher.isEmpty()) agg.teachers.add(det.teacher);
 
-                    if (curDateStr != null) {
-                        Matcher sm = startedPattern.matcher(rowText);
-                        String startedAt = sm.find() ? sm.group(1) : "";
-                        Matcher wm = waitBtnPattern.matcher(rowText);
-                        String waitBtn = wm.find() ? wm.group(1) : "";
-                        String lowerRow = rowText.toLowerCase(Locale.ROOT);
-                        boolean waitingT = lowerRow.contains("ждем начала от преподавателя")
-                                        || lowerRow.contains("ждём начала от преподавателя");
-                        boolean done = lowerRow.contains("вы присутствуете")
-                                    || lowerRow.contains("отмечен")
-                                    || lowerRow.contains("присутствует")
-                                    || (!startedAt.isEmpty() && !waitingT);
+                        if (curDateStr != null) {
+                            Matcher sm = startedPattern.matcher(rowText);
+                            String startedAt = sm.find() ? sm.group(1) : "";
+                            Matcher wm = waitBtnPattern.matcher(rowText);
+                            String waitBtn = wm.find() ? wm.group(1) : "";
+                            String lowerRow = rowText.toLowerCase(Locale.ROOT);
+                            boolean waitingT = lowerRow.contains("ждем начала от преподавателя")
+                                            || lowerRow.contains("ждём начала от преподавателя");
+                            boolean done = lowerRow.contains("вы присутствуете")
+                                        || lowerRow.contains("отмечен")
+                                        || lowerRow.contains("присутствует")
+                                        || (!startedAt.isEmpty() && !waitingT);
 
-                        JSONObject lesObj = new JSONObject();
-                        lesObj.put("time", timeRange);
-                        lesObj.put("startTime", startTime);
-                        lesObj.put("subjectTitle", det.subject);
-                        lesObj.put("lessonType", det.normType);
-                        lesObj.put("teacher", det.teacher);
-                        lesObj.put("room", det.room);
-                        lesObj.put("ruleKey", det.ruleKey);
-                        lesObj.put("checked", done);
-                        lesObj.put("waitingTeacher", waitingT && !done);
-                        lesObj.put("checkTime", startedAt);
-                        lesObj.put("waitBtnTime", waitBtn);
-                        weekLessonsByDate.get(curDateStr).add(lesObj);
+                            JSONObject lesObj = new JSONObject();
+                            lesObj.put("time", timeRange);
+                            lesObj.put("startTime", startTime);
+                            lesObj.put("subjectTitle", det.subject);
+                            lesObj.put("lessonType", det.normType);
+                            lesObj.put("teacher", det.teacher);
+                            lesObj.put("room", det.room);
+                            lesObj.put("ruleKey", det.ruleKey);
+                            lesObj.put("checked", done);
+                            lesObj.put("waitingTeacher", waitingT && !done);
+                            lesObj.put("checkTime", startedAt);
+                            lesObj.put("waitBtnTime", waitBtn);
+                            weekLessonsByDate.get(curDateStr).add(lesObj);
+                        }
                     }
                 }
 
