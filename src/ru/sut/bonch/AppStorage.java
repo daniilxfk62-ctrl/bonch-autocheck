@@ -14,7 +14,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class AppStorage {
-    public static final String APP_VERSION = "01.04.04";
+    public static final String APP_VERSION = "01.04.05";
 
     public static final String FILE_CONFIG = "user_config_v4.json";
     public static final String FILE_SMART_RULES = "smart_rules_v4.json";
@@ -103,18 +103,37 @@ public class AppStorage {
     }
 
     public void saveUserConfig(String login, String pass, String interval, String mode) {
+        JSONObject existing = getUserConfig();
+        String autoUpd = existing.optString("autoUpdateHours", "2");
+        saveUserConfigFull(login, pass, interval, mode, autoUpd);
+    }
+
+    public void saveUserConfigFull(String login, String pass, String interval, String mode, String autoUpdateHours) {
         try {
             JSONObject cfg = new JSONObject();
             cfg.put("login", login != null ? login.trim() : "");
             cfg.put("password", pass != null ? pass.trim() : "");
             cfg.put("interval", (interval != null && !interval.isEmpty()) ? interval : "1");
             cfg.put("mode", (mode != null && !mode.isEmpty()) ? mode : "full_lesson");
+            cfg.put("autoUpdateHours", (autoUpdateHours != null && !autoUpdateHours.isEmpty()) ? autoUpdateHours : "2");
             writeText(FILE_CONFIG, cfg.toString());
         } catch (Exception ignored) {}
     }
 
     public JSONObject getUserConfig() {
-        return readJson(FILE_CONFIG, "{\"interval\":\"1\",\"mode\":\"full_lesson\"}");
+        return readJson(FILE_CONFIG, "{\"interval\":\"1\",\"mode\":\"full_lesson\",\"autoUpdateHours\":\"2\"}");
+    }
+
+    public long getAutoUpdateIntervalMillis() {
+        String hStr = getUserConfig().optString("autoUpdateHours", "2");
+        if ("0".equals(hStr) || "off".equalsIgnoreCase(hStr)) return 0L;
+        try {
+            double h = Double.parseDouble(hStr);
+            if (h <= 0) return 0L;
+            return (long) (h * 3600000L);
+        } catch (Exception e) {
+            return 7200000L;
+        }
     }
 
     public boolean isRuleAllowed(String ruleKey) {
@@ -129,32 +148,65 @@ public class AppStorage {
     }
 
     /**
-     * Проверяет, подходит ли пара по выбранной пользователем подгруппе (преподавателю/кабинету).
-     * Формат сохраненного значения для предмета: "Преподаватель||Кабинет" или "Преподаватель".
+     * Проверяет, подходит ли пара по выбранной пользователем группе/предмету на одно время.
+     * Поддерживает как выбор для конкретного слота ("SLOT||dowIdx||startTime" -> "Предмет||Препод||Кабинет"),
+     * так и выбор по названию предмета ("Предмет" -> "Препод||Кабинет").
      */
-    public boolean isSubgroupAllowed(String subject, String teacher, String room) {
-        if (subject == null || subject.isEmpty()) return true;
+    public boolean isSubgroupAllowed(int dowIdx, String startTime, String subject, String teacher, String room) {
         JSONObject choices = getGroupChoices();
-        if (!choices.has(subject)) return true;
-        String chosen = choices.optString(subject, "").trim();
-        if (chosen.isEmpty() || "ALL".equals(chosen)) return true;
-
+        String sNorm = subject != null ? subject.trim() : "";
         String tNorm = teacher != null ? teacher.trim() : "";
-        String rNorm = room != null ? room.trim() : "";
-        String combo = tNorm + "||" + rNorm;
-        if (chosen.equalsIgnoreCase(combo)) return true;
+        String rNorm = ScheduleManager.formatRoomClean(room != null ? room : "");
 
-        String[] parts = chosen.split("\\|\\|");
-        String chosenTeacher = parts.length > 0 ? parts[0].trim() : "";
-        String chosenRoom = parts.length > 1 ? parts[1].trim() : "";
+        // 1. Проверяем привязку к слоту времени (если в одно время стоят несколько разных предметов или несколько групп)
+        if (dowIdx >= 0 && startTime != null && !startTime.isEmpty()) {
+            String slotKey = "SLOT||" + dowIdx + "||" + startTime;
+            if (choices.has(slotKey)) {
+                String chosenSlot = choices.optString(slotKey, "").trim();
+                if (!chosenSlot.isEmpty() && !"ALL".equals(chosenSlot)) {
+                    if (!matchesChoiceToken(chosenSlot, sNorm, tNorm, rNorm)) {
+                        return false;
+                    }
+                }
+            }
+        }
 
-        if (!chosenTeacher.isEmpty() && !tNorm.isEmpty()) {
-            return chosenTeacher.equalsIgnoreCase(tNorm);
+        // 2. Проверяем привязку по названию предмета
+        if (!sNorm.isEmpty() && choices.has(sNorm)) {
+            String chosenSubj = choices.optString(sNorm, "").trim();
+            if (!chosenSubj.isEmpty() && !"ALL".equals(chosenSubj)) {
+                if (!matchesChoiceToken(chosenSubj, sNorm, tNorm, rNorm)) {
+                    return false;
+                }
+            }
         }
-        if (!chosenRoom.isEmpty() && !rNorm.isEmpty()) {
-            return chosenRoom.equalsIgnoreCase(rNorm);
-        }
+
         return true;
+    }
+
+    private boolean matchesChoiceToken(String chosenToken, String sNorm, String tNorm, String rNorm) {
+        String[] parts = chosenToken.split("\\|\\|");
+        if (parts.length >= 3) {
+            // Формат: Предмет||Преподаватель||Кабинет
+            String cSubj = parts[0].trim();
+            String cTeach = parts[1].trim();
+            String cRoom = ScheduleManager.formatRoomClean(parts[2].trim());
+            if (!cSubj.isEmpty() && !sNorm.isEmpty() && !cSubj.equalsIgnoreCase(sNorm)) return false;
+            if (!cTeach.isEmpty() && !tNorm.isEmpty() && !cTeach.equalsIgnoreCase(tNorm)) return false;
+            if (cTeach.isEmpty() && !cRoom.isEmpty() && !rNorm.isEmpty() && !cRoom.equalsIgnoreCase(rNorm)) return false;
+            return true;
+        } else {
+            // Формат: Преподаватель||Кабинет
+            String cTeach = parts.length > 0 ? parts[0].trim() : "";
+            String cRoom = parts.length > 1 ? ScheduleManager.formatRoomClean(parts[1].trim()) : "";
+            if (!cTeach.isEmpty() && !tNorm.isEmpty()) {
+                return cTeach.equalsIgnoreCase(tNorm);
+            }
+            if (!cRoom.isEmpty() && !rNorm.isEmpty()) {
+                return cRoom.equalsIgnoreCase(rNorm);
+            }
+            return true;
+        }
     }
 
     public boolean isNotifyDiaryEnabled() {
