@@ -80,6 +80,17 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String getGroupChoices() {
+            return storage.readText(AppStorage.FILE_GROUP_CHOICES, "{}");
+        }
+
+        @JavascriptInterface
+        public void saveGroupChoices(String choicesJsonStr) {
+            storage.writeText(AppStorage.FILE_GROUP_CHOICES, choicesJsonStr != null ? choicesJsonStr : "{}");
+            sendDaemonCommand("refresh_rules");
+        }
+
+        @JavascriptInterface
         public String getNotifPrefs() {
             return storage.readText(AppStorage.FILE_NOTIF_PREFS, "{\"notifyDiary\":true,\"notifySkippedLessons\":true}");
         }
@@ -105,6 +116,11 @@ public class MainActivity extends Activity {
         }
 
         @JavascriptInterface
+        public String getCachedDiaryAll() {
+            return storage.readText(AppStorage.FILE_DIARY_ALL, "[]");
+        }
+
+        @JavascriptInterface
         public String getState() {
             try {
                 boolean enabled = storage.isDaemonEnabled();
@@ -115,7 +131,7 @@ public class MainActivity extends Activity {
                 }
                 state.put("daysMtime", storage.getFileMtime(AppStorage.FILE_SEMESTER_DAYS));
                 state.put("catMtime", storage.getFileMtime(AppStorage.FILE_SMART_CATALOG));
-                state.put("diaryMtime", storage.getFileMtime(AppStorage.FILE_DIARY_RECENT));
+                state.put("diaryMtime", storage.getFileMtime(AppStorage.FILE_DIARY_ALL) + storage.getFileMtime(AppStorage.FILE_DIARY_RECENT));
                 return state.toString();
             } catch (Exception e) {
                 return "{}";
