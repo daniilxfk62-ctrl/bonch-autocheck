@@ -23,7 +23,9 @@ public class SutApiClient {
     public static final String[] DIARY_URLS = {
         BASE_URL + "/project/cabinet/forms/dnevnik.php",
         BASE_URL + "/project/cabinet/forms/jurnal.php",
-        BASE_URL + "/project/cabinet/forms/usp.php"
+        BASE_URL + "/project/cabinet/forms/stud_jurnal.php",
+        BASE_URL + "/project/cabinet/forms/usp.php",
+        BASE_URL + "/project/cabinet/forms/zach.php"
     };
 
     private CookieManager cookieManager;
@@ -83,13 +85,24 @@ public class SutApiClient {
         throw lastErr != null ? lastErr : new Exception("Ошибка соединения с lk.sut.ru");
     }
 
+    private int countValidCyrillic(String s) {
+        int count = 0;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if ((c >= 'А' && c <= 'я') || c == 'Ё' || c == 'ё') {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private String executeSingleRequest(String method, String urlStr, String postBody) throws Exception {
         URL url = new URL(urlStr);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
         conn.setRequestMethod(method);
         conn.setConnectTimeout(25000);
         conn.setReadTimeout(40000);
-        conn.setInstanceFollowRedirects(false);
+        conn.setInstanceFollowRedirects(true);
         conn.setRequestProperty("Connection", "close");
         conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/128.0.0.0 Mobile Safari/537.36");
         conn.setRequestProperty("Referer", LOGIN_PAGE_URL);
@@ -106,11 +119,6 @@ public class SutApiClient {
         }
 
         int code = conn.getResponseCode();
-        if (code >= 300 && code < 400) {
-            conn.disconnect();
-            return "";
-        }
-
         InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
         if (is == null) {
             conn.disconnect();
@@ -126,16 +134,17 @@ public class SutApiClient {
 
         byte[] bytes = baos.toByteArray();
         String utf8 = new String(bytes, Charset.forName("UTF-8"));
-        String lower = utf8.toLowerCase(Locale.ROOT);
-        if (lower.contains("расписание") || lower.contains("занят") || lower.contains("присутств")
-            || lower.contains("понедельник") || lower.contains("вторник") || lower.contains("дневник")
-            || lower.contains("оценк") || utf8.trim().equals("1")) {
-            return utf8;
-        }
+        if (utf8.trim().equals("1")) return utf8;
+
+        // Если в UTF-8 есть символы замены (\uFFFD) или в CP1251 нормальной кириллицы заметно больше — берем windows-1251
         String cp1251 = new String(bytes, Charset.forName("windows-1251"));
-        if (cp1251.toLowerCase(Locale.ROOT).contains("расписание")
-            || cp1251.toLowerCase(Locale.ROOT).contains("занят")
-            || cp1251.toLowerCase(Locale.ROOT).contains("дневник")) {
+        int cyrUtf8 = countValidCyrillic(utf8);
+        int cyrCp1251 = countValidCyrillic(cp1251);
+
+        if (utf8.indexOf('\uFFFD') != -1 && cyrCp1251 > cyrUtf8) {
+            return cp1251;
+        }
+        if (cyrCp1251 > cyrUtf8 * 2 && cyrCp1251 > 10) {
             return cp1251;
         }
         return utf8;
