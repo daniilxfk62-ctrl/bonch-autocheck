@@ -7,6 +7,7 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -67,7 +68,12 @@ public class DiaryMonitor {
             String todayDateShort = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
             Set<String> fetchedSubPages = new HashSet<>();
 
-            for (String url : SutApiClient.DIARY_URLS) {
+            Set<String> candidateUrls = new LinkedHashSet<>();
+            String discovered = storage.getDiscoveredEndpoints().optString("diary", "").trim();
+            if (!discovered.isEmpty()) candidateUrls.add(discovered);
+            for (String u : SutApiClient.DIARY_URLS) candidateUrls.add(u);
+
+            for (String url : candidateUrls) {
                 String html = "";
                 try {
                     html = api.httpRequest("POST", url, "");
@@ -89,7 +95,6 @@ public class DiaryMonitor {
                     newAlerts
                 );
 
-                // Проверяем, есть ли на странице кнопки раскрытия журнала по конкретным дисциплинам: open_uch(id) / open_zan / Subj
                 Pattern subCallPat = Pattern.compile("(?:open_uch|open_jurnal|show_jurnal|open_predm)\\s*\\(\\s*['\"]?(\\d+)['\"]?", Pattern.CASE_INSENSITIVE);
                 Matcher subMat = subCallPat.matcher(html);
                 while (subMat.find() && fetchedSubPages.size() < 25) {
@@ -115,7 +120,6 @@ public class DiaryMonitor {
                 }
             }
 
-            // Дополнительно синхронизируем посещаемость и пропуски из уже загруженных дней расписания (прошедшие даты)
             syncAttendanceFromScheduleDays(storage, uniqueAllEntries, recentEntries);
 
             storage.writeText(AppStorage.FILE_DIARY_SNAPSHOT, newSnap.toString());
@@ -133,6 +137,9 @@ public class DiaryMonitor {
             }
             storage.writeText(AppStorage.FILE_DIARY_RECENT, recentJson.toString());
 
+            // Формируем сводку в формате Pulse UI (посещаемость + история + оценки)
+            buildAndSavePulseSummary(storage, uniqueAllEntries);
+
             if (!newAlerts.isEmpty() && storage.isNotifyDiaryEnabled()) {
                 for (String alertText : newAlerts) {
                     String title = "📊 Новая запись в Дневнике!";
@@ -140,13 +147,85 @@ public class DiaryMonitor {
                     NotificationHelper.sendAlert(ctx, title, alertText);
                 }
             } else if (manualTrigger) {
-                storage.addLog("📚 Дневник обновлен (записей: " + uniqueAllEntries.size() + ", новых: " + newAlerts.size() + ").");
+                storage.addLog("📚 Дневник обновлён (записей: " + uniqueAllEntries.size() + ", новых: " + newAlerts.size() + ").");
             }
         } catch (Exception e) {
             if (manualTrigger) {
                 storage.addLog("Ошибка проверки Дневника: " + e.getMessage());
             }
         }
+    }
+
+    private static class SubjectDiaryStats {
+        String subject;
+        int attended = 0;
+        int total = 0;
+        List<Integer> history = new ArrayList<>();
+        List<String> grades = new ArrayList<>();
+        String credit = "Контроль";
+    }
+
+    public void buildAndSavePulseSummary(AppStorage storage, Map<String, JSONObject> uniqueAllEntries) {
+        try {
+            Map<String, SubjectDiaryStats> bySubject = new LinkedHashMap<>();
+            for (JSONObject entry : uniqueAllEntries.values()) {
+                if (entry == null) continue;
+                String subj = entry.optString("subject", "").trim();
+                String val = entry.optString("value", "").trim();
+                if (subj.isEmpty() || val.isEmpty()) continue;
+
+                SubjectDiaryStats st = bySubject.get(subj);
+                if (st == null) {
+                    st = new SubjectDiaryStats();
+                    st.subject = subj;
+                    bySubject.put(subj, st);
+                }
+
+                String low = val.toLowerCase(Locale.ROOT);
+                if ("+".equals(val) || low.contains("присутств")) {
+                    st.attended++;
+                    st.total++;
+                    st.history.add(1);
+                } else if ("н".equals(low) || "н/я".equals(low) || low.contains("неявк") || low.contains("пропуск")) {
+                    st.total++;
+                    st.history.add(0);
+                } else if (low.contains("зач")) {
+                    st.grades.add("Зачёт");
+                    st.credit = "Зачёт";
+                } else if (val.matches("^[2345]$")) {
+                    st.grades.add(val);
+                    st.credit = "Экзамен";
+                } else if (val.matches("^\\d+(?:[.,]\\d+)?$")) {
+                    st.grades.add(val);
+                }
+            }
+
+            JSONArray summaryArr = new JSONArray();
+            for (SubjectDiaryStats st : bySubject.values()) {
+                JSONObject obj = new JSONObject();
+                obj.put("id", "d_" + Math.abs(st.subject.hashCode()));
+                obj.put("subject", st.subject);
+                obj.put("attended", st.attended);
+                obj.put("total", st.total);
+
+                JSONArray histArr = new JSONArray();
+                int hStart = Math.max(0, st.history.size() - 10);
+                for (int i = hStart; i < st.history.size(); i++) {
+                    histArr.put(st.history.get(i));
+                }
+                obj.put("history", histArr);
+
+                JSONArray gradesArr = new JSONArray();
+                for (String g : st.grades) {
+                    gradesArr.put(g);
+                }
+                obj.put("grades", gradesArr);
+                obj.put("credit", st.credit);
+                summaryArr.put(obj);
+            }
+
+            storage.writeText(AppStorage.FILE_DIARY_SUMMARY, summaryArr.toString());
+        } catch (Exception ignored) {}
     }
 
     private void parseDiaryHtmlDocument(
@@ -183,7 +262,6 @@ public class DiaryMonitor {
             }
             if (cells.isEmpty()) continue;
 
-            // 1. Проверяем, не шапка ли это с датами (например: Предмет | 02.09 | 09.09 | 16.09 ...)
             int dateCountInRow = 0;
             for (String c : cells) {
                 if (dateRegex.matcher(c).find()) dateCountInRow++;
@@ -197,7 +275,6 @@ public class DiaryMonitor {
                 continue;
             }
 
-            // 2. Строка-заголовок названия предмета
             if (cells.size() == 1 && cyrillicSubjectRegex.matcher(cells.get(0)).find()
                 && cells.get(0).length() > 4 && cells.get(0).length() < 110) {
                 String cand = cells.get(0);
@@ -207,7 +284,6 @@ public class DiaryMonitor {
                 continue;
             }
 
-            // Определяем название предмета в строке
             String rowSubj = "";
             int firstDataCol = 1;
             for (int cIdx = 0; cIdx < Math.min(3, cells.size()); cIdx++) {
@@ -226,7 +302,6 @@ public class DiaryMonitor {
                 }
             }
 
-            // 3. Если есть шапка дат (матричная таблица журнала)
             if (!rowSubj.isEmpty() && !currentHeaderDates.isEmpty() && cells.size() >= 3) {
                 int maxCols = Math.min(cells.size(), currentHeaderDates.size());
                 for (int col = firstDataCol; col < maxCols; col++) {
@@ -241,7 +316,6 @@ public class DiaryMonitor {
                 continue;
             }
 
-            // 4. Построчная таблица дневника (где в одной из колонок есть дата dd.mm.yyyy или dd.mm, а в другой — оценка / Н / статус)
             String foundDate = "";
             int dateColIdx = -1;
             for (int i = 0; i < cells.size(); i++) {
@@ -257,7 +331,6 @@ public class DiaryMonitor {
                 String subjName = !rowSubj.isEmpty() ? rowSubj : (!currentSectionSubject.isEmpty() ? currentSectionSubject : "");
                 if (subjName.isEmpty()) continue;
 
-                // Ищем ячейку со значением оценки или пропуска (с конца строки)
                 String extractedVal = "";
                 for (int i = cells.size() - 1; i >= 0; i--) {
                     if (i == dateColIdx) continue;
@@ -276,7 +349,6 @@ public class DiaryMonitor {
                         extractedVal = "+";
                         break;
                     }
-                    // Если в последней колонке стоит оценка с комментарием
                     Matcher numInside = Pattern.compile("(?:оценка|балл|отметка)?\\s*[:=-]?\\s*([2345])\\b", Pattern.CASE_INSENSITIVE).matcher(v);
                     if (numInside.find()) {
                         extractedVal = numInside.group(1);
@@ -327,10 +399,6 @@ public class DiaryMonitor {
         }
     }
 
-    /**
-     * Дополняет Дневник данными о посещениях/пропусках из расписания (по прошедшим дням семестра),
-     * чтобы статистика пропусков (Н) и посещаемости работала даже тогда, когда преподаватель ведет учет только через кнопки в расписании.
-     */
     private void syncAttendanceFromScheduleDays(
         AppStorage storage,
         Map<String, JSONObject> uniqueAllEntries,
@@ -372,11 +440,9 @@ public class DiaryMonitor {
                         continue;
                     }
 
-                    // Если это сегодняшний день и пара еще не закончилась — не ставим пропуск
                     if (isToday && !checked) continue;
 
                     String schedKey = subj + "||" + shortDate + "||sched_" + st;
-                    // Проверяем, нет ли уже оценки из журнала за эту дату по этому предмету
                     boolean alreadyHasJournalEntry = false;
                     for (String existingKey : uniqueAllEntries.keySet()) {
                         if (existingKey.startsWith(subj + "||" + shortDate + "||") && !existingKey.contains("sched_")) {

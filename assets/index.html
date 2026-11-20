@@ -1,43 +1,4478 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
-<title>Bonch AutoCheck</title>
-<style>
-  * { -webkit-tap-highlight-color: transparent; }
-  body { margin:0; background:#090d16; color:#f8fafc; font-family:system-ui,-apple-system,sans-serif; overflow-x:hidden; }
-  .page-pad { padding:12px 12px 76px 12px; }
-  .card { background:#111827; border:1px solid #1e293b; border-radius:20px; padding:16px; max-width:460px; margin:0 auto; }
-  .section-box { background:#0f172a; border:1px solid #1e293b; border-radius:16px; padding:14px; margin-bottom:12px; }
-  .section-title { font-size:13px; font-weight:900; color:#fb923c; margin-bottom:8px; display:flex; align-items:center; gap:6px; text-transform:uppercase; letter-spacing:0.4px; }
-  .lbl { font-size:11px; color:#94a3b8; margin-top:4px; display:block; }
-  input, select { width:100%; box-sizing:border-box; padding:11px; margin:4px 0 10px; border-radius:10px; border:1px solid #334155; background:#1e293b; color:#fff; font-size:14px; outline:none; }
-  .btn { width:100%; padding:15px; border-radius:12px; border:none; background:#2563eb; color:#fff; font-weight:800; font-size:15px; margin-top:6px; }
-  .btn.on { background:#dc2626; }
-  .btn-once { width:100%; padding:13px; border-radius:12px; border:1px solid #f59e0b; background:linear-gradient(135deg,#78350f 0%,#451a03 100%); color:#fde68a; font-weight:800; font-size:13px; margin-top:8px; }
-  .btn-once.on { background:#dc2626; border-color:#f87171; color:#fff; }
-  .btn-sec { width:100%; padding:11px; border-radius:12px; border:1px solid #334155; background:#1e293b; color:#cbd5e1; font-weight:600; font-size:12px; margin-top:7px; }
-  .status-card { margin:12px 0 6px; padding:12px 14px; background:#0f172a; border:1px solid #334155; border-left:4px solid #64748b; border-radius:12px; }
-  .status-card.on { border-left-color:#34d399; background:#06281e; border-color:#059669; }
-  .status-title { font-size:11px; color:#94a3b8; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px; font-weight:700; }
-  .status-val { font-size:14px; font-weight:800; color:#f8fafc; line-height:1.35; }
-  .profile-pill { display:flex; justify-content:space-between; align-items:center; background:#0f172a; border:1px solid #1e293b; border-radius:12px; padding:10px 12px; margin-bottom:10px; font-size:12px; color:#cbd5e1; cursor:pointer; }
-  .dev-panel { display:none; margin-top:12px; padding:12px; background:#090d16; border:1px dashed #f97316; border-radius:12px; }
-  .dev-hdr { font-size:11px; font-weight:800; color:#f97316; margin-bottom:6px; display:flex; justify-content:space-between; }
-  .log { background:#05080f; border:1px solid #1e293b; border-radius:8px; padding:8px; font-family:monospace; font-size:11px; height:120px; overflow-y:auto; white-space:pre-wrap; color:#cbd5e1; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Pulse — Автоотметка</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #ffffff;
+      --bg-outer: #f2f2f5;
+      --surface: #f7f7f9;
+      --surface-hover: #efeff3;
+      --surface-elevated: #ffffff;
+      --border: rgba(0, 0, 0, 0.075);
+      --border-strong: rgba(0, 0, 0, 0.14);
+      --text: #0d0d0f;
+      --text-secondary: #6e6e73;
+      --text-muted: #9a9aa2;
+      --ink: #0d0d0f;
+      --ink-text: #ffffff;
+      --accent: #7c3aed;
+      --accent-soft: rgba(124, 58, 237, 0.10);
+      --accent-ring: rgba(124, 58, 237, 0.25);
 
-  /* Секретная кнопка версии: абсолютно без визуального отклика при нажатии */
-  .ver-footer {
-    margin-top:14px;
-    padding:10px;
-    border-top:1px solid #1e293b;
-    text-align:center;
-    font-size:12px;
-    font-weight:800;
-    color:#f97316;
-    letter-spacing:0.5px;
-    user-select:none;
-    -webkit-user-select:none;
-    -webkit-tap-highlight-color:transparent !important;
-    outline:
+      /* Harmonious Apple-style Lesson Type Palette (Light) */
+      --type-lecture: #0284c7;
+      --type-lecture-bar: #38bdf8;
+      --type-lecture-soft: rgba(14, 165, 233, 0.11);
+      --type-lecture-ring: rgba(14, 165, 233, 0.28);
+
+      --type-practice: #16a34a;
+      --type-practice-bar: #4ade80;
+      --type-practice-soft: rgba(34, 197, 94, 0.12);
+      --type-practice-ring: rgba(34, 197, 94, 0.28);
+
+      --type-lab: #dc2626;
+      --type-lab-bar: #f87171;
+      --type-lab-soft: rgba(239, 68, 68, 0.10);
+      --type-lab-ring: rgba(239, 68, 68, 0.26);
+
+      --dock-bg: rgba(255, 255, 255, 0.82);
+      --dock-pill: rgba(0, 0, 0, 0.06);
+      --sheet-bg: #ffffff;
+      --backdrop: rgba(0, 0, 0, 0.32);
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
+      --shadow-dock: 0 10px 34px rgba(0, 0, 0, 0.09);
+      --shadow-frame: 0 26px 76px rgba(0, 0, 0, 0.12);
+
+      /* Apple Spring Curves */
+      --spring: cubic-bezier(0.32, 0.72, 0, 1);
+      --spring-bounce: cubic-bezier(0.34, 1.48, 0.64, 1);
+      --spring-snappy: cubic-bezier(0.2, 0.9, 0.25, 1);
+
+      --danger: #dc2626;
+      --danger-soft: rgba(220, 38, 38, 0.10);
+    }
+
+    [data-theme="dark"] {
+      --bg: #070709;
+      --bg-outer: #020203;
+      --surface: #121215;
+      --surface-hover: #1b1b20;
+      --surface-elevated: #17171b;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.15);
+      --text: #f5f5f7;
+      --text-secondary: #8e8e93;
+      --text-muted: #5a5a62;
+      --ink: #f5f5f7;
+      --ink-text: #070709;
+      --accent: #8b5cf6;
+      --accent-soft: rgba(139, 92, 246, 0.16);
+      --accent-ring: rgba(139, 92, 246, 0.34);
+
+      /* Harmonious Apple-style Lesson Type Palette (Dark) */
+      --type-lecture: #38bdf8;
+      --type-lecture-bar: #38bdf8;
+      --type-lecture-soft: rgba(56, 189, 248, 0.14);
+      --type-lecture-ring: rgba(56, 189, 248, 0.32);
+
+      --type-practice: #4ade80;
+      --type-practice-bar: #4ade80;
+      --type-practice-soft: rgba(74, 222, 128, 0.14);
+      --type-practice-ring: rgba(74, 222, 128, 0.32);
+
+      --type-lab: #f87171;
+      --type-lab-bar: #f87171;
+      --type-lab-soft: rgba(248, 113, 113, 0.14);
+      --type-lab-ring: rgba(248, 113, 113, 0.32);
+
+      --dock-bg: rgba(16, 16, 20, 0.84);
+      --dock-pill: rgba(255, 255, 255, 0.09);
+      --sheet-bg: #121216;
+      --backdrop: rgba(0, 0, 0, 0.66);
+      --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
+      --shadow-dock: 0 12px 36px rgba(0, 0, 0, 0.6);
+      --shadow-frame: 0 28px 84px rgba(0, 0, 0, 0.72);
+      --danger: #f87171;
+      --danger-soft: rgba(248, 113, 113, 0.15);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-outer);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      transition: background-color 0.3s var(--spring), color 0.3s var(--spring);
+      user-select: none;
+    }
+
+    input, textarea {
+      user-select: text;
+    }
+
+    .app-viewport {
+      width: 100%;
+      height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .phone-shell {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      transition: background-color 0.3s var(--spring), border-color 0.3s var(--spring);
+    }
+
+    @media (min-width: 520px) {
+      .phone-shell {
+        max-width: 430px;
+        height: min(860px, 94dvh);
+        border-radius: 38px;
+        border: 1px solid var(--border-strong);
+        box-shadow: var(--shadow-frame);
+      }
+    }
+
+    .tabular {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Dynamic Island Style Toast */
+    .toast {
+      position: absolute;
+      top: max(14px, env(safe-area-inset-top));
+      left: 50%;
+      transform: translate(-50%, -150%) scale(0.88);
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: var(--ink);
+      color: var(--ink-text);
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      max-width: calc(100% - 32px);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform 0.44s var(--spring-bounce), opacity 0.25s ease;
+    }
+
+    .toast.show {
+      transform: translate(-50%, 0) scale(1);
+      opacity: 1;
+    }
+
+    .toast-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    /* Main Content Stage with Apple Directional Tab Transitions */
+    .tab-stage {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+      touch-action: pan-y;
+    }
+
+    .tab-view {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      opacity: 0;
+      pointer-events: none;
+      transform: translate3d(24px, 0, 0) scale(0.99);
+      transition: opacity 0.28s var(--spring), transform 0.36s var(--spring);
+      will-change: transform, opacity;
+    }
+
+    .tab-view.from-left {
+      transform: translate3d(-24px, 0, 0) scale(0.99);
+    }
+
+    .tab-view.from-right {
+      transform: translate3d(24px, 0, 0) scale(0.99);
+    }
+
+    .tab-view.active {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+
+    .scroll-area {
+      flex: 1;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding: 12px 18px 106px;
+      scrollbar-width: none;
+    }
+
+    .scroll-area::-webkit-scrollbar {
+      display: none;
+    }
+
+    /* Stagger Entrance */
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translate3d(0, 10px, 0);
+      }
+      to {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+      }
+    }
+
+    .anim-in {
+      animation: fadeSlideUp 0.36s var(--spring) both;
+    }
+
+    /* Top Header */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: max(18px, env(safe-area-inset-top)) 18px 12px;
+      flex-shrink: 0;
+      background: var(--bg);
+      z-index: 10;
+    }
+
+    .top-title {
+      font-size: 24px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+    }
+
+    .top-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+      letter-spacing: -0.01em;
+    }
+
+    /* Apple Tactile Interactive Controls */
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.22s var(--spring-bounce), background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .icon-btn:hover {
+      background: var(--surface-hover);
+    }
+
+    .icon-btn:active {
+      transform: scale(0.86);
+    }
+
+    .icon-btn svg {
+      transition: transform 0.36s var(--spring-bounce);
+    }
+
+    .icon-btn.spin svg {
+      transform: rotate(180deg);
+    }
+
+    .tap {
+      cursor: pointer;
+      transition: transform 0.22s var(--spring), background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .tap:active {
+      transform: scale(0.972);
+    }
+
+    /* Apple Button Press Ripple */
+    .btn-spring {
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.22s var(--spring-bounce), background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+    }
+
+    .btn-spring:active {
+      transform: scale(0.93);
+    }
+
+    /* Auto-check Master Card */
+    .auto-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 15px 16px;
+      border-radius: 22px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 18px;
+      transition: border-color 0.3s var(--spring), background-color 0.3s var(--spring), transform 0.22s var(--spring);
+    }
+
+    .auto-card.is-on {
+      border-color: var(--accent-ring);
+    }
+
+    .auto-toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 36px;
+      padding: 0 15px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      flex-shrink: 0;
+      background: var(--ink);
+      color: var(--ink-text);
+      transition: transform 0.22s var(--spring-bounce), background-color 0.24s ease, color 0.24s ease, border-color 0.24s ease;
+    }
+
+    .auto-toggle-btn:active {
+      transform: scale(0.91);
+    }
+
+    .auto-toggle-btn.is-on {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: var(--accent-ring);
+    }
+
+    .auto-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .pulse-wrap {
+      position: relative;
+      width: 10px;
+      height: 10px;
+      flex-shrink: 0;
+    }
+
+    .pulse-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: background-color 0.28s ease;
+    }
+
+    .auto-card.is-on .pulse-dot {
+      background: var(--accent);
+    }
+
+    .auto-card.is-on .pulse-wrap::after {
+      content: '';
+      position: absolute;
+      inset: -4px;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent);
+      opacity: 0;
+      animation: pulseRing 2.2s infinite;
+    }
+
+    @keyframes pulseRing {
+      0% { transform: scale(0.7); opacity: 0.72; }
+      100% { transform: scale(1.8); opacity: 0; }
+    }
+
+    .auto-title {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .auto-desc {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+      margin-top: 1px;
+    }
+
+    /* Apple iOS Elastic Switch */
+    .switch {
+      position: relative;
+      width: 50px;
+      height: 30px;
+      border-radius: 999px;
+      background: var(--border-strong);
+      border: none;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background-color 0.28s var(--spring);
+    }
+
+    .switch::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: #ffffff;
+      box-shadow: 0 2px 7px rgba(0, 0, 0, 0.22);
+      transition: transform 0.34s var(--spring-bounce), width 0.18s var(--spring);
+    }
+
+    .switch:active::after {
+      width: 29px;
+    }
+
+    .switch[aria-checked="true"] {
+      background: var(--accent);
+    }
+
+    .switch[aria-checked="true"]::after {
+      transform: translateX(20px);
+    }
+
+    .switch[aria-checked="true"]:active::after {
+      transform: translateX(15px);
+    }
+
+    /* Section Label */
+    .section-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      letter-spacing: 0.01em;
+      margin: 0 2px 10px;
+    }
+
+    /* Lesson Type Color Classes */
+    .type-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .type-lecture {
+      background: var(--type-lecture-soft);
+      color: var(--type-lecture);
+    }
+
+    .type-practice {
+      background: var(--type-practice-soft);
+      color: var(--type-practice);
+    }
+
+    .type-lab {
+      background: var(--type-lab-soft);
+      color: var(--type-lab);
+    }
+
+    /* Class Card */
+    .class-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .class-card {
+      position: relative;
+      padding: 15px 16px 15px 19px;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+
+    .class-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 14px;
+      bottom: 14px;
+      width: 3px;
+      border-radius: 0 4px 4px 0;
+      background: var(--border-strong);
+      transition: background-color 0.25s ease;
+    }
+
+    .class-card.bar-lecture::before { background: var(--type-lecture-bar); }
+    .class-card.bar-practice::before { background: var(--type-practice-bar); }
+    .class-card.bar-lab::before { background: var(--type-lab-bar); }
+
+    .class-card.is-live {
+      background: var(--surface-elevated);
+      border-color: var(--border-strong);
+    }
+
+    .class-card.is-past {
+      opacity: 0.54;
+      filter: saturate(0.65);
+    }
+
+    .class-card.is-past:hover,
+    .class-card.is-past:active {
+      opacity: 0.86;
+      filter: saturate(1);
+    }
+
+    .class-card.is-done:not(.is-past) {
+      opacity: 0.76;
+    }
+
+    .class-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .class-time {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 500;
+      background: var(--surface-hover);
+      color: var(--text-secondary);
+    }
+
+    .badge.accent {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .badge.ink {
+      background: var(--ink);
+      color: var(--ink-text);
+    }
+
+    .badge-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .class-name {
+      font-size: 15.5px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.28;
+      margin-bottom: 6px;
+    }
+
+    .class-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    .class-meta {
+      font-size: 12.5px;
+      color: var(--text-secondary);
+    }
+
+    .class-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 13px;
+      padding-top: 11px;
+      border-top: 1px solid var(--border);
+    }
+
+    .check-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 34px;
+      padding: 0 15px;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      transition: transform 0.22s var(--spring-bounce), background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease;
+    }
+
+    .check-btn:active {
+      transform: scale(0.91);
+    }
+
+    .check-btn.primary {
+      background: var(--ink);
+      color: var(--ink-text);
+    }
+
+    .check-btn.checked {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: var(--accent-ring);
+      animation: popCheck 0.38s var(--spring-bounce);
+    }
+
+    @keyframes popCheck {
+      0% { transform: scale(0.86); }
+      60% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+
+    .spinner {
+      width: 13px;
+      height: 13px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.65s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ===== TAB 2: CONTINUOUS MULTI-WEEK TIKTOK SCHEDULE ===== */
+    .sched-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: max(16px, env(safe-area-inset-top)) 18px 8px;
+      background: var(--bg);
+      flex-shrink: 0;
+      z-index: 12;
+    }
+
+    .week-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .week-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.2s var(--spring-bounce), background-color 0.18s ease;
+    }
+
+    .week-btn:hover {
+      background: var(--surface-hover);
+    }
+
+    .week-btn:active {
+      transform: scale(0.84);
+    }
+
+    .week-label {
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 0 8px;
+      letter-spacing: -0.01em;
+    }
+
+    .pill-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 32px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.2s var(--spring-bounce), background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .pill-btn:active {
+      transform: scale(0.92);
+    }
+
+    /* Vertical Spatial Day Rail (matches vertical scroll direction) */
+    .day-rail {
+      position: absolute;
+      right: 8px;
+      top: 50%;
+      transform: translateY(-58%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 3px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      z-index: 15;
+    }
+
+    .rail-pill {
+      position: absolute;
+      top: 5px;
+      left: 3px;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: var(--ink);
+      pointer-events: none;
+      z-index: 1;
+      transition: transform 0.34s var(--spring);
+      will-change: transform;
+    }
+
+    .rail-day {
+      position: relative;
+      z-index: 2;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 10.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: color 0.22s ease, transform 0.2s var(--spring-bounce);
+    }
+
+    .rail-day:active {
+      transform: scale(0.86);
+    }
+
+    .rail-day.active {
+      color: var(--ink-text);
+    }
+
+    .rail-day.is-today:not(.active) {
+      color: var(--accent);
+    }
+
+    .rail-day.is-today::after {
+      content: '';
+      position: absolute;
+      bottom: 3px;
+      width: 3.5px;
+      height: 3.5px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .rail-day.is-today.active::after {
+      background: var(--accent);
+    }
+
+    .filter-strip {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 18px 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
+    }
+
+    .filter-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .filter-chip {
+      height: 27px;
+      padding: 0 11px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 500;
+      white-space: nowrap;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: transform 0.2s var(--spring-bounce), background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .filter-chip:active {
+      transform: scale(0.92);
+    }
+
+    .filter-chip.active {
+      background: var(--ink);
+      color: var(--ink-text);
+      border-color: var(--ink);
+    }
+
+    .filter-chip.active.f-lecture {
+      background: var(--type-lecture-soft);
+      color: var(--type-lecture);
+      border-color: var(--type-lecture-ring);
+    }
+
+    .filter-chip.active.f-practice {
+      background: var(--type-practice-soft);
+      color: var(--type-practice);
+      border-color: var(--type-practice-ring);
+    }
+
+    .filter-chip.active.f-lab {
+      background: var(--type-lab-soft);
+      color: var(--type-lab);
+      border-color: var(--type-lab-ring);
+    }
+
+    .color-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .dot-lecture { background: var(--type-lecture-bar); }
+    .dot-practice { background: var(--type-practice-bar); }
+    .dot-lab { background: var(--type-lab-bar); }
+
+    .snap-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .day-feed {
+      height: 100%;
+      overflow-y: auto;
+      scroll-snap-type: y mandatory;
+      scroll-behavior: smooth;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .day-feed::-webkit-scrollbar {
+      display: none;
+    }
+
+    .day-slide {
+      height: 100%;
+      scroll-snap-align: start;
+      scroll-snap-stop: always;
+      padding: 8px 48px 104px 18px;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .day-slide::-webkit-scrollbar {
+      display: none;
+    }
+
+    .day-hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .day-num-row {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+    }
+
+    .day-big-num {
+      font-size: 38px;
+      font-weight: 600;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .day-name-col {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .day-weekday {
+      font-size: 15.5px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .day-month {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .day-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      flex: 1;
+    }
+
+    .mini-lesson {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 12px 13px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .mini-time {
+      width: 44px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .mini-time strong {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .mini-time span {
+      color: var(--text-muted);
+    }
+
+    .mini-divider {
+      width: 3px;
+      height: 32px;
+      border-radius: 3px;
+      background: var(--border-strong);
+      flex-shrink: 0;
+    }
+
+    .mini-divider.bar-lecture { background: var(--type-lecture-bar); }
+    .mini-divider.bar-practice { background: var(--type-practice-bar); }
+    .mini-divider.bar-lab { background: var(--type-lab-bar); }
+
+    .mini-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .mini-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .mini-sub-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .mini-sub {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+
+    .next-day-hint {
+      margin-top: auto;
+      padding-top: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .sched-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-btn.sm {
+      width: 34px;
+      height: 34px;
+      position: relative;
+    }
+
+    .icon-btn .filter-dot {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .next-day-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.2s var(--spring-bounce), color 0.2s ease;
+    }
+
+    .next-day-pill:hover {
+      color: var(--text-secondary);
+    }
+
+    .next-day-pill.week-jump {
+      color: var(--accent);
+    }
+
+    .next-day-pill:active {
+      transform: scale(0.93);
+    }
+
+
+
+    .empty-day {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      padding: 24px 0;
+    }
+
+    .empty-day strong {
+      color: var(--text);
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .empty-day span {
+      font-size: 13px;
+    }
+
+    /* ===== SEGMENTED CONTROL ===== */
+    .segment-wrap {
+      padding: 0 18px 12px;
+      flex-shrink: 0;
+    }
+
+    .segment {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 3px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .segment.three {
+      grid-template-columns: 1fr 1fr 1fr;
+    }
+
+    .seg-btn {
+      position: relative;
+      z-index: 2;
+      height: 34px;
+      border: none;
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      border-radius: 11px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: color 0.22s ease, background-color 0.22s ease, transform 0.18s var(--spring-bounce), box-shadow 0.22s ease;
+    }
+
+    .seg-btn:active {
+      transform: scale(0.96);
+    }
+
+    .seg-btn.active {
+      background: var(--surface-elevated);
+      color: var(--text);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    }
+
+    .unread-count {
+      min-width: 17px;
+      height: 17px;
+      padding: 0 5px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 10.5px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* ===== TAB 3: MESSAGES & FILES ===== */
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 38px;
+      padding: 0 12px;
+      margin-bottom: 12px;
+      border-radius: 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      transition: border-color 0.2s ease;
+    }
+
+    .search-box:focus-within {
+      border-color: var(--accent-ring);
+    }
+
+    .search-box input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13.5px;
+    }
+
+    .search-box input::placeholder {
+      color: var(--text-muted);
+    }
+
+    .msg-item, .file-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .msg-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .msg-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .msg-name {
+      font-size: 14.5px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .msg-time {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .msg-preview {
+      font-size: 13px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-top: 2px;
+    }
+
+    .unread-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .file-ext {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    /* ===== TAB 4: DIARY ===== */
+    .kpi-card {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 18px;
+      border-radius: 22px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 14px;
+    }
+
+    .ring-wrap {
+      position: relative;
+      width: 86px;
+      height: 86px;
+      flex-shrink: 0;
+    }
+
+    .ring-svg {
+      width: 86px;
+      height: 86px;
+      transform: rotate(-90deg);
+    }
+
+    .ring-track {
+      fill: none;
+      stroke: var(--border-strong);
+      stroke-width: 7;
+    }
+
+    .ring-fill {
+      fill: none;
+      stroke: var(--accent);
+      stroke-width: 7;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.7s var(--spring);
+    }
+
+    .ring-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ring-val {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    .kpi-stats {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .kpi-stat-label {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      margin-bottom: 3px;
+    }
+
+    .kpi-stat-val {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+    }
+
+    .diary-card {
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 9px;
+    }
+
+    .diary-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .diary-name {
+      font-size: 14.5px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+
+    .diary-pct {
+      font-size: 13.5px;
+      font-weight: 600;
+    }
+
+    .bar-track {
+      width: 100%;
+      height: 5px;
+      border-radius: 999px;
+      background: var(--border);
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: var(--ink);
+      transition: width 0.55s var(--spring);
+    }
+
+    .bar-fill.high {
+      background: var(--accent);
+    }
+
+    .diary-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .dots-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .att-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--ink);
+    }
+
+    .att-dot.miss {
+      background: var(--border-strong);
+    }
+
+    .grades-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .grade-pill {
+      min-width: 28px;
+      height: 28px;
+      padding: 0 9px;
+      border-radius: 9px;
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .grade-pill.top {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
+
+    /* ===== TAB 5: SETTINGS & SUBJECT RULES ===== */
+    .settings-group {
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .settings-row:last-child {
+      border-bottom: none;
+    }
+
+    .row-title {
+      font-size: 14.5px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    .row-sub {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .chip-group {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+
+    .toggle-chip {
+      height: 30px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: transform 0.2s var(--spring-bounce), background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+
+    .toggle-chip:active {
+      transform: scale(0.91);
+    }
+
+    .toggle-chip.active {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
+
+    .toggle-chip.active.c-lecture {
+      background: var(--type-lecture-soft);
+      border-color: var(--type-lecture-ring);
+      color: var(--type-lecture);
+    }
+
+    .toggle-chip.active.c-practice {
+      background: var(--type-practice-soft);
+      border-color: var(--type-practice-ring);
+      color: var(--type-practice);
+    }
+
+    .toggle-chip.active.c-lab {
+      background: var(--type-lab-soft);
+      border-color: var(--type-lab-ring);
+      color: var(--type-lab);
+    }
+
+    .account-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .account-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    /* Subject Rule Matrix Card inside Sheet */
+    .rule-card {
+      padding: 13px 14px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 10px;
+    }
+
+    .rule-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .rule-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+    }
+
+    .rule-pills {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    .preset-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    /* ===== FLOATING APPLE BOTTOM DOCK WITH LIQUID SLIDING INDICATOR ===== */
+    .bottom-dock {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: max(12px, env(safe-area-inset-bottom));
+      z-index: 40;
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      padding: 6px;
+      border-radius: 26px;
+      background: var(--dock-bg);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-dock);
+    }
+
+    .dock-indicator {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      width: calc((100% - 12px) / 5);
+      height: 52px;
+      border-radius: 20px;
+      background: var(--dock-pill);
+      pointer-events: none;
+      z-index: 1;
+      transition: transform 0.38s var(--spring);
+      will-change: transform;
+    }
+
+    .dock-item {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      height: 52px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-family: inherit;
+      cursor: pointer;
+      border-radius: 20px;
+      transition: color 0.24s ease, transform 0.2s var(--spring-bounce);
+    }
+
+    .dock-item:active {
+      transform: scale(0.88);
+    }
+
+    .dock-item.active {
+      color: var(--text);
+    }
+
+    .dock-item.active svg {
+      transform: scale(1.06);
+      transition: transform 0.3s var(--spring-bounce);
+    }
+
+    .dock-item span {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+    }
+
+    .dock-badge {
+      position: absolute;
+      top: 7px;
+      right: calc(50% - 14px);
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    /* ===== APPLE BOTTOM SHEET WITH SWIPE-TO-DISMISS ===== */
+    .sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 60;
+      background: var(--backdrop);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.28s var(--spring);
+    }
+
+    .sheet-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .sheet {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 70;
+      max-height: 84%;
+      display: flex;
+      flex-direction: column;
+      background: var(--sheet-bg);
+      border-top: 1px solid var(--border);
+      border-radius: 28px 28px 0 0;
+      padding: 10px 20px max(24px, env(safe-area-inset-bottom));
+      transform: translate3d(0, 105%, 0);
+      transition: transform 0.4s var(--spring);
+      will-change: transform;
+    }
+
+    .sheet.open {
+      transform: translate3d(0, 0, 0);
+    }
+
+    .sheet.dragging {
+      transition: none;
+    }
+
+    .sheet-handle-zone {
+      padding: 4px 0 14px;
+      cursor: grab;
+      flex-shrink: 0;
+      touch-action: none;
+    }
+
+    .sheet-handle {
+      width: 38px;
+      height: 4.5px;
+      border-radius: 999px;
+      background: var(--border-strong);
+      margin: 0 auto;
+    }
+
+    .sheet-scroll {
+      overflow-y: auto;
+      scrollbar-width: none;
+    }
+
+    .sheet-scroll::-webkit-scrollbar {
+      display: none;
+    }
+
+    .sheet-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.025em;
+      margin-bottom: 4px;
+    }
+
+    .sheet-sub {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+    }
+
+    .field input {
+      width: 100%;
+      height: 44px;
+      padding: 0 14px;
+      border-radius: 14px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .field input:focus {
+      border-color: var(--accent);
+    }
+
+    .full-btn {
+      width: 100%;
+      height: 46px;
+      border-radius: 15px;
+      border: none;
+      background: var(--ink);
+      color: var(--ink-text);
+      font-family: inherit;
+      font-size: 14.5px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 0.2s var(--spring-bounce), opacity 0.2s ease;
+    }
+
+    .full-btn:active {
+      transform: scale(0.96);
+    }
+
+    .full-btn.secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+
+    .full-btn.danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    /* Chat Bubbles inside Sheet */
+    .chat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .bubble {
+      max-width: 86%;
+      padding: 10px 13px;
+      border-radius: 16px;
+      font-size: 13.5px;
+      line-height: 1.4;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      align-self: flex-start;
+    }
+
+    .bubble.me {
+      background: var(--ink);
+      color: var(--ink-text);
+      border-color: transparent;
+      align-self: flex-end;
+    }
+
+    .bubble-time {
+      display: block;
+      font-size: 10.5px;
+      opacity: 0.6;
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .chat-compose {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chat-compose input {
+      flex: 1;
+      height: 42px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13.5px;
+      outline: none;
+    }
+
+    .chat-compose input:focus {
+      border-color: var(--accent);
+    }
+
+    .send-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      border: none;
+      background: var(--ink);
+      color: var(--ink-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.2s var(--spring-bounce);
+    }
+
+    .send-btn:active {
+      transform: scale(0.88);
+    }
+
+    /* ===== WELCOME ONBOARDING & DETAILS OVERLAY ===== */
+    .onboard-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 85;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      opacity: 0;
+      pointer-events: none;
+      transform: scale(1.03);
+      transition: opacity 0.42s var(--spring), transform 0.48s var(--spring);
+    }
+
+    .onboard-overlay.open {
+      opacity: 1;
+      pointer-events: auto;
+      transform: scale(1);
+    }
+
+    .onboard-pages {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .onboard-page {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      padding: max(18px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+      overflow-y: auto;
+      scrollbar-width: none;
+      transition: transform 0.44s var(--spring), opacity 0.34s var(--spring);
+      will-change: transform, opacity;
+    }
+
+    .onboard-page::-webkit-scrollbar {
+      display: none;
+    }
+
+    .onboard-page.page-welcome {
+      transform: translate3d(0, 0, 0);
+      opacity: 1;
+    }
+
+    .onboard-overlay.show-details .onboard-page.page-welcome {
+      transform: translate3d(-28%, 0, 0);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .onboard-page.page-details {
+      transform: translate3d(100%, 0, 0);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .onboard-overlay.show-details .onboard-page.page-details {
+      transform: translate3d(0, 0, 0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .onboard-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      flex-shrink: 0;
+    }
+
+    .brand-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px 6px 9px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-size: 12.5px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-orb {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent-ring);
+      animation: orbBreath 2.8s ease-in-out infinite;
+    }
+
+    @keyframes orbBreath {
+      0%, 100% { transform: scale(0.92); opacity: 0.85; }
+      50% { transform: scale(1.16); opacity: 1; }
+    }
+
+    /* Apple Blur-Reveal Text Animation */
+    @keyframes appleReveal {
+      from {
+        opacity: 0;
+        filter: blur(8px);
+        transform: translate3d(0, 14px, 0);
+      }
+      to {
+        opacity: 1;
+        filter: blur(0);
+        transform: translate3d(0, 0, 0);
+      }
+    }
+
+    .onboard-overlay.open .reveal {
+      animation: appleReveal 0.68s var(--spring) both;
+    }
+
+    .reveal-d1 { animation-delay: 60ms !important; }
+    .reveal-d2 { animation-delay: 140ms !important; }
+    .reveal-d3 { animation-delay: 230ms !important; }
+    .reveal-d4 { animation-delay: 310ms !important; }
+    .reveal-d5 { animation-delay: 390ms !important; }
+    .reveal-d6 { animation-delay: 470ms !important; }
+
+    .welcome-hero {
+      margin-top: 8px;
+      margin-bottom: 26px;
+    }
+
+    .welcome-h1 {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      line-height: 1.08;
+      margin-bottom: 10px;
+    }
+
+    .welcome-h1 .accent-word {
+      color: var(--accent);
+    }
+
+    .welcome-lead {
+      font-size: 14.5px;
+      line-height: 1.48;
+      color: var(--text-secondary);
+      letter-spacing: -0.01em;
+    }
+
+    .pillar-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .pillar-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 13px;
+      padding: 14px 15px;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .pillar-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .pillar-icon.accent {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
+
+    .pillar-title {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      margin-bottom: 2px;
+    }
+
+    .pillar-desc {
+      font-size: 12.5px;
+      line-height: 1.42;
+      color: var(--text-secondary);
+    }
+
+    .welcome-actions {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 8px;
+    }
+
+    .link-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 42px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-secondary);
+      font-family: inherit;
+      font-size: 13.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.2s var(--spring-bounce), color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .link-btn:hover {
+      background: var(--surface);
+      color: var(--text);
+    }
+
+    .link-btn:active {
+      transform: scale(0.96);
+    }
+
+    /* Details Page Accordion */
+    .back-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 34px;
+      padding: 0 12px 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.2s var(--spring-bounce), background-color 0.2s ease;
+    }
+
+    .back-pill:active {
+      transform: scale(0.92);
+    }
+
+    .faq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      margin-bottom: 18px;
+    }
+
+    .faq-item {
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      transition: border-color 0.24s ease;
+    }
+
+    .faq-item.open {
+      border-color: var(--border-strong);
+    }
+
+    .faq-trigger {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px 15px;
+      border: none;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: -0.015em;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .faq-chev {
+      color: var(--text-muted);
+      flex-shrink: 0;
+      transition: transform 0.32s var(--spring);
+    }
+
+    .faq-item.open .faq-chev {
+      transform: rotate(180deg);
+      color: var(--accent);
+    }
+
+    .faq-body {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows 0.34s var(--spring);
+    }
+
+    .faq-item.open .faq-body {
+      grid-template-rows: 1fr;
+    }
+
+    .faq-inner {
+      overflow: hidden;
+    }
+
+    .faq-text {
+      padding: 0 15px 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+
+    .author-card {
+      padding: 15px 16px;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .author-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .author-tags {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-viewport">
+    <div class="phone-shell" id="app">
+      <!-- Dynamic Island Toast -->
+      <div class="toast" id="toast" role="status" aria-live="polite">
+        <span class="toast-dot"></span>
+        <span id="toastText">Готово</span>
+      </div>
+
+      <!-- Tab Views (Swipeable Left/Right) -->
+      <main class="tab-stage" id="tabStage">
+        <!-- TAB 1: СЕГОДНЯ -->
+        <section class="tab-view active" id="view-today" aria-label="Сегодня">
+          <header class="top-bar">
+            <div>
+              <h1 class="top-title">Сегодня</h1>
+              <div class="top-sub tabular" id="todaySubtitle">Чт, 19 ноября · 12 нед.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button class="icon-btn" id="quickSyncBtn" aria-label="Синхронизировать" title="Синхронизировать с ЛК">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+              </button>
+              <button class="icon-btn" id="quickThemeBtn" aria-label="Сменить тему" title="Сменить тему"></button>
+            </div>
+          </header>
+
+          <div class="scroll-area" id="todayContent"></div>
+        </section>
+
+        <!-- TAB 2: РАСПИСАНИЕ (Continuous Multi-Week TikTok Vertical Snap) -->
+        <section class="tab-view" id="view-schedule" aria-label="Расписание">
+          <header class="sched-header">
+            <div class="week-nav">
+              <button class="week-btn" id="prevWeekBtn" aria-label="Предыдущая неделя">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+              </button>
+              <span class="week-label tabular" id="weekLabel">12 нед.</span>
+              <button class="week-btn" id="nextWeekBtn" aria-label="Следующая неделя">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
+            </div>
+            <div class="sched-actions">
+              <button class="pill-btn" id="jumpTodayBtn">Сегодня</button>
+              <button class="icon-btn sm" id="scheduleFilterBtn" aria-label="Фильтр занятий" title="Фильтр занятий">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
+                <span class="filter-dot" id="scheduleFilterDot" style="display:none;"></span>
+              </button>
+            </div>
+          </header>
+
+
+
+          <div class="snap-wrap">
+            <div class="day-feed" id="dayFeed"></div>
+            <div class="day-rail" id="dayRail" aria-label="Индикатор дней недели"></div>
+          </div>
+        </section>
+
+        <!-- TAB 3: СООБЩЕНИЯ -->
+        <section class="tab-view" id="view-messages" aria-label="Сообщения">
+          <header class="top-bar">
+            <div>
+              <h1 class="top-title">Сообщения</h1>
+              <div class="top-sub" id="msgSubtitle">Личные и файлы группы</div>
+            </div>
+            <button class="icon-btn" id="syncMessagesBtn" aria-label="Обновить сообщения" title="Обновить сообщения">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+            </button>
+          </header>
+
+          <div class="segment-wrap">
+            <div class="segment">
+              <button class="seg-btn active" id="segPersonalBtn" data-msg-tab="personal">
+                Личные <span class="unread-count" id="unreadBadge">2</span>
+              </button>
+              <button class="seg-btn" id="segFilesBtn" data-msg-tab="files">Файлы группы</button>
+            </div>
+          </div>
+
+          <div class="scroll-area" id="messagesContent"></div>
+        </section>
+
+        <!-- TAB 4: ДНЕВНИК -->
+        <section class="tab-view" id="view-diary" aria-label="Дневник">
+          <header class="top-bar">
+            <div>
+              <h1 class="top-title">Дневник</h1>
+              <div class="top-sub">Осенний семестр</div>
+            </div>
+          </header>
+
+          <div class="scroll-area" id="diaryContent"></div>
+        </section>
+
+        <!-- TAB 5: НАСТРОЙКИ -->
+        <section class="tab-view" id="view-settings" aria-label="Настройки">
+          <header class="top-bar">
+            <div>
+              <h1 class="top-title">Настройки</h1>
+              <div class="top-sub">Автоотметка и профиль</div>
+            </div>
+          </header>
+
+          <div class="scroll-area" id="settingsContent"></div>
+        </section>
+      </main>
+
+      <!-- Floating Bottom Dock with Sliding Pill -->
+      <nav class="bottom-dock" id="bottomDock" aria-label="Навигация">
+        <div class="dock-indicator" id="dockIndicator"></div>
+
+        <button class="dock-item active" data-tab="today" aria-label="Сегодня">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+          <span>Сегодня</span>
+        </button>
+
+        <button class="dock-item" data-tab="schedule" aria-label="Расписание">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="4"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+          <span>Расписание</span>
+        </button>
+
+        <button class="dock-item" data-tab="messages" aria-label="Сообщения">
+          <span class="dock-badge" id="dockMsgBadge"></span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Сообщения</span>
+        </button>
+
+        <button class="dock-item" data-tab="diary" aria-label="Дневник">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <span>Дневник</span>
+        </button>
+
+        <button class="dock-item" data-tab="settings" aria-label="Настройки">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09c-.66 0-1.25.4-1.51 1z"/></svg>
+          <span>Настройки</span>
+        </button>
+      </nav>
+
+      <!-- First-Run Welcome & Details Overlay -->
+      <div class="onboard-overlay" id="onboardOverlay" aria-hidden="true">
+        <div class="onboard-pages">
+          <!-- Page 1: Ultra-concise Welcome -->
+          <div class="onboard-page page-welcome">
+            <div class="onboard-top reveal reveal-d1">
+              <div class="brand-pill">
+                <span class="brand-orb"></span>
+                <span>Pulse · v2.6</span>
+              </div>
+              <button class="icon-btn" id="onboardThemeBtn" aria-label="Сменить тему"></button>
+            </div>
+
+            <div class="welcome-hero">
+              <h2 class="welcome-h1 reveal reveal-d2">Пары на <span class="accent-word">автопилоте</span>.</h2>
+              <p class="welcome-lead reveal reveal-d3">Минималистичный клиент для автоотметки, расписания и дневника вуза.</p>
+            </div>
+
+            <div class="pillar-list">
+              <div class="pillar-card reveal reveal-d3">
+                <div class="pillar-icon accent">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Что делает</div>
+                  <div class="pillar-desc">Сам отмечает тебя на нужных парах, собирает расписание, сообщения и посещаемость.</div>
+                </div>
+              </div>
+
+              <div class="pillar-card reveal reveal-d4">
+                <div class="pillar-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Безопасно</div>
+                  <div class="pillar-desc">Логин и пароль остаются только на твоём устройстве, а вход на ПК не сбрасывается.</div>
+                </div>
+              </div>
+
+              <div class="pillar-card reveal reveal-d5">
+                <div class="pillar-icon">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">От студентов — студентам</div>
+                  <div class="pillar-desc">Создано командой Student Dev Team без рекламы и лишнего шума.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="welcome-actions reveal reveal-d6">
+              <button class="full-btn" id="startAppBtn">Начать</button>
+              <button class="link-btn" id="openDetailsBtn">
+                Как это работает и подробности
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Page 2: Deep-Dive Details & Credits -->
+          <div class="onboard-page page-details">
+            <div class="onboard-top">
+              <button class="back-pill" id="backToWelcomeBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                Назад
+              </button>
+              <span class="badge">Подробно</span>
+            </div>
+
+            <div style="margin-bottom:18px;">
+              <h2 class="top-title" style="margin-bottom:4px;">Как устроен Pulse</h2>
+              <div class="top-sub">Все детали про работу, приватность и авторов</div>
+            </div>
+
+            <div class="faq-list" id="faqList">
+              <div class="faq-item open">
+                <button class="faq-trigger" data-faq>
+                  <span>Как работает автоотметка?</span>
+                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="faq-body"><div class="faq-inner">
+                  <div class="faq-text">Приложение сверяется с расписанием звонков и твоими правилами по каждому предмету. Когда начинается нужная лекция, практика или лаба, отметка отправляется автоматически с выбранной задержкой (например, 1–4 минуты).</div>
+                </div></div>
+              </div>
+
+              <div class="faq-item">
+                <button class="faq-trigger" data-faq>
+                  <span>Точно ли это безопасно?</span>
+                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="faq-body"><div class="faq-inner">
+                  <div class="faq-text">Да. Учётные данные хранятся локально только в памяти твоего браузера/устройства и никогда не записываются в сторонние базы данных. В любой момент ты можешь выйти из аккаунта и очистить сессию одной кнопкой.</div>
+                </div></div>
+              </div>
+
+              <div class="faq-item">
+                <button class="faq-trigger" data-faq>
+                  <span>Не выкинет ли из кабинета на ПК?</span>
+                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="faq-body"><div class="faq-inner">
+                  <div class="faq-text">В настройках включена «Защита сессии (Анти-кик)»: клиент сначала использует активную cookie-сессию и не делает лишних повторных входов, поэтому открытый кабинет на компьютере остаётся активным.</div>
+                </div></div>
+              </div>
+
+              <div class="faq-item">
+                <button class="faq-trigger" data-faq>
+                  <span>Можно ли выбрать конкретные пары?</span>
+                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="faq-body"><div class="faq-inner">
+                  <div class="faq-text">Да — в разделе «Настройки → Правила по предметам» или прямо по нажатию на любую пару можно отдельно включить или выключить автоотметку для лекций, практик и лабораторных каждого предмета.</div>
+                </div></div>
+              </div>
+            </div>
+
+            <div class="author-card">
+              <div class="author-top">
+                <div class="row-title" style="font-weight:600;">Создатели</div>
+                <span class="badge accent">Student Dev Team</span>
+              </div>
+              <div class="row-sub" style="line-height:1.45;">Сделано студентами для удобного контроля учёбы. Минимализм, открытая архитектура и ноль трекинга.</div>
+              <div class="author-tags">
+                <button class="pill-btn" id="copyAuthorContactBtn">Связаться с авторами</button>
+              </div>
+            </div>
+
+            <div style="margin-top:auto;padding-top:6px;">
+              <button class="full-btn" id="finishDetailsBtn">Всё понятно — перейти в приложение</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Sheet -->
+      <div class="sheet-backdrop" id="sheetBackdrop"></div>
+      <div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-hidden="true">
+        <div class="sheet-handle-zone" id="sheetHandleZone">
+          <div class="sheet-handle"></div>
+        </div>
+        <div class="sheet-scroll" id="sheetContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const HAS_BRIDGE = typeof window.AndroidBridge !== 'undefined';
+      const STORAGE_KEY = 'pulse_autocheck_state_v5';
+      const TAB_ORDER = ['today', 'schedule', 'messages', 'diary', 'settings'];
+      const DAY_SHORTS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+      const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+      const MONTHS_NOM = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+      const WEEKDAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+      const WEEKDAYS_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
+
+      let SUBJECT_CATALOG = [
+        { name: 'Математический анализ', types: ['Лекция', 'Практика'] },
+        { name: 'Алгоритмы и структуры данных', types: ['Лекция', 'Практика', 'Лаба'] },
+        { name: 'Операционные системы', types: ['Лекция', 'Лаба'] },
+        { name: 'Сети и телекоммуникации', types: ['Лекция', 'Практика', 'Лаба'] },
+        { name: 'Физика', types: ['Лекция', 'Практика', 'Лаба'] },
+        { name: 'Иностранный язык', types: ['Практика'] }
+      ];
+
+      const DEMO_STATE = {
+        onboardingSeen: false,
+        activeTab: 'today',
+        themeMode: 'light',
+        autoCheckEnabled: false,
+        daemonStatus: 'Отключено',
+        scanningSemester: false,
+        scanStatus: '',
+        logs: [],
+        autoDelay: 'random',
+        antiKick: true,
+        autoTypes: { Лекция: true, Практика: true, Лаба: true },
+        subjectRules: {},
+        scheduleFilter: 'Все',
+        activeGlobalDayIdx: 0,
+        msgSubTab: 'personal',
+        msgQuery: '',
+        diarySubTab: 'attendance',
+        account: {
+          loggedIn: false,
+          name: '',
+          group: '',
+          email: ''
+        },
+        todayClasses: HAS_BRIDGE ? [] : [
+          { id: 't1', start: '09:00', end: '10:35', subject: 'Математический анализ', type: 'Лекция', room: 'ауд. 312/1', teacher: 'проф. Соловьёв А.В.', status: 'checked', isPast: true, checkedAt: '09:02', checkedBy: 'auto', raspId: '', weekId: '' },
+          { id: 't2', start: '10:45', end: '12:20', subject: 'Алгоритмы и структуры данных', type: 'Практика', room: 'ауд. 408/2', teacher: 'доц. Морозова Е.И.', status: 'live', isPast: false, checkedAt: null, checkedBy: null, raspId: '', weekId: '' }
+        ],
+        semesterWeeks: HAS_BRIDGE ? {} : {
+          12: [
+            { num: '16', weekday: 'Понедельник', month: 'Ноябрь', lessons: [{ id: 'w12-1', start: '09:00', end: '10:35', subject: 'Сети и телекоммуникации', type: 'Практика', room: '404/1', teacher: 'доц. Никитин П.О.' }] },
+            { num: '17', weekday: 'Вторник', month: 'Ноябрь', lessons: [] },
+            { num: '18', weekday: 'Среда', month: 'Ноябрь', lessons: [] },
+            { num: '19', weekday: 'Четверг', month: 'Ноябрь', isToday: true, lessons: [{ id: 't1', start: '09:00', end: '10:35', subject: 'Математический анализ', type: 'Лекция', room: '312/1', teacher: 'проф. Соловьёв А.В.' }] },
+            { num: '20', weekday: 'Пятница', month: 'Ноябрь', lessons: [] },
+            { num: '21', weekday: 'Суббота', month: 'Ноябрь', lessons: [] }
+          ]
+        },
+        messages: HAS_BRIDGE ? [] : [
+          {
+            id: 'm1', sender: 'Морозова Е.И.', initials: 'МЕ', role: 'Алгоритмы и структуры данных', time: '10:12', unread: true, muted: false,
+            thread: [{ from: 'them', text: 'Добрый день! Перенесла защиту 3-й лабораторной на следующую среду.', time: '10:11' }]
+          }
+        ],
+        groupFiles: HAS_BRIDGE ? [] : [
+          { id: 'f1', name: 'Лаб_3_Графы_варианты.pdf', ext: 'PDF', subject: 'Алгоритмы', size: '1.4 МБ', date: 'Сегодня', author: 'Морозова Е.И.', url: '' }
+        ],
+        diary: HAS_BRIDGE ? [] : [
+          { id: 'd1', subject: 'Математический анализ', attended: 11, total: 12, history: [1,1,1,0,1,1,1,1], grades: ['5', '4', '5'], credit: 'Экзамен' }
+        ]
+      };
+
+      function safeParse(raw, fallback) {
+        try {
+          if (!raw) return fallback;
+          return JSON.parse(raw);
+        } catch (e) {
+          return fallback;
+        }
+      }
+
+      function cloneObj(o) {
+        return JSON.parse(JSON.stringify(o));
+      }
+
+      function loadState() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) return cloneObj(DEMO_STATE);
+          const parsed = JSON.parse(raw);
+          const merged = Object.assign(cloneObj(DEMO_STATE), parsed);
+          if (!merged.subjectRules) merged.subjectRules = {};
+          return merged;
+        } catch (e) {
+          return cloneObj(DEMO_STATE);
+        }
+      }
+
+      function saveState() {
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            onboardingSeen: state.onboardingSeen,
+            activeTab: state.activeTab,
+            themeMode: state.themeMode,
+            scheduleFilter: state.scheduleFilter,
+            msgSubTab: state.msgSubTab,
+            diarySubTab: state.diarySubTab,
+            autoDelay: state.autoDelay,
+            antiKick: state.antiKick,
+            subjectRules: state.subjectRules
+          }));
+        } catch (e) {}
+      }
+
+      let state = loadState();
+      let toastTimer = null;
+      let checkingIds = new Set();
+      let prevTabIdx = TAB_ORDER.indexOf(state.activeTab);
+      let lastMtimes = { days: -1, cat: -1, diary: -1, messages: -1, files: -1, profile: -1 };
+      let currentWeekNum = 0;
+
+      const $ = (id) => document.getElementById(id);
+
+      function getTypeKey(type) {
+        if (type === 'Лекция') return 'lecture';
+        if (type === 'Практика') return 'practice';
+        return 'lab';
+      }
+
+      function escapeHtml(s) {
+        return String(s || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function parseHmToMins(hm) {
+        if (!hm) return -1;
+        const m = String(hm).match(/(\d{1,2})[:.](\d{2})/);
+        if (!m) return -1;
+        return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+      }
+
+      function formatTodayHeader() {
+        const now = new Date();
+        const wd = WEEKDAYS_SHORT[now.getDay()];
+        const d = now.getDate();
+        const mon = MONTHS_GEN[now.getMonth()];
+        const wk = currentWeekNum > 0 ? ` · ${currentWeekNum} нед.` : '';
+        const el = $('todaySubtitle');
+        if (el) el.textContent = `${wd}, ${d} ${mon}${wk}`;
+      }
+
+      /* ===== ANDROID BRIDGE ADAPTERS ===== */
+      function applySmartRulesFromBridge(rawRules) {
+        const obj = safeParse(rawRules, {});
+        const map = {};
+        Object.keys(obj).forEach((k) => {
+          const parts = k.split('||');
+          if (parts.length === 2) {
+            if (!map[parts[0]]) map[parts[0]] = {};
+            map[parts[0]][parts[1]] = !!obj[k];
+          }
+        });
+        state.subjectRules = map;
+      }
+
+      function pushSmartRulesToBridge() {
+        if (!HAS_BRIDGE) return;
+        const flat = {};
+        Object.keys(state.subjectRules).forEach((subj) => {
+          const types = state.subjectRules[subj] || {};
+          Object.keys(types).forEach((t) => {
+            flat[`${subj}||${t}`] = !!types[t];
+          });
+        });
+        try {
+          window.AndroidBridge.saveSmartRules(JSON.stringify(flat));
+        } catch (e) {}
+      }
+
+      function applyCatalogFromBridge(rawCatalog) {
+        const arr = safeParse(rawCatalog, []);
+        if (!Array.isArray(arr) || !arr.length) return;
+        SUBJECT_CATALOG = arr.map((item) => {
+          const types = [];
+          if (item.lecCount > 0) types.push('Лекция');
+          if (item.pracCount > 0) types.push('Практика');
+          if (item.labCount > 0) types.push('Лаба');
+          if (!types.length) types.push('Лекция', 'Практика');
+          return { name: item.subject || 'Предмет', types };
+        });
+      }
+
+      function applySemesterDaysFromBridge(rawDays) {
+        const arr = safeParse(rawDays, []);
+        if (!Array.isArray(arr) || !arr.length) {
+          state.semesterWeeks = {};
+          state.todayClasses = [];
+          return;
+        }
+
+        const now = new Date();
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const todayStr = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
+        const weeks = {};
+        let todayLessons = [];
+
+        arr.forEach((d, dayIdx) => {
+          const wNum = d.weekNum && d.weekNum > 0 ? d.weekNum : 1;
+          if (!weeks[wNum]) weeks[wNum] = [];
+
+          const dateStr = d.dateStr || '';
+          const dParts = dateStr.split('.');
+          const numStr = dParts.length >= 1 && dParts[0] ? String(parseInt(dParts[0], 10)) : String(dayIdx + 1);
+          const monthIdx = dParts.length >= 2 ? parseInt(dParts[1], 10) - 1 : now.getMonth();
+          const monthName = MONTHS_NOM[monthIdx] || '';
+          const dowIdx = typeof d.dowIdx === 'number' && d.dowIdx >= 0 && d.dowIdx < 6 ? d.dowIdx : (dayIdx % 6);
+          const isToday = !!d.isOrange || dateStr === todayStr;
+          if (isToday) currentWeekNum = wNum;
+
+          const lessons = (Array.isArray(d.lessons) ? d.lessons : []).map((l, lIdx) => {
+            const start = l.startTime || '09:00';
+            const end = l.endTime || '';
+            const subj = l.subjectTitle || 'Предмет';
+            const type = l.lessonType || 'Практика';
+            const room = l.room || '—';
+            const teacher = l.teacher || 'Преподаватель не указан';
+            const id = `les_${dateStr}_${start}_${lIdx}`;
+            return {
+              id,
+              start,
+              end,
+              subject: subj,
+              type,
+              room,
+              teacher,
+              raspId: l.raspId || '',
+              weekId: l.weekId || '',
+              waitingTeacher: !!l.waitingTeacher,
+              checked: !!l.checked,
+              checkTime: l.checkTime || '',
+              checkedBy: l.checkedBy || ''
+            };
+          });
+
+          weeks[wNum].push({
+            num: numStr,
+            weekday: WEEKDAYS_FULL[dowIdx] || d.shortDow || '',
+            month: monthName,
+            dateStr,
+            isToday,
+            lessons
+          });
+
+          if (isToday) {
+            todayLessons = lessons.map((l) => {
+              const sM = parseHmToMins(l.start);
+              const eM = parseHmToMins(l.end) > 0 ? parseHmToMins(l.end) : (sM + 95);
+              let status = 'upcoming';
+              let isPast = false;
+              if (l.checked) {
+                status = 'checked';
+                isPast = eM > 0 && nowMins > eM;
+              } else if (sM >= 0 && nowMins >= sM - 10 && nowMins <= eM) {
+                status = 'live';
+              } else if (eM > 0 && nowMins > eM) {
+                isPast = true;
+              }
+              return Object.assign({}, l, {
+                status,
+                isPast,
+                checkedAt: l.checkTime || null
+              });
+            });
+          }
+        });
+
+        state.semesterWeeks = weeks;
+        state.todayClasses = todayLessons;
+        if (state.activeGlobalDayIdx === 0) {
+          state.activeGlobalDayIdx = getTodayGlobalIdx();
+        }
+        formatTodayHeader();
+      }
+
+      function syncFromAndroid(force) {
+        if (!HAS_BRIDGE) return;
+        try {
+          const bridge = window.AndroidBridge;
+          const st = safeParse(bridge.getState(), {});
+
+          const prevActive = state.autoCheckEnabled;
+          const prevStatus = state.daemonStatus;
+          const prevScan = state.scanningSemester;
+          const prevScanText = state.scanStatus;
+
+          state.autoCheckEnabled = !!st.daemonEnabled;
+          state.daemonStatus = st.status || (state.autoCheckEnabled ? 'Активно' : 'Отключено');
+          state.scanningSemester = !!st.scanningSemester;
+          state.scanStatus = st.scanStatus || '';
+          state.logs = Array.isArray(st.logs) ? st.logs : [];
+
+          let needToday = force || prevActive !== state.autoCheckEnabled || prevStatus !== state.daemonStatus || prevScan !== state.scanningSemester || prevScanText !== state.scanStatus;
+          let needSchedule = force;
+          let needMessages = force;
+          let needDiary = force;
+          let needSettings = force || prevActive !== state.autoCheckEnabled;
+
+          if (force) {
+            const cfg = safeParse(bridge.getSavedConfig(), {});
+            if (cfg.autoDelay) state.autoDelay = cfg.autoDelay;
+            if (typeof cfg.antiKick === 'boolean') state.antiKick = cfg.antiKick;
+            if (cfg.themeMode) state.themeMode = cfg.themeMode;
+            applySmartRulesFromBridge(bridge.getSmartRules());
+          }
+
+          if (force || st.profileMtime !== lastMtimes.profile) {
+            lastMtimes.profile = st.profileMtime || 0;
+            const prof = safeParse(bridge.getProfile(), {});
+            state.account = {
+              loggedIn: !!prof.loggedIn,
+              name: prof.name || (prof.loggedIn ? 'Студент СПбГУТ' : ''),
+              group: prof.group || '',
+              email: prof.email || ''
+            };
+            needSettings = true;
+          }
+
+          if (force || st.catMtime !== lastMtimes.cat) {
+            lastMtimes.cat = st.catMtime || 0;
+            applyCatalogFromBridge(bridge.getCachedSmartCatalog());
+            needSettings = true;
+          }
+
+          if (force || st.daysMtime !== lastMtimes.days) {
+            lastMtimes.days = st.daysMtime || 0;
+            applySemesterDaysFromBridge(bridge.getCachedSemesterDays());
+            checkingIds.clear();
+            needToday = true;
+            needSchedule = true;
+          }
+
+          if (force || st.messagesMtime !== lastMtimes.messages) {
+            lastMtimes.messages = st.messagesMtime || 0;
+            state.messages = safeParse(bridge.getCachedMessages(), []);
+            needMessages = true;
+          }
+
+          if (force || st.filesMtime !== lastMtimes.files) {
+            lastMtimes.files = st.filesMtime || 0;
+            state.groupFiles = safeParse(bridge.getCachedGroupFiles(), []);
+            needMessages = true;
+          }
+
+          if (force || st.diaryMtime !== lastMtimes.diary) {
+            lastMtimes.diary = st.diaryMtime || 0;
+            state.diary = safeParse(bridge.getCachedDiarySummary(), []);
+            needDiary = true;
+          }
+
+          if (force) applyTheme();
+          if (needToday) renderToday();
+          if (needSchedule) renderSchedule();
+          if (needMessages) renderMessages();
+          if (needDiary) renderDiary();
+          if (needSettings) renderSettings();
+        } catch (e) {}
+      }
+
+      function getAllDaysFlat() {
+        const weekNums = Object.keys(state.semesterWeeks).map(Number).sort((a, b) => a - b);
+        const flat = [];
+        weekNums.forEach((w) => {
+          (state.semesterWeeks[w] || []).forEach((d, dayInWeek) => {
+            flat.push(Object.assign({ week: w, dayInWeek }, d));
+          });
+        });
+        return flat;
+      }
+
+      function getTodayGlobalIdx() {
+        const flat = getAllDaysFlat();
+        const idx = flat.findIndex((d) => d.isToday);
+        return idx >= 0 ? idx : 0;
+      }
+
+      function isSubjectTypeAuto(subject, type) {
+        const rules = state.subjectRules[subject];
+        if (rules && typeof rules[type] === 'boolean') {
+          return rules[type];
+        }
+        return !!state.autoTypes[type];
+      }
+
+      function isClassAutoActive(cls) {
+        return state.autoCheckEnabled && isSubjectTypeAuto(cls.subject, cls.type);
+      }
+
+      function setSubjectTypeRule(subject, type, val) {
+        if (!state.subjectRules[subject]) state.subjectRules[subject] = {};
+        state.subjectRules[subject][type] = val;
+        saveState();
+        pushSmartRulesToBridge();
+      }
+
+      function getRulesSummary() {
+        let enabled = 0;
+        let total = 0;
+        SUBJECT_CATALOG.forEach((s) => {
+          s.types.forEach((t) => {
+            total += 1;
+            if (isSubjectTypeAuto(s.name, t)) enabled += 1;
+          });
+        });
+        return { enabled, total };
+      }
+
+      function showToast(text) {
+        const el = $('toast');
+        $('toastText').textContent = text;
+        el.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2300);
+      }
+
+      function applyTheme() {
+        let effective = state.themeMode;
+        if (effective === 'auto') {
+          effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', effective);
+        const iconSvg = effective === 'dark'
+          ? '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>'
+          : '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
+        ['quickThemeBtn', 'onboardThemeBtn'].forEach((id) => {
+          const btn = $(id);
+          if (btn) btn.innerHTML = iconSvg;
+        });
+      }
+
+      function openSheet(html) {
+        const sheet = $('sheet');
+        sheet.style.transform = '';
+        sheet.classList.remove('dragging');
+        $('sheetContent').innerHTML = html;
+        $('sheetBackdrop').classList.add('open');
+        sheet.classList.add('open');
+        sheet.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeSheet() {
+        const sheet = $('sheet');
+        sheet.style.transform = '';
+        sheet.classList.remove('dragging');
+        $('sheetBackdrop').classList.remove('open');
+        sheet.classList.remove('open');
+        sheet.setAttribute('aria-hidden', 'true');
+      }
+
+      function getUnreadCount() {
+        return state.messages.filter((m) => m.unread).length;
+      }
+
+      function updateBadges() {
+        const unread = getUnreadCount();
+        const badge = $('unreadBadge');
+        const dockBadge = $('dockMsgBadge');
+        if (badge) {
+          badge.textContent = unread;
+          badge.style.display = unread > 0 ? 'inline-flex' : 'none';
+        }
+        if (dockBadge) {
+          dockBadge.style.display = unread > 0 ? 'block' : 'none';
+        }
+      }
+
+      function toggleMasterAutoCheck() {
+        if (HAS_BRIDGE && !state.account.loggedIn) {
+          showToast('Сначала войдите в аккаунт вуза');
+          openAccountSheet();
+          return;
+        }
+        state.autoCheckEnabled = !state.autoCheckEnabled;
+        saveState();
+        if (HAS_BRIDGE) {
+          try { window.AndroidBridge.setAutoCheckEnabled(state.autoCheckEnabled); } catch (e) {}
+        }
+        renderToday();
+        renderSchedule();
+        renderSettings();
+        showToast(state.autoCheckEnabled ? 'Автоотметка включена' : 'Автоотметка выключена');
+      }
+
+      /* ===== RENDER TAB 1: TODAY ===== */
+      function renderToday() {
+        formatTodayHeader();
+        const container = $('todayContent');
+        const autoCount = state.todayClasses.filter((c) => c.status !== 'checked' && isClassAutoActive(c)).length;
+        const checkedCount = state.todayClasses.filter((c) => c.status === 'checked').length;
+
+        let autoDesc = state.autoCheckEnabled
+          ? (HAS_BRIDGE && state.daemonStatus ? state.daemonStatus : (autoCount > 0 ? `Активна · ещё ${autoCount}` : 'Все активные пары отмечены'))
+          : 'Приостановлена';
+        if (state.scanningSemester && state.scanStatus) {
+          autoDesc = state.scanStatus;
+        }
+
+        let html = `
+          <div class="auto-card tap ${state.autoCheckEnabled ? 'is-on' : ''}" id="masterAutoCard">
+            <div class="auto-left">
+              <div class="pulse-wrap"><div class="pulse-dot"></div></div>
+              <div style="min-width:0;">
+                <div class="auto-title">Автоотметка</div>
+                <div class="auto-desc" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(autoDesc)}</div>
+              </div>
+            </div>
+            <button class="auto-toggle-btn ${state.autoCheckEnabled ? 'is-on' : ''}" id="masterAutoSwitch" aria-pressed="${state.autoCheckEnabled}">
+              ${state.autoCheckEnabled ? 'Включена' : 'Включить'}
+            </button>
+          </div>
+        `;
+
+        if (HAS_BRIDGE && !state.account.loggedIn) {
+          html += `
+            <div class="empty-day" style="margin-top:24px;">
+              <strong>Войдите в ЛК СПбГУТ</strong>
+              <span style="margin-bottom:14px;">Чтобы загрузить расписание, дневник и сообщения</span>
+              <button class="pill-btn" id="todayLoginBtn" style="background:var(--ink);color:var(--ink-text);border:none;height:38px;padding:0 18px;">Войти в аккаунт</button>
+            </div>
+          `;
+          container.innerHTML = html;
+          $('masterAutoSwitch').addEventListener('click', (e) => { e.stopPropagation(); toggleMasterAutoCheck(); });
+          $('masterAutoCard').addEventListener('click', toggleMasterAutoCheck);
+          $('todayLoginBtn').addEventListener('click', openAccountSheet);
+          return;
+        }
+
+        html += `
+          <div class="section-label">
+            <span>Пары сегодня</span>
+            <span class="tabular">${checkedCount} из ${state.todayClasses.length}</span>
+          </div>
+        `;
+
+        if (!state.todayClasses.length) {
+          html += `
+            <div class="empty-day" style="margin-top:20px;">
+              <strong>На сегодня пар нет</strong>
+              <span>Можно отдохнуть или обновить расписание</span>
+            </div>
+          `;
+        } else {
+          html += `<div class="class-list">`;
+          state.todayClasses.forEach((cls, idx) => {
+            const isChecking = checkingIds.has(cls.id);
+            const isChecked = cls.status === 'checked';
+            const isLive = cls.status === 'live';
+            const autoOn = isClassAutoActive(cls);
+            const tKey = getTypeKey(cls.type);
+
+            let statusBadge = '';
+            if (isChecked) {
+              statusBadge = `<span class="badge accent"><span class="badge-dot"></span>Отмечен${cls.checkedAt ? ' · ' + escapeHtml(cls.checkedAt) : ''}</span>`;
+            } else if (cls.waitingTeacher) {
+              statusBadge = `<span class="badge">Ждём препода</span>`;
+            } else if (isLive) {
+              statusBadge = `<span class="badge ink"><span class="badge-dot"></span>Идёт сейчас</span>`;
+            } else if (autoOn) {
+              statusBadge = `<span class="badge accent">Авто</span>`;
+            } else {
+              statusBadge = `<span class="badge">Вручную</span>`;
+            }
+
+            let btnHtml = '';
+            if (isChecking) {
+              btnHtml = `<button class="check-btn primary" disabled><span class="spinner"></span>Отметка</button>`;
+            } else if (isChecked) {
+              btnHtml = `<button class="check-btn checked" data-action="toggle-check" data-id="${cls.id}">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                Отмечен
+              </button>`;
+            } else {
+              btnHtml = `<button class="check-btn primary" data-action="check-in" data-id="${cls.id}">Отметиться</button>`;
+            }
+
+            const pastCls = cls.isPast ? 'is-past' : (isChecked ? 'is-done' : '');
+            html += `
+              <article class="class-card tap bar-${tKey} ${isLive ? 'is-live' : ''} ${pastCls}" data-open-class="${cls.id}">
+                <div class="class-top">
+                  <span class="class-time tabular">${escapeHtml(cls.start)}${cls.end ? ' – ' + escapeHtml(cls.end) : ''}</span>
+                  ${statusBadge}
+                </div>
+                <div class="class-name">${escapeHtml(cls.subject)}</div>
+                <div class="class-meta-row">
+                  <span class="type-pill type-${tKey}">${escapeHtml(cls.type)}</span>
+                  <span class="class-meta">${escapeHtml(cls.room)}</span>
+                </div>
+                <div class="class-footer">
+                  <span class="class-meta">${escapeHtml(cls.teacher)}</span>
+                  ${btnHtml}
+                </div>
+              </article>
+            `;
+          });
+          html += `</div>`;
+        }
+
+        container.innerHTML = html;
+
+        $('masterAutoSwitch').addEventListener('click', (e) => { e.stopPropagation(); toggleMasterAutoCheck(); });
+        $('masterAutoCard').addEventListener('click', toggleMasterAutoCheck);
+
+        container.querySelectorAll('[data-action="check-in"]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            performCheckIn(btn.dataset.id);
+          });
+        });
+
+        container.querySelectorAll('[data-action="toggle-check"]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openClassSheet(btn.dataset.id);
+          });
+        });
+
+        container.querySelectorAll('[data-open-class]').forEach((card) => {
+          card.addEventListener('click', () => openClassSheet(card.dataset.openClass));
+        });
+      }
+
+      function performCheckIn(id) {
+        const cls = state.todayClasses.find((c) => c.id === id);
+        if (!cls || cls.status === 'checked' || checkingIds.has(id)) return;
+        checkingIds.add(id);
+        renderToday();
+
+        if (HAS_BRIDGE) {
+          try {
+            window.AndroidBridge.manualCheckIn(cls.raspId || '', cls.weekId || '', cls.start || '', cls.subject || '');
+            showToast(`Отправка отметки: ${cls.subject}`);
+          } catch (e) {}
+          setTimeout(() => {
+            checkingIds.delete(id);
+            syncFromAndroid(true);
+          }, 2600);
+          return;
+        }
+
+        setTimeout(() => {
+          checkingIds.delete(id);
+          const now = new Date();
+          cls.status = 'checked';
+          cls.checkedAt = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          renderToday();
+          showToast(`Отмечено: ${cls.subject}`);
+        }, 480);
+      }
+
+      function openClassSheet(id) {
+        const cls = state.todayClasses.find((c) => c.id === id);
+        if (!cls) return;
+        const isChecked = cls.status === 'checked';
+        const ruleOn = isSubjectTypeAuto(cls.subject, cls.type);
+        const tKey = getTypeKey(cls.type);
+
+        openSheet(`
+          <div class="sheet-title">${escapeHtml(cls.subject)}</div>
+          <div class="class-meta-row" style="margin-bottom:16px;">
+            <span class="type-pill type-${tKey}">${escapeHtml(cls.type)}</span>
+            <span class="class-meta tabular">${escapeHtml(cls.start)}${cls.end ? '–' + escapeHtml(cls.end) : ''} · ${escapeHtml(cls.room)}</span>
+          </div>
+
+          <div class="settings-group">
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Преподаватель</div>
+                <div class="row-sub">${escapeHtml(cls.teacher)}</div>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Автоотметка · ${escapeHtml(cls.type)}</div>
+                <div class="row-sub">${ruleOn ? 'Отмечаться на этом типе пар предмета' : 'Пропускать этот тип пар предмета'}</div>
+              </div>
+              <button class="switch" id="sheetClassAuto" role="switch" aria-checked="${ruleOn}"></button>
+            </div>
+          </div>
+
+          ${isChecked
+            ? `<button class="full-btn secondary" id="sheetDoneBtn">Отмечен${cls.checkedAt ? ' в ' + escapeHtml(cls.checkedAt) : ''}</button>`
+            : `<button class="full-btn" id="sheetCheckBtn">Отметиться сейчас</button>`
+          }
+        `);
+
+        $('sheetClassAuto').addEventListener('click', () => {
+          setSubjectTypeRule(cls.subject, cls.type, !ruleOn);
+          renderToday();
+          renderSchedule();
+          renderSettings();
+          openClassSheet(id);
+          showToast(`${cls.type} (${cls.subject}): ${!ruleOn ? 'авто вкл' : 'авто выкл'}`);
+        });
+
+        const checkBtn = $('sheetCheckBtn');
+        if (checkBtn) {
+          checkBtn.addEventListener('click', () => {
+            closeSheet();
+            performCheckIn(id);
+          });
+        }
+
+        const doneBtn = $('sheetDoneBtn');
+        if (doneBtn) doneBtn.addEventListener('click', closeSheet);
+      }
+
+      /* ===== RENDER TAB 2: CONTINUOUS MULTI-WEEK SCHEDULE ===== */
+      function renderScheduleHeaderControls(flatDays) {
+        const activeDay = flatDays[state.activeGlobalDayIdx] || flatDays[0];
+        if (!activeDay) {
+          $('weekLabel').textContent = '—';
+          $('dayRail').innerHTML = '';
+          return;
+        }
+
+        $('weekLabel').textContent = `${activeDay.week} нед.`;
+        const jumpBtn = $('jumpTodayBtn');
+        if (jumpBtn) {
+          jumpBtn.style.display = activeDay.isToday ? 'none' : 'inline-flex';
+        }
+
+        const weekDays = state.semesterWeeks[activeDay.week] || [];
+        const weekStartGlobalIdx = flatDays.findIndex((d) => d.week === activeDay.week && d.dayInWeek === 0);
+
+        const rail = $('dayRail');
+        const activeInWeek = activeDay.dayInWeek;
+        const buttonsHtml = weekDays.map((d, i) => {
+          const gIdx = weekStartGlobalIdx + i;
+          const isActive = gIdx === state.activeGlobalDayIdx;
+          return `<button class="rail-day ${isActive ? 'active' : ''} ${d.isToday ? 'is-today' : ''}" data-rail-global="${gIdx}" aria-label="${DAY_SHORTS[i] || ''}, ${d.num}">${DAY_SHORTS[i] || ''}</button>`;
+        }).join('');
+
+        if (!rail.querySelector('.rail-pill') || rail.dataset.week !== String(activeDay.week)) {
+          rail.dataset.week = String(activeDay.week);
+          rail.innerHTML = `<div class="rail-pill" id="railPill"></div>${buttonsHtml}`;
+          rail.querySelectorAll('[data-rail-global]').forEach((btn) => {
+            btn.addEventListener('click', () => scrollToGlobalDay(Number(btn.dataset.railGlobal), true));
+          });
+        } else {
+          rail.querySelectorAll('.rail-day').forEach((btn, i) => {
+            btn.classList.toggle('active', i === activeInWeek);
+          });
+        }
+
+        const pill = $('railPill');
+        if (pill) {
+          pill.style.transform = `translate3d(0, ${activeInWeek * 32}px, 0)`;
+        }
+      }
+
+      function renderSchedule() {
+        const flatDays = getAllDaysFlat();
+        const feed = $('dayFeed');
+
+        const dot = $('scheduleFilterDot');
+        if (dot) dot.style.display = state.scheduleFilter === 'Все' ? 'none' : 'block';
+
+        if (!flatDays.length) {
+          renderScheduleHeaderControls([]);
+          feed.innerHTML = `
+            <div class="day-slide">
+              <div class="empty-day">
+                <strong>Расписание не загружено</strong>
+                <span style="margin-bottom:14px;">${state.scanningSemester ? escapeHtml(state.scanStatus) : 'Загрузите расписание семестра из ЛК СПбГУТ'}</span>
+                <button class="pill-btn" id="scanSemesterEmptyBtn" style="background:var(--ink);color:var(--ink-text);border:none;height:38px;padding:0 18px;">Загрузить семестр</button>
+              </div>
+            </div>
+          `;
+          const btn = $('scanSemesterEmptyBtn');
+          if (btn) {
+            btn.addEventListener('click', () => {
+              if (HAS_BRIDGE) {
+                if (!state.account.loggedIn) { openAccountSheet(); return; }
+                window.AndroidBridge.scanSemesterNow('', '', '', '');
+                showToast('Сканирование 18 недель семестра...');
+              }
+            });
+          }
+          return;
+        }
+
+        state.activeGlobalDayIdx = Math.max(0, Math.min(state.activeGlobalDayIdx, flatDays.length - 1));
+        renderScheduleHeaderControls(flatDays);
+
+        feed.innerHTML = flatDays.map((day, idx) => {
+          const filtered = state.scheduleFilter === 'Все'
+            ? day.lessons
+            : day.lessons.filter((l) => l.type === state.scheduleFilter);
+
+          const nextDay = flatDays[idx + 1];
+          const isWeekBoundary = nextDay && nextDay.week !== day.week;
+
+          const lessonsHtml = filtered.length
+            ? filtered.map((l) => {
+                const autoActive = isClassAutoActive(l);
+                const tKey = getTypeKey(l.type);
+                return `
+                  <div class="mini-lesson tap" data-sched-lesson="${encodeURIComponent(JSON.stringify(l))}">
+                    <div class="mini-time tabular">
+                      <strong>${escapeHtml(l.start)}</strong>
+                      <span>${escapeHtml(l.end)}</span>
+                    </div>
+                    <div class="mini-divider bar-${tKey}"></div>
+                    <div class="mini-info">
+                      <div class="mini-title">${escapeHtml(l.subject)}</div>
+                      <div class="mini-sub-row">
+                        <span class="type-pill type-${tKey}">${escapeHtml(l.type)}</span>
+                        <span class="mini-sub">${escapeHtml(l.room)}</span>
+                      </div>
+                    </div>
+                    ${l.checked ? '<span class="badge accent">✓</span>' : (autoActive ? '<span class="badge accent">Авто</span>' : '')}
+                  </div>
+                `;
+              }).join('')
+            : `<div class="empty-day">
+                <strong>Свободный день</strong>
+                <span>${state.scheduleFilter === 'Все' ? 'Пар нет — листай вниз дальше' : `Нет занятий типа «${escapeHtml(state.scheduleFilter)}»`}</span>
+              </div>`;
+
+          let hintHtml = '';
+          if (nextDay) {
+            const label = isWeekBoundary
+              ? `Неделя ${nextDay.week} · ${nextDay.weekday}, ${nextDay.num}`
+              : `${nextDay.weekday}, ${nextDay.num} · ${nextDay.lessons.length} пар`;
+            hintHtml = `
+              <div class="next-day-hint">
+                <button class="next-day-pill ${isWeekBoundary ? 'week-jump' : ''}" data-snap-to="${idx + 1}">
+                  ${escapeHtml(label)}
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+              </div>`;
+          } else {
+            hintHtml = `
+              <div class="next-day-hint">
+                <button class="next-day-pill" data-snap-to="0">
+                  К началу семестра
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                </button>
+              </div>`;
+          }
+
+          return `
+            <article class="day-slide" data-global-idx="${idx}">
+              <div class="day-hero">
+                <div class="day-num-row">
+                  <span class="day-big-num tabular">${escapeHtml(day.num)}</span>
+                  <div class="day-name-col">
+                    <span class="day-weekday">${escapeHtml(day.weekday)}</span>
+                    <span class="day-month">${escapeHtml(day.month)} · ${day.week} нед.</span>
+                  </div>
+                </div>
+                ${day.isToday ? '<span class="badge accent"><span class="badge-dot"></span>Сегодня</span>' : `<span class="badge tabular">${filtered.length} пар</span>`}
+              </div>
+              <div class="day-cards">${lessonsHtml}</div>
+              ${hintHtml}
+            </article>
+          `;
+        }).join('');
+
+        feed.querySelectorAll('[data-snap-to]').forEach((btn) => {
+          btn.addEventListener('click', () => scrollToGlobalDay(Number(btn.dataset.snapTo), true));
+        });
+
+        feed.querySelectorAll('[data-sched-lesson]').forEach((el) => {
+          el.addEventListener('click', () => {
+            const l = safeParse(decodeURIComponent(el.dataset.schedLesson), null);
+            if (l) openScheduleLessonSheet(l.subject, l.type, `${l.start}–${l.end}`, l.room, l.teacher);
+          });
+        });
+
+        requestAnimationFrame(() => scrollToGlobalDay(state.activeGlobalDayIdx, false));
+      }
+
+      function openScheduleLessonSheet(subject, type, time, room, teacher) {
+        const ruleOn = isSubjectTypeAuto(subject, type);
+        const tKey = getTypeKey(type);
+
+        openSheet(`
+          <div class="sheet-title">${escapeHtml(subject)}</div>
+          <div class="class-meta-row" style="margin-bottom:16px;">
+            <span class="type-pill type-${tKey}">${escapeHtml(type)}</span>
+            <span class="class-meta tabular">${escapeHtml(time)} · ${escapeHtml(room)}</span>
+          </div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Преподаватель</div>
+                <div class="row-sub">${escapeHtml(teacher)}</div>
+              </div>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Автоотметка · ${escapeHtml(type)}</div>
+                <div class="row-sub">${ruleOn ? 'Включена для этого предмета' : 'Выключена для этого предмета'}</div>
+              </div>
+              <button class="switch" id="sheetSubjectTypeToggle" role="switch" aria-checked="${ruleOn}"></button>
+            </div>
+          </div>
+          <button class="full-btn secondary" id="sheetOpenAllRules">Все правила по предметам</button>
+        `);
+
+        $('sheetSubjectTypeToggle').addEventListener('click', () => {
+          setSubjectTypeRule(subject, type, !ruleOn);
+          renderSchedule();
+          renderToday();
+          renderSettings();
+          openScheduleLessonSheet(subject, type, time, room, teacher);
+          showToast(`${type} (${subject}): ${!ruleOn ? 'вкл' : 'выкл'}`);
+        });
+
+        $('sheetOpenAllRules').addEventListener('click', openSubjectRulesSheet);
+      }
+
+      function scrollToGlobalDay(idx, smooth) {
+        const feed = $('dayFeed');
+        const flatDays = getAllDaysFlat();
+        if (!flatDays.length) return;
+        const clamped = Math.max(0, Math.min(idx, flatDays.length - 1));
+        state.activeGlobalDayIdx = clamped;
+        const h = feed.clientHeight || 500;
+        feed.scrollTo({ top: clamped * h, behavior: smooth ? 'smooth' : 'auto' });
+        renderScheduleHeaderControls(flatDays);
+      }
+
+      let feedScrollTimer = null;
+      $('dayFeed').addEventListener('scroll', () => {
+        clearTimeout(feedScrollTimer);
+        feedScrollTimer = setTimeout(() => {
+          const feed = $('dayFeed');
+          const flatDays = getAllDaysFlat();
+          if (!flatDays.length) return;
+          const h = feed.clientHeight || 1;
+          const idx = Math.round(feed.scrollTop / h);
+          const clamped = Math.max(0, Math.min(idx, flatDays.length - 1));
+          if (clamped !== state.activeGlobalDayIdx) {
+            state.activeGlobalDayIdx = clamped;
+            renderScheduleHeaderControls(flatDays);
+          }
+        }, 55);
+      });
+
+      $('prevWeekBtn').addEventListener('click', () => {
+        const flatDays = getAllDaysFlat();
+        if (!flatDays.length) return;
+        const curWeek = (flatDays[state.activeGlobalDayIdx] || flatDays[0]).week;
+        const targetIdx = flatDays.findIndex((d) => d.week === curWeek - 1 && d.dayInWeek === 0);
+        if (targetIdx >= 0) scrollToGlobalDay(targetIdx, true);
+        else showToast('Начало доступного расписания');
+      });
+
+      $('nextWeekBtn').addEventListener('click', () => {
+        const flatDays = getAllDaysFlat();
+        if (!flatDays.length) return;
+        const curWeek = (flatDays[state.activeGlobalDayIdx] || flatDays[0]).week;
+        const targetIdx = flatDays.findIndex((d) => d.week === curWeek + 1 && d.dayInWeek === 0);
+        if (targetIdx >= 0) scrollToGlobalDay(targetIdx, true);
+        else showToast('Конец доступного расписания');
+      });
+
+      $('jumpTodayBtn').addEventListener('click', () => {
+        scrollToGlobalDay(getTodayGlobalIdx(), true);
+        showToast('Переход к сегодняшнему дню');
+      });
+
+      function openScheduleFilterSheet() {
+        const opts = [
+          { label: 'Все', desc: 'Показывать все занятия', dot: '' },
+          { label: 'Лекция', desc: 'Только лекции', dot: 'dot-lecture' },
+          { label: 'Практика', desc: 'Только практические занятия', dot: 'dot-practice' },
+          { label: 'Лаба', desc: 'Только лабораторные работы', dot: 'dot-lab' }
+        ];
+        const rows = opts.map((o) => `
+          <div class="settings-row tap" data-pick-filter="${o.label}">
+            <div style="display:flex;align-items:center;gap:10px;">
+              ${o.dot ? `<span class="color-dot ${o.dot}" style="width:9px;height:9px;"></span>` : '<span class="color-dot" style="width:9px;height:9px;background:var(--text-muted);"></span>'}
+              <div>
+                <div class="row-title">${o.label}</div>
+                <div class="row-sub">${o.desc}</div>
+              </div>
+            </div>
+            ${state.scheduleFilter === o.label ? '<span class="badge accent">Выбрано</span>' : ''}
+          </div>
+        `).join('');
+
+        openSheet(`
+          <div class="sheet-title">Фильтр расписания</div>
+          <div class="sheet-sub">Выберите тип занятий для отображения</div>
+          <div class="settings-group">${rows}</div>
+          ${HAS_BRIDGE ? '<button class="full-btn secondary" id="rescanSemSheetBtn">Обновить весь семестр (18 нед.)</button>' : ''}
+        `);
+
+        $('sheetContent').querySelectorAll('[data-pick-filter]').forEach((row) => {
+          row.addEventListener('click', () => {
+            state.scheduleFilter = row.dataset.pickFilter;
+            saveState();
+            renderSchedule();
+            closeSheet();
+            showToast(state.scheduleFilter === 'Все' ? 'Показаны все пары' : `Фильтр: ${state.scheduleFilter}`);
+          });
+        });
+
+        const rescanBtn = $('rescanSemSheetBtn');
+        if (rescanBtn) {
+          rescanBtn.addEventListener('click', () => {
+            closeSheet();
+            if (!state.account.loggedIn) { openAccountSheet(); return; }
+            window.AndroidBridge.scanSemesterNow('', '', '', '');
+            showToast('Загрузка 18 недель семестра...');
+          });
+        }
+      }
+
+      $('scheduleFilterBtn').addEventListener('click', openScheduleFilterSheet);
+
+      /* ===== RENDER TAB 3: MESSAGES & GROUP FILES ===== */
+      function renderMessages() {
+        updateBadges();
+        $('segPersonalBtn').classList.toggle('active', state.msgSubTab === 'personal');
+        $('segFilesBtn').classList.toggle('active', state.msgSubTab === 'files');
+
+        const container = $('messagesContent');
+        let searchEl = $('msgSearchInput');
+        if (!searchEl) {
+          container.innerHTML = `
+            <div class="search-box">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input type="text" id="msgSearchInput" placeholder="" value="" />
+            </div>
+            <div id="msgListContainer"></div>
+          `;
+          searchEl = $('msgSearchInput');
+          searchEl.addEventListener('input', (e) => {
+            state.msgQuery = e.target.value;
+            renderMessagesList();
+          });
+        }
+
+        searchEl.placeholder = state.msgSubTab === 'personal' ? 'Поиск сообщений...' : 'Поиск файлов группы...';
+        if (searchEl.value !== state.msgQuery) searchEl.value = state.msgQuery;
+        renderMessagesList();
+      }
+
+      function renderMessagesList() {
+        const listEl = $('msgListContainer');
+        if (!listEl) return;
+        const q = state.msgQuery.trim().toLowerCase();
+        let html = '';
+
+        if (state.msgSubTab === 'personal') {
+          const list = state.messages.filter((m) =>
+            !q || (m.sender || '').toLowerCase().includes(q) || (m.thread || []).some((t) => (t.text || '').toLowerCase().includes(q))
+          );
+
+          if (!list.length) {
+            html = `<div class="empty-day"><strong>Сообщений пока нет</strong><span>Нажмите обновить в правом верхнем углу</span></div>`;
+          } else {
+            list.forEach((m) => {
+              const thread = Array.isArray(m.thread) ? m.thread : [];
+              const last = thread[thread.length - 1];
+              html += `
+                <div class="msg-item tap" data-open-msg="${escapeHtml(m.id)}">
+                  <div class="avatar">${escapeHtml(m.initials || 'ЛК')}</div>
+                  <div class="msg-body">
+                    <div class="msg-row">
+                      <span class="msg-name">${escapeHtml(m.sender)}</span>
+                      <span class="msg-time tabular">${escapeHtml(m.time || '')}</span>
+                    </div>
+                    <div class="msg-preview">${escapeHtml(last ? last.text : (m.role || ''))}</div>
+                  </div>
+                  ${m.unread ? '<span class="unread-dot"></span>' : ''}
+                </div>
+              `;
+            });
+          }
+        } else {
+          const files = state.groupFiles.filter((f) =>
+            !q || (f.name || '').toLowerCase().includes(q) || (f.subject || '').toLowerCase().includes(q)
+          );
+
+          if (!files.length) {
+            html = `<div class="empty-day"><strong>Файлов группы пока нет</strong><span>Нажмите обновить для синхронизации с ЛК</span></div>`;
+          } else {
+            files.forEach((f) => {
+              html += `
+                <div class="file-item tap" data-open-file="${escapeHtml(f.id)}">
+                  <div class="file-ext">${escapeHtml(f.ext || 'FILE')}</div>
+                  <div class="msg-body">
+                    <div class="msg-row">
+                      <span class="msg-name">${escapeHtml(f.name)}</span>
+                    </div>
+                    <div class="msg-preview">${escapeHtml(f.subject || '')} · ${escapeHtml(f.size || '')} · ${escapeHtml(f.date || '')}</div>
+                  </div>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-secondary);flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                </div>
+              `;
+            });
+          }
+        }
+
+        listEl.innerHTML = html;
+
+        listEl.querySelectorAll('[data-open-msg]').forEach((el) => {
+          el.addEventListener('click', () => openMessageSheet(el.dataset.openMsg));
+        });
+
+        listEl.querySelectorAll('[data-open-file]').forEach((el) => {
+          el.addEventListener('click', () => openFileSheet(el.dataset.openFile));
+        });
+      }
+
+      function openMessageSheet(id) {
+        const msg = state.messages.find((m) => m.id === id);
+        if (!msg) return;
+        if (msg.unread) {
+          msg.unread = false;
+          if (HAS_BRIDGE) {
+            try { window.AndroidBridge.markMessageRead(msg.id); } catch (e) {}
+          }
+          renderMessages();
+        }
+
+        const bubbles = (msg.thread || []).map((b) =>
+          `<div class="bubble ${b.from === 'me' ? 'me' : ''}">${escapeHtml(b.text)}<span class="bubble-time tabular">${escapeHtml(b.time || '')}</span></div>`
+        ).join('');
+
+        openSheet(`
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+            <div style="min-width:0;">
+              <div class="sheet-title" style="margin-bottom:2px;">${escapeHtml(msg.sender)}</div>
+              <div class="sheet-sub" style="margin-bottom:0;">${escapeHtml(msg.role || 'Сообщение ЛК')}</div>
+            </div>
+            <button class="pill-btn" id="muteSenderBtn">${msg.muted ? 'Уведомления выкл' : 'Уведомления вкл'}</button>
+          </div>
+          <div class="chat-list" id="chatList">${bubbles}</div>
+          <form class="chat-compose" id="chatForm">
+            <input type="text" id="chatInput" placeholder="Ответить..." autocomplete="off" />
+            <button type="submit" class="send-btn" aria-label="Отправить">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+            </button>
+          </form>
+        `);
+
+        const listEl = $('chatList');
+        listEl.scrollTop = listEl.scrollHeight;
+
+        $('muteSenderBtn').addEventListener('click', () => {
+          if (HAS_BRIDGE) {
+            try { msg.muted = !!window.AndroidBridge.toggleSenderMute(msg.id); } catch (e) {}
+          } else {
+            msg.muted = !msg.muted;
+          }
+          openMessageSheet(id);
+          showToast(msg.muted ? 'Уведомления отключены' : 'Уведомления включены');
+        });
+
+        $('chatForm').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const val = $('chatInput').value.trim();
+          if (!val) return;
+          const now = new Date();
+          const t = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          if (!Array.isArray(msg.thread)) msg.thread = [];
+          msg.thread.push({ from: 'me', text: val, time: t });
+          msg.time = t;
+          if (HAS_BRIDGE) {
+            try { window.AndroidBridge.sendMessage(msg.id, val); } catch (err) {}
+          }
+          renderMessages();
+          openMessageSheet(id);
+          showToast('Сообщение отправлено');
+        });
+      }
+
+      function openFileSheet(id) {
+        const f = state.groupFiles.find((x) => x.id === id);
+        if (!f) return;
+        openSheet(`
+          <div class="sheet-title">${escapeHtml(f.name)}</div>
+          <div class="sheet-sub">${escapeHtml(f.subject || '')} · ${escapeHtml(f.size || '')}</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div><div class="row-title">Загрузил</div><div class="row-sub">${escapeHtml(f.author || 'Преподаватель')}</div></div>
+              <span class="badge">${escapeHtml(f.ext || 'FILE')}</span>
+            </div>
+            <div class="settings-row">
+              <div><div class="row-title">Дата</div><div class="row-sub">${escapeHtml(f.date || '—')}</div></div>
+            </div>
+          </div>
+          <button class="full-btn" id="downloadFileBtn">Скачать файл</button>
+        `);
+
+        $('downloadFileBtn').addEventListener('click', () => {
+          if (HAS_BRIDGE && f.url) {
+            const ok = window.AndroidBridge.downloadGroupFile(f.url, f.name);
+            closeSheet();
+            showToast(ok ? `Загрузка начата: ${f.name}` : 'Не удалось скачать файл');
+          } else {
+            closeSheet();
+            showToast(`Загружено: ${f.name}`);
+          }
+        });
+      }
+
+      $('segPersonalBtn').addEventListener('click', () => {
+        state.msgSubTab = 'personal';
+        renderMessages();
+      });
+
+      $('segFilesBtn').addEventListener('click', () => {
+        state.msgSubTab = 'files';
+        renderMessages();
+      });
+
+      /* ===== RENDER TAB 4: DIARY ===== */
+      function renderDiary() {
+        const container = $('diaryContent');
+        const list = Array.isArray(state.diary) ? state.diary : [];
+
+        if (!list.length) {
+          container.innerHTML = `
+            <div class="empty-day" style="margin-top:32px;">
+              <strong>Дневник пока пуст</strong>
+              <span style="margin-bottom:14px;">Синхронизируйте данные с ЛК СПбГУТ</span>
+              <button class="pill-btn" id="diarySyncBtn" style="background:var(--ink);color:var(--ink-text);border:none;height:38px;padding:0 18px;">Обновить дневник</button>
+            </div>
+          `;
+          const btn = $('diarySyncBtn');
+          if (btn) {
+            btn.addEventListener('click', () => {
+              if (HAS_BRIDGE) {
+                if (!state.account.loggedIn) { openAccountSheet(); return; }
+                window.AndroidBridge.checkDiaryNow('', '', '', '');
+                showToast('Обновление дневника...');
+              }
+            });
+          }
+          return;
+        }
+
+        const totalAtt = list.reduce((a, d) => a + (d.attended || 0), 0);
+        const totalAll = list.reduce((a, d) => a + (d.total || 0), 0);
+        const pct = totalAll ? Math.round((totalAtt / totalAll) * 100) : 0;
+
+        const numericGrades = list.flatMap((d) => (d.grades || []).map(Number).filter((n) => !Number.isNaN(n)));
+        const avgGrade = numericGrades.length
+          ? (numericGrades.reduce((a, b) => a + b, 0) / numericGrades.length).toFixed(2)
+          : '—';
+
+        const r = 36;
+        const circ = 2 * Math.PI * r;
+        const offset = circ - (pct / 100) * circ;
+
+        let html = `
+          <div class="kpi-card">
+            <div class="ring-wrap">
+              <svg class="ring-svg" viewBox="0 0 86 86">
+                <circle class="ring-track" cx="43" cy="43" r="${r}" />
+                <circle class="ring-fill" cx="43" cy="43" r="${r}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}" />
+              </svg>
+              <div class="ring-center">
+                <span class="ring-val tabular">${pct}%</span>
+              </div>
+            </div>
+            <div class="kpi-stats">
+              <div>
+                <div class="kpi-stat-label">Средний балл</div>
+                <div class="kpi-stat-val tabular">${avgGrade}</div>
+              </div>
+              <div>
+                <div class="kpi-stat-label">Посещено</div>
+                <div class="kpi-stat-val tabular">${totalAtt}/${totalAll}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="segment" style="margin-bottom:14px;">
+            <button class="seg-btn ${state.diarySubTab === 'attendance' ? 'active' : ''}" data-diary-tab="attendance">Посещаемость</button>
+            <button class="seg-btn ${state.diarySubTab === 'grades' ? 'active' : ''}" data-diary-tab="grades">Оценки</button>
+          </div>
+        `;
+
+        if (state.diarySubTab === 'attendance') {
+          list.forEach((d) => {
+            const p = d.total ? Math.round((d.attended / d.total) * 100) : 0;
+            const dots = (d.history || []).slice(-8).map((v) => `<span class="att-dot ${v ? '' : 'miss'}"></span>`).join('');
+            html += `
+              <div class="diary-card">
+                <div class="diary-top">
+                  <span class="diary-name">${escapeHtml(d.subject)}</span>
+                  <span class="diary-pct tabular">${p}%</span>
+                </div>
+                <div class="bar-track">
+                  <div class="bar-fill ${p >= 85 ? 'high' : ''}" style="width:${p}%"></div>
+                </div>
+                <div class="diary-foot">
+                  <span class="tabular">${d.attended || 0} из ${d.total || 0} пар</span>
+                  <div class="dots-row" title="Последние занятия">${dots}</div>
+                </div>
+              </div>
+            `;
+          });
+        } else {
+          list.forEach((d) => {
+            const grades = Array.isArray(d.grades) ? d.grades : [];
+            const pills = grades.length
+              ? grades.map((g) => `<span class="grade-pill ${g === '5' || g === 'Зачёт' ? 'top' : ''}">${escapeHtml(g)}</span>`).join('')
+              : '<span class="row-sub">Оценок пока нет</span>';
+            html += `
+              <div class="diary-card">
+                <div class="diary-top" style="margin-bottom:8px;">
+                  <span class="diary-name">${escapeHtml(d.subject)}</span>
+                  <span class="badge">${escapeHtml(d.credit || 'Контроль')}</span>
+                </div>
+                <div class="grades-row">${pills}</div>
+              </div>
+            `;
+          });
+        }
+
+        container.innerHTML = html;
+
+        container.querySelectorAll('[data-diary-tab]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            state.diarySubTab = btn.dataset.diaryTab;
+            saveState();
+            renderDiary();
+          });
+        });
+      }
+
+      /* ===== RENDER TAB 5: SETTINGS ===== */
+      function persistPulseSettingsToBridge() {
+        saveState();
+        if (HAS_BRIDGE) {
+          try {
+            window.AndroidBridge.savePulseSettings(state.autoDelay, !!state.antiKick, state.themeMode);
+          } catch (e) {}
+        }
+      }
+
+      function renderSettings() {
+        const container = $('settingsContent');
+        const acc = state.account;
+        const initials = acc.loggedIn && acc.name
+          ? acc.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+          : (acc.loggedIn ? 'ЛК' : '—');
+
+        const delays = [
+          { key: 'instant', label: 'Сразу' },
+          { key: '2m', label: '+2 мин' },
+          { key: 'random', label: '1–4 мин' }
+        ];
+
+        const summary = getRulesSummary();
+
+        container.innerHTML = `
+          <div class="account-card tap" id="accountCard">
+            <div class="account-left">
+              <div class="avatar">${escapeHtml(initials)}</div>
+              <div style="min-width:0;">
+                <div class="row-title">${acc.loggedIn ? escapeHtml(acc.name || 'Студент СПбГУТ') : 'Войти в аккаунт вуза'}</div>
+                <div class="row-sub">${acc.loggedIn ? escapeHtml((acc.group ? acc.group + ' · ' : '') + (acc.email || 'lk.sut.ru')) : 'Личный кабинет lk.sut.ru'}</div>
+              </div>
+            </div>
+            <span class="badge ${acc.loggedIn ? 'accent' : ''}">${acc.loggedIn ? 'Активен' : 'Вход'}</span>
+          </div>
+
+          <div class="section-label"><span>Автоотметка</span></div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Фоновая автоотметка</div>
+                <div class="row-sub">Отмечаться автоматически по правилам</div>
+              </div>
+              <button class="switch" id="setAutoSwitch" role="switch" aria-checked="${state.autoCheckEnabled}"></button>
+            </div>
+
+            <div class="settings-row tap" id="openRulesRow">
+              <div>
+                <div class="row-title">Правила по предметам</div>
+                <div class="row-sub tabular">Активно ${summary.enabled} из ${summary.total} типов пар</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span class="badge accent">Настроить</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+              </div>
+            </div>
+
+            <div class="settings-row" style="flex-direction:column;align-items:stretch;">
+              <div>
+                <div class="row-title">Задержка отметки</div>
+                <div class="row-sub">Пауза после начала пары</div>
+              </div>
+              <div class="chip-group">
+                ${delays.map((d) =>
+                  `<button class="toggle-chip ${state.autoDelay === d.key ? 'active' : ''}" data-delay-chip="${d.key}">${d.label}</button>`
+                ).join('')}
+              </div>
+            </div>
+
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Защита сессии</div>
+                <div class="row-sub">Не сбрасывать вход на компьютере</div>
+              </div>
+              <button class="switch" id="setAntiKick" role="switch" aria-checked="${state.antiKick}"></button>
+            </div>
+          </div>
+
+          <div class="section-label"><span>Синхронизация</span></div>
+          <div class="settings-group">
+            <div class="settings-row tap" id="syncAllRow">
+              <div>
+                <div class="row-title">Синхронизировать всё</div>
+                <div class="row-sub">Расписание, дневник, сообщения и файлы</div>
+              </div>
+              <span class="badge">Сейчас</span>
+            </div>
+            <div class="settings-row tap" id="scanSemesterRow">
+              <div>
+                <div class="row-title">Загрузить весь семестр</div>
+                <div class="row-sub">${state.scanningSemester ? escapeHtml(state.scanStatus) : 'Сканирование всех 18 недель'}</div>
+              </div>
+              <span class="badge">18 нед.</span>
+            </div>
+            <div class="settings-row tap" id="openLogsRow">
+              <div>
+                <div class="row-title">Журнал событий</div>
+                <div class="row-sub">Диагностика фоновой службы</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+
+          <div class="section-label"><span>Внешний вид</span></div>
+          <div class="settings-group" style="padding:12px;">
+            <div class="segment three">
+              <button class="seg-btn ${state.themeMode === 'light' ? 'active' : ''}" data-theme-opt="light">Светлая</button>
+              <button class="seg-btn ${state.themeMode === 'dark' ? 'active' : ''}" data-theme-opt="dark">Тёмная</button>
+              <button class="seg-btn ${state.themeMode === 'auto' ? 'active' : ''}" data-theme-opt="auto">Авто</button>
+            </div>
+          </div>
+
+          <div class="section-label"><span>О проекте</span></div>
+          <div class="settings-group">
+            <div class="settings-row tap" id="openWelcomeRow">
+              <div>
+                <div class="row-title">Приветственный экран</div>
+                <div class="row-sub">Как работает, безопасность и FAQ</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            <div class="settings-row tap" id="openCreditsRow">
+              <div>
+                <div class="row-title">О приложении</div>
+                <div class="row-sub">Pulse v2.0 · СПбГУТ</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+        `;
+
+        $('accountCard').addEventListener('click', openAccountSheet);
+        $('openRulesRow').addEventListener('click', openSubjectRulesSheet);
+        $('setAutoSwitch').addEventListener('click', toggleMasterAutoCheck);
+
+        $('setAntiKick').addEventListener('click', () => {
+          state.antiKick = !state.antiKick;
+          persistPulseSettingsToBridge();
+          renderSettings();
+          showToast(state.antiKick ? 'Защита сессии включена' : 'Защита сессии выключена');
+        });
+
+        container.querySelectorAll('[data-delay-chip]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            state.autoDelay = btn.dataset.delayChip;
+            persistPulseSettingsToBridge();
+            renderSettings();
+            showToast('Задержка обновлена');
+          });
+        });
+
+        container.querySelectorAll('[data-theme-opt]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            state.themeMode = btn.dataset.themeOpt;
+            persistPulseSettingsToBridge();
+            applyTheme();
+            renderSettings();
+          });
+        });
+
+        $('syncAllRow').addEventListener('click', () => {
+          if (HAS_BRIDGE) {
+            if (!state.account.loggedIn) { openAccountSheet(); return; }
+            window.AndroidBridge.syncAll();
+          }
+          showToast('Синхронизация с ЛК...');
+        });
+
+        $('scanSemesterRow').addEventListener('click', () => {
+          if (HAS_BRIDGE) {
+            if (!state.account.loggedIn) { openAccountSheet(); return; }
+            window.AndroidBridge.scanSemesterNow('', '', '', '');
+          }
+          showToast('Сканирование 18 недель...');
+        });
+
+        $('openLogsRow').addEventListener('click', openLogsSheet);
+        $('openWelcomeRow').addEventListener('click', () => openOnboarding(false));
+        $('openCreditsRow').addEventListener('click', openCreditsSheet);
+      }
+
+      function openLogsSheet() {
+        const logsHtml = (state.logs && state.logs.length)
+          ? state.logs.slice(-35).reverse().map((l) => `<div style="font-size:11.5px;font-family:monospace;padding:5px 0;border-bottom:1px solid var(--border);color:var(--text-secondary);">${escapeHtml(l)}</div>`).join('')
+          : '<div class="row-sub">Журнал пока пуст</div>';
+
+        openSheet(`
+          <div class="sheet-title">Журнал событий</div>
+          <div class="sheet-sub">${escapeHtml(state.daemonStatus || 'Служба готова')}</div>
+          <div style="max-height:300px;overflow-y:auto;margin-bottom:14px;">${logsHtml}</div>
+          <button class="full-btn secondary" id="testNotifBtn">Проверить уведомление</button>
+        `);
+
+        $('testNotifBtn').addEventListener('click', () => {
+          if (HAS_BRIDGE) {
+            try { window.AndroidBridge.testNotifNow(); } catch (e) {}
+          }
+          showToast('Тестовое уведомление отправлено');
+        });
+      }
+
+      function openSubjectRulesSheet() {
+        const cardsHtml = SUBJECT_CATALOG.map((subj) => {
+          const allOn = subj.types.every((t) => isSubjectTypeAuto(subj.name, t));
+          const pillsHtml = subj.types.map((t) => {
+            const on = isSubjectTypeAuto(subj.name, t);
+            const tKey = getTypeKey(t);
+            return `
+              <button class="toggle-chip c-${tKey} ${on ? 'active' : ''}" data-rule-subj="${escapeHtml(subj.name)}" data-rule-type="${escapeHtml(t)}">
+                <span class="color-dot dot-${tKey}"></span>${escapeHtml(t)}
+              </button>
+            `;
+          }).join('');
+
+          return `
+            <div class="rule-card">
+              <div class="rule-head">
+                <span class="rule-title">${escapeHtml(subj.name)}</span>
+                <button class="switch" role="switch" aria-checked="${allOn}" data-rule-all="${escapeHtml(subj.name)}" style="transform:scale(0.84);transform-origin:right center;"></button>
+              </div>
+              <div class="rule-pills">${pillsHtml}</div>
+            </div>
+          `;
+        }).join('');
+
+        openSheet(`
+          <div class="sheet-title">Правила по предметам</div>
+          <div class="sheet-sub">Выберите, на каких типах пар отмечаться автоматически</div>
+          <div class="preset-row">
+            <button class="pill-btn" id="presetAllOn">Включить все</button>
+            <button class="pill-btn" id="presetLecturesOnly">Только лекции</button>
+            <button class="pill-btn" id="presetAllOff">Выключить все</button>
+          </div>
+          ${cardsHtml}
+        `);
+
+        $('presetAllOn').addEventListener('click', () => {
+          SUBJECT_CATALOG.forEach((s) => s.types.forEach((t) => setSubjectTypeRule(s.name, t, true)));
+          syncAfterRulesChange();
+          openSubjectRulesSheet();
+          showToast('Включены все пары');
+        });
+
+        $('presetLecturesOnly').addEventListener('click', () => {
+          SUBJECT_CATALOG.forEach((s) => s.types.forEach((t) => setSubjectTypeRule(s.name, t, t === 'Лекция')));
+          syncAfterRulesChange();
+          openSubjectRulesSheet();
+          showToast('Оставлены только лекции');
+        });
+
+        $('presetAllOff').addEventListener('click', () => {
+          SUBJECT_CATALOG.forEach((s) => s.types.forEach((t) => setSubjectTypeRule(s.name, t, false)));
+          syncAfterRulesChange();
+          openSubjectRulesSheet();
+          showToast('Автоотметка по предметам выключена');
+        });
+
+        $('sheetContent').querySelectorAll('[data-rule-subj]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const subj = btn.dataset.ruleSubj;
+            const type = btn.dataset.ruleType;
+            setSubjectTypeRule(subj, type, !isSubjectTypeAuto(subj, type));
+            syncAfterRulesChange();
+            openSubjectRulesSheet();
+          });
+        });
+
+        $('sheetContent').querySelectorAll('[data-rule-all]').forEach((sw) => {
+          sw.addEventListener('click', () => {
+            const name = sw.dataset.ruleAll;
+            const subj = SUBJECT_CATALOG.find((s) => s.name === name);
+            if (!subj) return;
+            const allOn = subj.types.every((t) => isSubjectTypeAuto(name, t));
+            subj.types.forEach((t) => setSubjectTypeRule(name, t, !allOn));
+            syncAfterRulesChange();
+            openSubjectRulesSheet();
+          });
+        });
+      }
+
+      function syncAfterRulesChange() {
+        renderSettings();
+        renderToday();
+        renderSchedule();
+      }
+
+      function openAccountSheet() {
+        const acc = state.account;
+        if (acc.loggedIn) {
+          openSheet(`
+            <div class="sheet-title">${escapeHtml(acc.name || 'Студент СПбГУТ')}</div>
+            <div class="sheet-sub">${escapeHtml((acc.group ? acc.group + ' · ' : '') + (acc.email || ''))}</div>
+            <div class="settings-group">
+              <div class="settings-row">
+                <div><div class="row-title">Статус сессии</div><div class="row-sub">Cookie хранится локально на устройстве</div></div>
+                <span class="badge accent">OK</span>
+              </div>
+            </div>
+            <button class="full-btn danger" id="logoutBtn">Выйти из аккаунта</button>
+          `);
+          $('logoutBtn').addEventListener('click', () => {
+            state.account.loggedIn = false;
+            state.autoCheckEnabled = false;
+            if (HAS_BRIDGE) {
+              try { window.AndroidBridge.logoutAccount(); } catch (e) {}
+            }
+            renderSettings();
+            renderToday();
+            closeSheet();
+            showToast('Вы вышли из аккаунта');
+          });
+        } else {
+          openSheet(`
+            <div class="sheet-title">Вход в ЛК СПбГУТ</div>
+            <div class="sheet-sub">Данные хранятся только на вашем устройстве</div>
+            <form id="loginForm">
+              <div class="field">
+                <label for="loginEmail">Логин или почта от lk.sut.ru</label>
+                <input id="loginEmail" type="text" required placeholder="student@sut.ru" value="${escapeHtml(acc.email || '')}" />
+              </div>
+              <div class="field">
+                <label for="loginPass">Пароль</label>
+                <input id="loginPass" type="password" required placeholder="••••••••" />
+              </div>
+              <button type="submit" class="full-btn">Войти и синхронизировать</button>
+            </form>
+          `);
+          $('loginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const email = $('loginEmail').value.trim();
+            const pass = $('loginPass').value.trim();
+            if (!email || !pass) return;
+            state.account.email = email;
+            state.account.loggedIn = true;
+            if (HAS_BRIDGE) {
+              try { window.AndroidBridge.loginAccount(email, pass); } catch (err) {}
+            }
+            renderSettings();
+            renderToday();
+            closeSheet();
+            showToast('Подключение к lk.sut.ru...');
+          });
+        }
+      }
+
+      function openCreditsSheet() {
+        openSheet(`
+          <div class="sheet-title">Pulse · Автоотметка</div>
+          <div class="sheet-sub">Минималистичный клиент для ЛК СПбГУТ</div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div><div class="row-title">Версия</div><div class="row-sub">v2.0 · Android Native Service + WebView</div></div>
+              <span class="badge accent">02.00.00</span>
+            </div>
+            <div class="settings-row">
+              <div><div class="row-title">Приватность</div><div class="row-sub">Локальное хранение учётных данных</div></div>
+            </div>
+          </div>
+          <button class="full-btn secondary" id="closeCreditsBtn">Готово</button>
+        `);
+        $('closeCreditsBtn').addEventListener('click', closeSheet);
+      }
+
+      /* ===== NAVIGATION & GESTURES ===== */
+      function updateDockIndicator(idx) {
+        const ind = $('dockIndicator');
+        if (ind) ind.style.transform = `translate3d(${idx * 100}%, 0, 0)`;
+      }
+
+      function switchTab(tabName) {
+        const nextIdx = TAB_ORDER.indexOf(tabName);
+        if (nextIdx < 0) return;
+        prevTabIdx = nextIdx;
+
+        state.activeTab = tabName;
+        saveState();
+
+        TAB_ORDER.forEach((name, idx) => {
+          const el = $(`view-${name}`);
+          if (!el) return;
+          el.classList.remove('from-left', 'from-right');
+          if (name === tabName) el.classList.add('active');
+          else {
+            el.classList.remove('active');
+            el.classList.add(idx < nextIdx ? 'from-left' : 'from-right');
+          }
+        });
+
+        document.querySelectorAll('.dock-item').forEach((b) => {
+          b.classList.toggle('active', b.dataset.tab === tabName);
+        });
+
+        updateDockIndicator(nextIdx);
+
+        if (tabName === 'schedule') {
+          requestAnimationFrame(() => scrollToGlobalDay(state.activeGlobalDayIdx, false));
+        }
+      }
+
+      document.querySelectorAll('.dock-item').forEach((btn) => {
+        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+      });
+
+      let touchStartX = 0, touchStartY = 0, touchValid = false;
+      $('tabStage').addEventListener('touchstart', (e) => {
+        if ($('sheet').classList.contains('open')) return;
+        if (e.target.closest('.filter-strip, input, textarea')) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchValid = true;
+      }, { passive: true });
+
+      $('tabStage').addEventListener('touchend', (e) => {
+        if (!touchValid) return;
+        touchValid = false;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.45) {
+          const curIdx = TAB_ORDER.indexOf(state.activeTab);
+          if (dx < 0 && curIdx < TAB_ORDER.length - 1) switchTab(TAB_ORDER[curIdx + 1]);
+          else if (dx > 0 && curIdx > 0) switchTab(TAB_ORDER[curIdx - 1]);
+        }
+      }, { passive: true });
+
+      let sheetStartY = 0, sheetDragY = 0, sheetDragging = false;
+      $('sheetHandleZone').addEventListener('touchstart', (e) => {
+        sheetStartY = e.touches[0].clientY;
+        sheetDragY = 0;
+        sheetDragging = true;
+        $('sheet').classList.add('dragging');
+      }, { passive: true });
+
+      $('sheetHandleZone').addEventListener('touchmove', (e) => {
+        if (!sheetDragging) return;
+        sheetDragY = Math.max(0, e.touches[0].clientY - sheetStartY);
+        $('sheet').style.transform = `translate3d(0, ${sheetDragY}px, 0)`;
+      }, { passive: true });
+
+      $('sheetHandleZone').addEventListener('touchend', () => {
+        if (!sheetDragging) return;
+        sheetDragging = false;
+        $('sheet').classList.remove('dragging');
+        if (sheetDragY > 80) closeSheet();
+        else $('sheet').style.transform = '';
+      });
+
+      $('quickThemeBtn').addEventListener('click', () => {
+        const btn = $('quickThemeBtn');
+        btn.classList.add('spin');
+        setTimeout(() => btn.classList.remove('spin'), 360);
+        const current = document.documentElement.getAttribute('data-theme');
+        state.themeMode = current === 'dark' ? 'light' : 'dark';
+        persistPulseSettingsToBridge();
+        applyTheme();
+        renderSettings();
+      });
+
+      $('quickSyncBtn').addEventListener('click', () => {
+        const btn = $('quickSyncBtn');
+        btn.classList.add('spin');
+        setTimeout(() => btn.classList.remove('spin'), 400);
+        if (HAS_BRIDGE) {
+          if (!state.account.loggedIn) { openAccountSheet(); return; }
+          window.AndroidBridge.syncAll();
+        }
+        showToast('Синхронизация с ЛК...');
+      });
+
+      $('syncMessagesBtn').addEventListener('click', () => {
+        const btn = $('syncMessagesBtn');
+        btn.classList.add('spin');
+        setTimeout(() => btn.classList.remove('spin'), 400);
+        if (HAS_BRIDGE) {
+          if (!state.account.loggedIn) { openAccountSheet(); return; }
+          window.AndroidBridge.syncMessagesNow();
+        }
+        showToast('Обновление сообщений и файлов...');
+      });
+
+      $('sheetBackdrop').addEventListener('click', closeSheet);
+
+      if (window.ResizeObserver) {
+        new ResizeObserver(() => {
+          if (state.activeTab === 'schedule') scrollToGlobalDay(state.activeGlobalDayIdx, false);
+        }).observe($('dayFeed'));
+      }
+
+      /* ===== ONBOARDING ===== */
+      function openOnboarding(toDetails) {
+        const overlay = $('onboardOverlay');
+        overlay.classList.toggle('show-details', !!toDetails);
+        overlay.classList.add('open');
+        overlay.setAttribute('aria-hidden', 'false');
+      }
+
+      function closeOnboarding() {
+        const overlay = $('onboardOverlay');
+        overlay.classList.remove('open', 'show-details');
+        overlay.setAttribute('aria-hidden', 'true');
+        state.onboardingSeen = true;
+        saveState();
+      }
+
+      $('startAppBtn').addEventListener('click', () => {
+        closeOnboarding();
+        if (HAS_BRIDGE && !state.account.loggedIn) openAccountSheet();
+        else showToast('Добро пожаловать в Pulse');
+      });
+
+      $('openDetailsBtn').addEventListener('click', () => $('onboardOverlay').classList.add('show-details'));
+      $('backToWelcomeBtn').addEventListener('click', () => $('onboardOverlay').classList.remove('show-details'));
+      $('finishDetailsBtn').addEventListener('click', () => {
+        closeOnboarding();
+        if (HAS_BRIDGE && !state.account.loggedIn) openAccountSheet();
+      });
+
+      $('onboardThemeBtn').addEventListener('click', () => {
+        const current = document.documentElement.getAttribute('data-theme');
+        state.themeMode = current === 'dark' ? 'light' : 'dark';
+        persistPulseSettingsToBridge();
+        applyTheme();
+        renderSettings();
+      });
+
+      document.querySelectorAll('[data-faq]').forEach((trigger) => {
+        trigger.addEventListener('click', () => {
+          const item = trigger.closest('.faq-item');
+          const wasOpen = item.classList.contains('open');
+          document.querySelectorAll('#faqList .faq-item').forEach((el) => el.classList.remove('open'));
+          if (!wasOpen) item.classList.add('open');
+        });
+      });
+
+      $('copyAuthorContactBtn').addEventListener('click', () => {
+        showToast('Student Dev Team · СПбГУТ');
+      });
+
+      function renderAll() {
+        applyTheme();
+        if (HAS_BRIDGE) {
+          syncFromAndroid(true);
+        } else {
+          renderToday();
+          renderSchedule();
+          renderMessages();
+          renderDiary();
+          renderSettings();
+        }
+        switchTab(state.activeTab);
+        if (!state.onboardingSeen) {
+          requestAnimationFrame(() => openOnboarding(false));
+        }
+      }
+
+      renderAll();
+      if (HAS_BRIDGE) {
+        setInterval(() => syncFromAndroid(false), 2000);
+      }
+    })();
+  </script>
+</body>
+</html>

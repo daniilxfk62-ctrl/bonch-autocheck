@@ -13,6 +13,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Matcher;
@@ -45,9 +46,12 @@ public class ScheduleManager {
     public final Set<String> markedRaspIdsToday = new HashSet<>();
     public final Set<String> notifiedSkippedToday = new HashSet<>();
     public final Map<String, String> checkInTimeByStart = new HashMap<>();
+    public final Map<String, String> checkInByMap = new HashMap<>();
+    public final Map<String, Long> plannedDelayTargetMillis = new HashMap<>();
     public final Set<String> todayRealStartTimes = new HashSet<>();
     public volatile boolean lastPollMarkedAny = false;
 
+    private final Random random = new Random();
     private JSONArray semesterDaysArray = new JSONArray();
     private JSONArray smartCatalogArray = new JSONArray();
     private int todayDayIdx = 0;
@@ -76,8 +80,59 @@ public class ScheduleManager {
             markedRaspIdsToday.clear();
             notifiedSkippedToday.clear();
             checkInTimeByStart.clear();
+            checkInByMap.clear();
+            plannedDelayTargetMillis.clear();
             recalculateTodayIndex(storage);
         }
+    }
+
+    /**
+     * Проверяет, наступило ли время автоотметки с учётом выбранной задержки (instant / 2m / random).
+     */
+    private boolean isDelayElapsed(AppStorage storage, String startTime, String raspId) {
+        String delayMode = storage.getAutoDelayMode();
+        if ("instant".equals(delayMode)) return true;
+
+        String key = startTime + "_" + raspId;
+        long now = System.currentTimeMillis();
+        Long target = plannedDelayTargetMillis.get(key);
+        if (target == null) {
+            long delayMs;
+            if ("2m".equals(delayMode)) {
+                delayMs = 120000L; // ровно 2 минуты
+            } else {
+                // random: от 1 до 4 минут (60..240 сек)
+                delayMs = (60 + random.nextInt(181)) * 1000L;
+            }
+
+            long baseMillis = now;
+            try {
+                String[] parts = startTime.replace(".", ":").split(":");
+                Calendar startCal = Calendar.getInstance();
+                startCal.set(Calendar.HOUR_OF_DAY, Integer.parseInt(parts[0]));
+                startCal.set(Calendar.MINUTE, Integer.parseInt(parts[1]));
+                startCal.set(Calendar.SECOND, 0);
+                startCal.set(Calendar.MILLISECOND, 0);
+                long lessonStartMillis = startCal.getTimeInMillis();
+                // Если кнопка открылась до начала пары или в самом начале — считаем от начала пары;
+                // если преподаватель открыл позже — не ждём лишнего, если уже прошло > 5 мин
+                if (now <= lessonStartMillis + 300000L) {
+                    baseMillis = Math.max(lessonStartMillis, now - 15000L);
+                } else {
+                    baseMillis = now;
+                    delayMs = Math.min(delayMs, 45000L);
+                }
+            } catch (Exception ignored) {}
+
+            target = baseMillis + delayMs;
+            plannedDelayTargetMillis.put(key, target);
+
+            if (now < target) {
+                String targetTimeStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date(target));
+                storage.addLog("⏳ Задержка отметки (" + delayMode + "): запланировано на " + targetTimeStr);
+            }
+        }
+        return now >= target;
     }
 
     public synchronized void syncTodayRealStartTimes(AppStorage storage) {
@@ -278,7 +333,7 @@ public class ScheduleManager {
                             notifiedSkippedToday.add(uniqueKey);
                             String title = "🔔 Пара без автоотметки (" + st + ")";
                             String msg = subj + " • " + lType + (teacher.isEmpty() ? "" : " (" + teacher + ")")
-                                + " — автоотметка выключена в 🤖.";
+                                + " — автоотметка выключена.";
                             storage.addLog(title + ": " + msg);
                             NotificationHelper.sendAlert(ctx, title, msg);
                         }
@@ -307,11 +362,6 @@ public class ScheduleManager {
         public String ruleKey = "";
     }
 
-    /**
-     * Извлекает один или несколько вариантов занятий из одной строки <tr>.
-     * Если в одной строке таблицы сразу указаны 2 преподавателя и 2 кабинета (например, 2 группы Иностранного языка),
-     * метод возвращает 2 объекта ParsedRowDetails, чтобы оба отобразились в выборе подгрупп!
-     */
     public List<ParsedRowDetails> extractStructuredLessonsFromRow(String trInner, String timeRange) {
         ParsedRowDetails base = new ParsedRowDetails();
         List<String> tds = new ArrayList<>();
@@ -394,7 +444,6 @@ public class ScheduleManager {
                 continue;
             }
 
-            // Ищем всех преподавателей в ячейке
             Matcher ms = fioShortPat.matcher(cellPlain);
             boolean matchedAnyFio = false;
             while (ms.find()) {
@@ -412,7 +461,6 @@ public class ScheduleManager {
             }
             if (matchedAnyFio) continue;
 
-            // Ищем аудитории (может быть несколько через <br> или |)
             if (roomHintPat.matcher(cellPlain).find() || (subjectCellIdx != -1 && i == subjectCellIdx + 1)) {
                 String[] roomParts = cellPlain.split("\\|");
                 for (String rp : roomParts) {
@@ -490,6 +538,124 @@ public class ScheduleManager {
         return (dow == Calendar.SUNDAY) ? 6 : (dow - Calendar.MONDAY);
     }
 
+    private static String extractEndTime(String timeRange, String startTime) {
+        if (timeRange != null) {
+            Matcher m = Pattern.compile("[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)").matcher(timeRange);
+            if (m.find()) {
+                return String.format(Locale.US, "%02d:%02d", Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2)));
+            }
+        }
+        try {
+            String[] p = startTime.split(":");
+            int totalMins = Integer.parseInt(p[0]) * 60 + Integer.parseInt(p[1]) + 95;
+            return String.format(Locale.US, "%02d:%02d", (totalMins / 60) % 24, totalMins % 60);
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Ручная отметка на конкретной паре по нажатию кнопки «Отметиться» в Pulse UI.
+     */
+    public synchronized boolean manualCheckIn(
+        Context ctx,
+        SutApiClient api,
+        AppStorage storage,
+        String login,
+        String password,
+        String raspId,
+        String weekId,
+        String startTime,
+        String subjectTitle
+    ) {
+        if (!api.isAuthenticated() && !api.authenticate(login, password, storage)) {
+            storage.addLog("Ручная отметка: ошибка входа в ЛК");
+            return false;
+        }
+
+        try {
+            if (raspId != null && !raspId.isEmpty() && weekId != null && !weekId.isEmpty()) {
+                if (api.sendAndVerifyOpenZan(raspId, weekId)) {
+                    String nowStr = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
+                    markedRaspIdsToday.add(raspId);
+                    if (startTime != null && !startTime.isEmpty()) {
+                        completedWindowsToday.add(startTime);
+                        waitingTeacherToday.remove(startTime);
+                        checkInTimeByStart.put(startTime, nowStr);
+                        checkInByMap.put(startTime, "manual");
+                    }
+                    markLessonCheckedInCache(storage, startTime, subjectTitle, nowStr, "manual");
+                    storage.addLog("✅ Ручная отметка выполнена: " + subjectTitle + " (" + nowStr + ")");
+                    return true;
+                }
+            }
+
+            // Если raspId не был закэширован — делаем свежий запрос текущей недели и ищем открытую кнопку
+            String html = api.httpRequest("POST", SutApiClient.SCHEDULE_URL, "");
+            Pattern trPat = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            Pattern zanPat = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
+            Matcher trMat = trPat.matcher(html);
+            while (trMat.find()) {
+                String trInner = trMat.group(1);
+                Matcher zm = zanPat.matcher(trInner);
+                if (!zm.find()) continue;
+
+                String rowPlain = trInner.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+                boolean matches = (startTime != null && !startTime.isEmpty() && rowPlain.contains(startTime))
+                    || (subjectTitle != null && !subjectTitle.isEmpty() && rowPlain.toLowerCase(Locale.ROOT).contains(subjectTitle.toLowerCase(Locale.ROOT)));
+
+                if (matches) {
+                    String foundRasp = zm.group(1);
+                    String foundWeek = zm.group(2);
+                    if (api.sendAndVerifyOpenZan(foundRasp, foundWeek)) {
+                        String nowStr = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
+                        markedRaspIdsToday.add(foundRasp);
+                        if (startTime != null && !startTime.isEmpty()) {
+                            completedWindowsToday.add(startTime);
+                            waitingTeacherToday.remove(startTime);
+                            checkInTimeByStart.put(startTime, nowStr);
+                            checkInByMap.put(startTime, "manual");
+                        }
+                        markLessonCheckedInCache(storage, startTime, subjectTitle, nowStr, "manual");
+                        storage.addLog("✅ Ручная отметка выполнена: " + subjectTitle + " (" + nowStr + ")");
+                        return true;
+                    }
+                }
+            }
+
+            storage.addLog("Кнопка «Отметиться» для «" + subjectTitle + "» пока не открыта в ЛК.");
+            return false;
+        } catch (Exception e) {
+            storage.addLog("Ошибка ручной отметки: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void markLessonCheckedInCache(AppStorage storage, String startTime, String subjectTitle, String timeStr, String checkedBy) {
+        try {
+            String todayStr = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
+            for (int i = 0; i < semesterDaysArray.length(); i++) {
+                JSONObject d = semesterDaysArray.optJSONObject(i);
+                if (d == null || !todayStr.equals(d.optString("dateStr", ""))) continue;
+                JSONArray lessons = d.optJSONArray("lessons");
+                if (lessons == null) break;
+                for (int k = 0; k < lessons.length(); k++) {
+                    JSONObject les = lessons.optJSONObject(k);
+                    if (les == null) continue;
+                    if ((startTime != null && startTime.equals(les.optString("startTime", "")))
+                        && (subjectTitle == null || subjectTitle.isEmpty() || subjectTitle.equals(les.optString("subjectTitle", "")))) {
+                        les.put("checked", true);
+                        les.put("waitingTeacher", false);
+                        les.put("checkTime", timeStr);
+                        les.put("checkedBy", checkedBy);
+                    }
+                }
+                break;
+            }
+            storage.writeText(AppStorage.FILE_SEMESTER_DAYS, semesterDaysArray.toString());
+        } catch (Exception ignored) {}
+    }
+
     public synchronized void pollCurrentWeekAndCheckIn(
         Context ctx,
         SutApiClient api,
@@ -532,6 +698,8 @@ public class ScheduleManager {
             String lastStartTime = "";
             List<String> newlyChecked = new ArrayList<>();
 
+            boolean daemonEnabled = storage.isDaemonEnabled();
+
             while (trMatcher.find()) {
                 String trAttrs = trMatcher.group(1);
                 String trInner = trMatcher.group(2);
@@ -569,7 +737,6 @@ public class ScheduleManager {
                         } catch (Exception ignored) {}
                         continue;
                     }
-                    // Проверяем, не является ли эта строка второй подгруппой/предметом на то же самое время (rowspan без повтора времени)
                     Matcher pm = pairNumPattern.matcher(rowText);
                     if (pm.find() && PAIR_NUM_TO_TIME.containsKey(pm.group(1))) {
                         timeRange = PAIR_NUM_TO_TIME.get(pm.group(1));
@@ -584,6 +751,7 @@ public class ScheduleManager {
                     }
                 }
 
+                String endTime = extractEndTime(timeRange, startTime);
                 List<ParsedRowDetails> variants = extractStructuredLessonsFromRow(trInner, timeRange);
 
                 Matcher zm = zanPattern.matcher(fullTrHtml);
@@ -607,7 +775,7 @@ public class ScheduleManager {
                     boolean allowedBySmart = storage.isRuleAllowed(structured.ruleKey);
                     boolean allowedBySubgroup = storage.isSubgroupAllowed(curDowIdx, startTime, structured.subject, structured.teacher, structured.room);
 
-                    if (allowedBySubgroup) {
+                    if (allowedBySubgroup && daemonEnabled) {
                         if (!allowedBySmart) {
                             if (raspId != null && storage.isNotifySkippedEnabled() && todayStr.equals(curDateStr)) {
                                 String btnNotifyKey = "btn_" + todayStr + "_" + startTime + "_" + structured.ruleKey;
@@ -622,19 +790,22 @@ public class ScheduleManager {
                             if (currentWindowStart != null && currentWindowStart.equals(startTime)) {
                                 completedWindowsToday.add(startTime);
                                 waitingTeacherToday.remove(startTime);
-                                checkInTimeByStart.put(startTime, "пропуск 🤖");
+                                checkInTimeByStart.put(startTime, "пропуск");
                             }
                         } else if (raspId != null && weekId != null && !alreadyInHtml && !markedRaspIdsToday.contains(raspId)) {
-                            if (api.sendAndVerifyOpenZan(raspId, weekId)) {
-                                String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-                                markedRaspIdsToday.add(raspId);
-                                checkInTimeByStart.put(startTime, nowStr);
-                                completedWindowsToday.add(startTime);
-                                waitingTeacherToday.remove(startTime);
-                                alreadyInHtml = true;
-                                waitingForTeacher = false;
-                                lastPollMarkedAny = true;
-                                newlyChecked.add(structured.subject + " (" + structured.normType + ", отметка в " + nowStr + ")");
+                            if (isDelayElapsed(storage, startTime, raspId)) {
+                                if (api.sendAndVerifyOpenZan(raspId, weekId)) {
+                                    String nowStr = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
+                                    markedRaspIdsToday.add(raspId);
+                                    checkInTimeByStart.put(startTime, nowStr);
+                                    checkInByMap.put(startTime, "auto");
+                                    completedWindowsToday.add(startTime);
+                                    waitingTeacherToday.remove(startTime);
+                                    alreadyInHtml = true;
+                                    waitingForTeacher = false;
+                                    lastPollMarkedAny = true;
+                                    newlyChecked.add(structured.subject + " (" + structured.normType + ", в " + nowStr + ")");
+                                }
                             }
                         }
                     }
@@ -666,12 +837,16 @@ public class ScheduleManager {
                         JSONObject item = new JSONObject();
                         item.put("time", timeRange);
                         item.put("startTime", startTime);
+                        item.put("endTime", endTime);
                         item.put("subjectTitle", structured.subject);
                         item.put("lessonType", structured.normType);
                         item.put("teacher", structured.teacher);
                         item.put("room", structured.room);
                         item.put("ruleKey", structured.ruleKey);
+                        item.put("raspId", raspId != null ? raspId : "");
+                        item.put("weekId", weekId != null ? weekId : "");
                         item.put("checked", isLessonDone);
+                        item.put("checkedBy", checkInByMap.containsKey(startTime) ? checkInByMap.get(startTime) : (isLessonDone ? "auto" : ""));
                         item.put("waitingTeacher", waitingForTeacher && !isLessonDone);
                         item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
                         item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
@@ -734,7 +909,7 @@ public class ScheduleManager {
             }
 
             if (!newlyChecked.isEmpty()) {
-                String nowStr = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
+                String nowStr = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
                 for (String s : newlyChecked) {
                     String title = "✅ Отметился на паре в " + nowStr + "!";
                     storage.addLog(title + " — " + s);
@@ -773,6 +948,7 @@ public class ScheduleManager {
             Pattern dateValPattern = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");
             Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)");
             Pattern pairNumPattern = Pattern.compile("^\\s*([1-7])\\s*(?:пара|\\(\\s*\\))", Pattern.CASE_INSENSITIVE);
+            Pattern zanPattern = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
             Pattern startedPattern = Pattern.compile("занятие\\s+началось\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
             Pattern waitBtnPattern = Pattern.compile("Кнопка\\s+появится\\s+в\\s*(\\d{1,2}[:.]\\d{2})", Pattern.CASE_INSENSITIVE);
             Pattern boldCheckPat = Pattern.compile("<(b|strong)[^>]*>.*[А-Яа-яЁёA-Za-z]{3,}.*</\\1>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
@@ -846,7 +1022,11 @@ public class ScheduleManager {
                         }
                     }
 
+                    String endTime = extractEndTime(timeRange, startTime);
                     List<ParsedRowDetails> variants = extractStructuredLessonsFromRow(trInner, timeRange);
+                    Matcher zm = zanPattern.matcher(trInner);
+                    String raspId = zm.find() ? zm.group(1) : "";
+                    String weekId = !raspId.isEmpty() ? zm.group(2) : "";
 
                     for (ParsedRowDetails det : variants) {
                         if ("Предмет".equals(det.subject)) continue;
@@ -879,12 +1059,16 @@ public class ScheduleManager {
                             JSONObject lesObj = new JSONObject();
                             lesObj.put("time", timeRange);
                             lesObj.put("startTime", startTime);
+                            lesObj.put("endTime", endTime);
                             lesObj.put("subjectTitle", det.subject);
                             lesObj.put("lessonType", det.normType);
                             lesObj.put("teacher", det.teacher);
                             lesObj.put("room", det.room);
                             lesObj.put("ruleKey", det.ruleKey);
+                            lesObj.put("raspId", raspId);
+                            lesObj.put("weekId", weekId);
                             lesObj.put("checked", done);
+                            lesObj.put("checkedBy", done ? "auto" : "");
                             lesObj.put("waitingTeacher", waitingT && !done);
                             lesObj.put("checkTime", startedAt);
                             lesObj.put("waitBtnTime", waitBtn);
@@ -956,8 +1140,8 @@ public class ScheduleManager {
 
             smartCatalogArray = newCatalog;
             storage.writeText(AppStorage.FILE_SMART_CATALOG, smartCatalogArray.toString());
-            storage.addLog("🤖 Семестр сохранен (" + smartCatalogArray.length() + " предм.)");
-            daemon.onScanProgress(false, "Семестр сохранен");
+            storage.addLog("Семестр сохранён (" + smartCatalogArray.length() + " предм.)");
+            daemon.onScanProgress(false, "Семестр сохранён");
         } catch (Exception e) {
             storage.addLog("Ошибка анализа семестра: " + e.getMessage());
             daemon.onScanProgress(false, "Ошибка анализа");
