@@ -3,6 +3,7 @@ name: Build Modular Bonch APK
 on:
   push:
     branches: [ "main", "master" ]
+    tags: [ "v*" ]
   workflow_dispatch:
 
 permissions:
