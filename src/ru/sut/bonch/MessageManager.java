@@ -169,7 +169,11 @@ public class MessageManager {
             Pattern datePat = Pattern.compile("(\\d{2}\\.\\d{2}(?:\\.\\d{2,4})?(?:\\s+\\d{1,2}:\\d{2})?|\\d{1,2}:\\d{2})");
             Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.|[А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ][а-яё]+)?)");
 
-            Matcher trMat = trPat.matcher(html);
+            String sanitizedHtml = stripScriptsAndStyles(html);
+            boolean hasServerRowIds = TR_ID_PAT.matcher(sanitizedHtml).find()
+                || TR_CLICK_PAT.matcher(sanitizedHtml).find();
+
+            Matcher trMat = trPat.matcher(sanitizedHtml);
             int fetchedDetailsCount = 0;
             int maxDetailsToFetch = manualTrigger ? 12 : 6;
             int rowCounter = 0;
@@ -182,6 +186,7 @@ public class MessageManager {
                 if (trLow.contains("<th") && !trLow.contains("<td")) continue;
 
                 String serverId = extractRowServerId(trAttrs, trInner);
+                if (hasServerRowIds && serverId.isEmpty()) continue;
 
                 Matcher tdMat = tdPat.matcher(trInner);
                 List<String> cells = new ArrayList<>();
@@ -227,7 +232,7 @@ public class MessageManager {
                 for (int i = 0; i < cells.size(); i++) {
                     if (i == dateIdx) continue;
                     String c = cells.get(i);
-                    if (c.isEmpty() || c.matches("^\\d+$") || c.equalsIgnoreCase("удалить") || c.equalsIgnoreCase("ответить")) {
+                    if (c.isEmpty() || c.matches("^\\d+$") || isGarbageMessageToken(c)) {
                         continue;
                     }
                     if (sender.isEmpty() && (fioPat.matcher(c).find()
@@ -243,13 +248,14 @@ public class MessageManager {
                 }
 
                 if (sender.isEmpty()) {
-                    if (!subject.isEmpty()) {
+                    if (!subject.isEmpty() && !isGarbageMessageToken(subject)) {
                         sender = subject;
-                        subject = "Сообщение из ЛК";
+                        subject = "Личное сообщение";
                     } else {
                         continue;
                     }
                 }
+                if (isGarbageMessageToken(sender)) continue;
                 if (subject.isEmpty()) subject = "Личное сообщение";
 
                 // Открываем реальный текст и вложения сообщения через POST sendto2.php?id=<ID>&prosmotr
@@ -527,7 +533,7 @@ public class MessageManager {
             Pattern sizePat = Pattern.compile("(\\d+(?:[.,]\\d+)?\\s*(?:Б|КБ|МБ|ГБ|KB|MB|GB))", Pattern.CASE_INSENSITIVE);
             Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.|[А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ][а-яё]+)?)");
 
-            Matcher trMat = trPat.matcher(html);
+            Matcher trMat = trPat.matcher(stripScriptsAndStyles(html));
 
             while (trMat.find()) {
                 String trAttrs = trMat.group(1);
@@ -759,6 +765,41 @@ public class MessageManager {
                 try { attachFile.delete(); } catch (Exception ignored) {}
             }
         }
+    }
+
+    private static String stripScriptsAndStyles(String raw) {
+        if (raw == null || raw.isEmpty()) return "";
+        return raw
+            .replaceAll("(?is)<script[^>]*>.*?</script>", " ")
+            .replaceAll("(?is)<style[^>]*>.*?</style>", " ")
+            .replaceAll("(?s)<!--.*?-->", " ");
+    }
+
+    private static boolean isGarbageMessageToken(String text) {
+        if (text == null) return true;
+        String s = text.trim();
+        if (s.isEmpty()) return true;
+        String low = s.toLowerCase(Locale.ROOT);
+        if (low.contains("mem.") || low.contains("history[") || s.contains("'+") || s.contains("+'")
+            || low.contains("javascript:") || low.contains("function(")) {
+            return true;
+        }
+        return low.equals("сообщение")
+            || low.equals("сообщения")
+            || low.equals("сообщение из лк")
+            || low.equals("личное сообщение")
+            || low.equals("входящие")
+            || low.equals("исходящие")
+            || low.equals("дата")
+            || low.equals("тема")
+            || low.equals("отправитель")
+            || low.equals("получатель")
+            || low.equals("файлы")
+            || low.equals("удалить")
+            || low.equals("ответить")
+            || low.equals("просмотр")
+            || low.equals("действие")
+            || low.equals("действия");
     }
 
     private static String cleanHtml(String raw) {

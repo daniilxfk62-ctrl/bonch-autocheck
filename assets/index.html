@@ -1060,8 +1060,8 @@
     /* Schedule Calendar Sheet */
     .cal-header-row {
       display: grid;
-      grid-template-columns: 38px repeat(6, 1fr);
-      gap: 4px;
+      grid-template-columns: 34px repeat(7, 1fr);
+      gap: 3px;
       padding: 0 4px 8px;
       text-align: center;
       font-size: 11px;
@@ -1087,8 +1087,8 @@
 
     .cal-week-row {
       display: grid;
-      grid-template-columns: 38px repeat(6, 1fr);
-      gap: 4px;
+      grid-template-columns: 34px repeat(7, 1fr);
+      gap: 3px;
       align-items: center;
       padding: 4px;
       border-radius: 14px;
@@ -1163,6 +1163,117 @@
       width: 4px;
       height: 4px;
       border-radius: 50%;
+    }
+
+    .cal-dot.dot-note {
+      background: var(--accent);
+    }
+
+    .cal-cell.is-sunday {
+      color: var(--text-muted);
+      opacity: 0.38;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .cal-cell.is-sunday-today {
+      opacity: 0.65;
+      border-color: var(--border-strong);
+      background: var(--surface-hover);
+    }
+
+    .day-hero-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .note-add-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: transform 0.18s var(--spring-bounce), background-color 0.18s ease, color 0.18s ease;
+    }
+
+    .note-add-btn:active {
+      transform: scale(0.88);
+    }
+
+    .note-add-btn.has-notes {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
+
+    .day-notes-box {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 11px 13px;
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--accent-ring);
+      margin-bottom: 12px;
+    }
+
+    .day-notes-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .day-note-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      line-height: 1.38;
+      color: var(--text);
+    }
+
+    .day-note-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-top: 6px;
+      flex-shrink: 0;
+    }
+
+    .note-sheet-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 13px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .note-del-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: none;
+      background: var(--danger-soft);
+      color: var(--danger);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
     }
 
     .avatar.is-profile {
@@ -1699,6 +1810,65 @@
       background: var(--accent-soft);
       border-color: var(--accent-ring);
       color: var(--accent);
+    }
+
+    .grade-pill.midterm {
+      background: var(--type-lecture-soft);
+      border-color: var(--type-lecture-ring);
+      color: var(--type-lecture);
+      font-size: 12px;
+    }
+
+    .grade-pill.fail {
+      background: var(--danger-soft);
+      border-color: rgba(220, 38, 38, 0.25);
+      color: var(--danger);
+    }
+
+    .att-dot.excused {
+      background: var(--warn);
+    }
+
+    .badge.danger {
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .diary-setting-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+
+    .diary-detail-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .diary-detail-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 13px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .diary-kpi-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 14px;
     }
 
     /* ===== TAB 5: SETTINGS & DEVELOPER CREDITS ===== */
@@ -3009,11 +3179,13 @@
         antiKick: true,
         autoTypes: { Лекция: true, Практика: true, Лаба: true },
         subjectRules: {},
+        dayNotes: {},
         scheduleFilter: 'Все',
         activeGlobalDayIdx: 0,
         msgSubTab: 'personal',
         msgQuery: '',
         diarySubTab: 'attendance',
+        countExcusedAsAttended: false,
         account: {
           loggedIn: false,
           name: '',
@@ -3047,6 +3219,7 @@
           const parsed = JSON.parse(raw);
           const merged = Object.assign(cloneObj(INITIAL_STATE), parsed);
           if (!merged.subjectRules) merged.subjectRules = {};
+          if (!merged.dayNotes || typeof merged.dayNotes !== 'object') merged.dayNotes = {};
           // Runtime backend data is never restored from localStorage
           merged.todayClasses = [];
           merged.semesterWeeks = {};
@@ -3071,9 +3244,11 @@
             scheduleFilter: state.scheduleFilter,
             msgSubTab: state.msgSubTab,
             diarySubTab: state.diarySubTab,
+            countExcusedAsAttended: !!state.countExcusedAsAttended,
             autoDelay: state.autoDelay,
             antiKick: !!state.antiKick,
-            subjectRules: state.subjectRules
+            subjectRules: state.subjectRules,
+            dayNotes: state.dayNotes
           }));
         } catch (e) {}
       }
@@ -3353,12 +3528,14 @@
           }
         });
 
-        currentWeekNum = foundTodayWeek;
         state.semesterWeeks = weeks;
         state.todayClasses = todayLessons;
+        const targetIdx = getTodayGlobalIdx();
+        const flatAfter = getAllDaysFlat();
+        currentWeekNum = foundTodayWeek || (flatAfter[targetIdx] ? flatAfter[targetIdx].week : 0);
         if (lastTodayStamp !== todayStr) {
           lastTodayStamp = todayStr;
-          state.activeGlobalDayIdx = getTodayGlobalIdx();
+          state.activeGlobalDayIdx = targetIdx;
         }
         formatTodayHeader();
       }
@@ -3468,10 +3645,110 @@
         return flat;
       }
 
+      function getTodayDateStr() {
+        const now = new Date();
+        return `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
+      }
+
+      function addDaysToDateStr(dateStr, deltaDays) {
+        const d = parseDateStrToMidnight(dateStr);
+        if (!d) return null;
+        d.setDate(d.getDate() + deltaDays);
+        return {
+          dateStr: `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`,
+          num: String(d.getDate())
+        };
+      }
+
       function getTodayGlobalIdx() {
         const flat = getAllDaysFlat();
-        const idx = flat.findIndex((d) => d.isToday);
-        return idx >= 0 ? idx : 0;
+        if (!flat.length) return 0;
+        const exactIdx = flat.findIndex((d) => d.isToday);
+        if (exactIdx >= 0) return exactIdx;
+
+        const now = new Date();
+        const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+        const nextIdx = flat.findIndex((d) => {
+          const dt = parseDateStrToMidnight(d.dateStr);
+          return dt && dt.getTime() >= todayMid;
+        });
+        return nextIdx >= 0 ? nextIdx : flat.length - 1;
+      }
+
+      function getNotesForDate(dateStr) {
+        if (!dateStr || !state.dayNotes) return [];
+        const arr = state.dayNotes[dateStr];
+        return Array.isArray(arr) ? arr : [];
+      }
+
+      function addDayNote(dateStr, text) {
+        const clean = String(text || '').trim();
+        if (!dateStr || !clean) return;
+        if (!state.dayNotes || typeof state.dayNotes !== 'object') state.dayNotes = {};
+        if (!Array.isArray(state.dayNotes[dateStr])) state.dayNotes[dateStr] = [];
+        state.dayNotes[dateStr].push({
+          id: 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          text: clean
+        });
+        saveState();
+        renderToday();
+        renderSchedule();
+      }
+
+      function deleteDayNote(dateStr, noteId) {
+        if (!dateStr || !state.dayNotes || !Array.isArray(state.dayNotes[dateStr])) return;
+        state.dayNotes[dateStr] = state.dayNotes[dateStr].filter((n) => n.id !== noteId);
+        if (!state.dayNotes[dateStr].length) {
+          delete state.dayNotes[dateStr];
+        }
+        saveState();
+        renderToday();
+        renderSchedule();
+      }
+
+      function openDayNotesSheet(dateStr, titleLabel) {
+        if (!dateStr) return;
+        const notes = getNotesForDate(dateStr);
+        const listHtml = notes.length
+          ? `<div class="diary-detail-list">${notes.map((n) => `
+              <div class="note-sheet-row">
+                <div style="font-size:13.5px;line-height:1.4;word-break:break-word;">${escapeHtml(n.text)}</div>
+                <button type="button" class="note-del-btn" data-del-note="${escapeHtml(n.id)}" aria-label="Удалить заметку">✕</button>
+              </div>
+            `).join('')}</div>`
+          : `<div class="empty-day" style="padding:18px 8px;">
+              <strong>Заметок нет</strong>
+              <span>Добавьте напоминание на этот день — оно появится в расписании и календаре.</span>
+            </div>`;
+
+        openSheet(`
+          <div class="sheet-title">Заметки</div>
+          <div class="sheet-sub">${escapeHtml(titleLabel || dateStr)}</div>
+          ${listHtml}
+          <form class="chat-compose" id="dayNoteForm">
+            <input type="text" id="dayNoteInput" placeholder="Новая заметка..." autocomplete="off" />
+            <button type="submit" class="send-btn" aria-label="Добавить заметку">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            </button>
+          </form>
+        `);
+
+        $('sheetContent').querySelectorAll('[data-del-note]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            deleteDayNote(dateStr, btn.dataset.delNote);
+            openDayNotesSheet(dateStr, titleLabel);
+            showToast('Заметка удалена');
+          });
+        });
+
+        $('dayNoteForm').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const val = $('dayNoteInput').value.trim();
+          if (!val) return;
+          addDayNote(dateStr, val);
+          openDayNotesSheet(dateStr, titleLabel);
+          showToast('Заметка добавлена', 'success');
+        });
       }
 
       function isSubjectTypeAuto(subject, type) {
@@ -3646,6 +3923,28 @@
               ${state.autoCheckEnabled ? 'Включена' : 'Включить'}
             </button>
           </div>
+          `;
+
+        const todayDateStr = getTodayDateStr();
+        const todayNotes = getNotesForDate(todayDateStr);
+        if (todayNotes.length) {
+          html += `
+            <div class="day-notes-box tap anim-in" id="todayNotesBox">
+              <div class="day-notes-head">
+                <span>Заметки на сегодня (${todayNotes.length})</span>
+                <span>Изменить</span>
+              </div>
+              ${todayNotes.map((n) => `
+                <div class="day-note-item">
+                  <span class="day-note-dot"></span>
+                  <span>${escapeHtml(n.text)}</span>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        }
+
+        html += `
           <div class="section-label">
             <span>Пары сегодня</span>
             <span class="tabular">${checkedCount} из ${state.todayClasses.length}</span>
@@ -3719,6 +4018,13 @@
         }
 
         container.innerHTML = html;
+
+        const todayNotesBox = $('todayNotesBox');
+        if (todayNotesBox) {
+          todayNotesBox.addEventListener('click', () => {
+            openDayNotesSheet(getTodayDateStr(), 'Сегодня · ' + getTodayDateStr());
+          });
+        }
 
         $('masterAutoSwitch').addEventListener('click', (e) => { e.stopPropagation(); toggleMasterAutoCheck(); });
         $('masterAutoCard').addEventListener('click', toggleMasterAutoCheck);
@@ -3833,9 +4139,12 @@
         }
 
         $('weekLabel').textContent = `${activeDay.week} нед.`;
+        const targetTodayIdx = getTodayGlobalIdx();
         const jumpBtn = $('jumpTodayBtn');
         if (jumpBtn) {
-          jumpBtn.style.display = activeDay.isToday ? 'none' : 'inline-flex';
+          const targetDay = flatDays[targetTodayIdx];
+          jumpBtn.textContent = targetDay && targetDay.isToday ? 'Сегодня' : 'След. нед.';
+          jumpBtn.style.display = state.activeGlobalDayIdx === targetTodayIdx ? 'none' : 'inline-flex';
         }
 
         const weekDays = state.semesterWeeks[activeDay.week] || [];
@@ -3960,6 +4269,23 @@
               </div>`;
           }
 
+          const dayNotes = getNotesForDate(day.dateStr);
+          const dayNotesTitle = `${day.weekday}, ${day.num} ${day.month}`;
+          const notesBlockHtml = dayNotes.length
+            ? `<div class="day-notes-box tap" data-open-notes="${escapeHtml(day.dateStr)}" data-notes-title="${escapeHtml(dayNotesTitle)}">
+                <div class="day-notes-head">
+                  <span>Заметки (${dayNotes.length})</span>
+                  <span>+ Добавить</span>
+                </div>
+                ${dayNotes.map((n) => `
+                  <div class="day-note-item">
+                    <span class="day-note-dot"></span>
+                    <span>${escapeHtml(n.text)}</span>
+                  </div>
+                `).join('')}
+              </div>`
+            : '';
+
           return `
             <article class="day-slide" data-global-idx="${idx}">
               <div class="day-hero">
@@ -3970,8 +4296,14 @@
                     <span class="day-month">${escapeHtml(day.month)} · ${day.week} нед.</span>
                   </div>
                 </div>
-                ${day.isToday ? '<span class="badge accent"><span class="badge-dot"></span>Сегодня</span>' : `<span class="badge tabular">${filtered.length} пар</span>`}
+                <div class="day-hero-right">
+                  <button class="note-add-btn ${dayNotes.length ? 'has-notes' : ''}" data-open-notes="${escapeHtml(day.dateStr)}" data-notes-title="${escapeHtml(dayNotesTitle)}" aria-label="Заметки к дню" title="Заметки к дню">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  </button>
+                  ${day.isToday ? '<span class="badge accent"><span class="badge-dot"></span>Сегодня</span>' : `<span class="badge tabular">${filtered.length} пар</span>`}
+                </div>
               </div>
+              ${notesBlockHtml}
               <div class="day-cards">${lessonsHtml}</div>
               ${hintHtml}
             </article>
@@ -3986,6 +4318,12 @@
           el.addEventListener('click', () => {
             const l = safeParse(decodeURIComponent(el.dataset.schedLesson), null);
             if (l) openScheduleLessonSheet(l.subject, l.type, `${l.start}–${l.end}`, l.room, l.teacher);
+          });
+        });
+
+        feed.querySelectorAll('[data-open-notes]').forEach((el) => {
+          el.addEventListener('click', () => {
+            openDayNotesSheet(el.dataset.openNotes, el.dataset.notesTitle);
           });
         });
 
@@ -4089,7 +4427,9 @@
         const weekNums = Object.keys(state.semesterWeeks).map(Number).sort((a, b) => a - b);
         const activeDay = flatDays[state.activeGlobalDayIdx] || flatDays[0];
         const todayIdx = getTodayGlobalIdx();
-        const hasToday = flatDays[todayIdx] && flatDays[todayIdx].isToday;
+        const todayTarget = flatDays[todayIdx];
+        const hasExactToday = !!(todayTarget && todayTarget.isToday);
+        const todayDateStr = getTodayDateStr();
 
         const rowsHtml = weekNums.map((w) => {
           const days = state.semesterWeeks[w] || [];
@@ -4106,10 +4446,11 @@
             const isAct = gIdx === state.activeGlobalDayIdx;
             const isPast = !d.isToday && isDatePast(d.dateStr);
             const typeSet = new Set((d.lessons || []).map((l) => getTypeKey(l.type)));
+            const hasNotes = getNotesForDate(d.dateStr).length > 0;
             const dots = ['lecture', 'practice', 'lab']
               .filter((t) => typeSet.has(t))
               .map((t) => `<span class="cal-dot dot-${t}"></span>`)
-              .join('');
+              .join('') + (hasNotes ? '<span class="cal-dot dot-note"></span>' : '');
 
             cells.push(`
               <button class="cal-cell tabular ${isAct ? 'is-active' : ''} ${d.isToday ? 'is-today' : ''} ${isPast ? 'is-past' : ''}" data-cal-idx="${gIdx}" aria-label="${escapeHtml(d.weekday)}, ${escapeHtml(d.num)} ${escapeHtml(d.month)}">
@@ -4118,6 +4459,25 @@
               </button>
             `);
           }
+
+          let sunInfo = null;
+          if (days[5] && days[5].dateStr) {
+            sunInfo = addDaysToDateStr(days[5].dateStr, 1);
+          } else if (days[0] && days[0].dateStr) {
+            sunInfo = addDaysToDateStr(days[0].dateStr, 6);
+          }
+          if (sunInfo) {
+            const isSunToday = sunInfo.dateStr === todayDateStr;
+            cells.push(`
+              <div class="cal-cell tabular is-sunday ${isSunToday ? 'is-sunday-today' : ''}" aria-hidden="true">
+                <span>${escapeHtml(sunInfo.num)}</span>
+                <span class="cal-dots"></span>
+              </div>
+            `);
+          } else {
+            cells.push('<div></div>');
+          }
+
           return `
             <div class="cal-week-row ${isCurWeek ? 'is-current-week' : ''}" data-cal-week="${w}">
               <span class="cal-week-tag tabular">${w}н</span>
@@ -4133,10 +4493,10 @@
           </div>
           <div class="sheet-sub">Выберите день для быстрого перехода</div>
           <div class="cal-header-row">
-            <span>Нед</span><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span>
+            <span>Нед</span><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span style="opacity:0.5;">Вс</span>
           </div>
           <div class="cal-weeks" id="calWeeksScroll">${rowsHtml}</div>
-          ${hasToday ? '<button class="full-btn secondary" id="calJumpTodayBtn" style="margin-top:8px;">Перейти к сегодня</button>' : ''}
+          <button class="full-btn secondary" id="calJumpTodayBtn" style="margin-top:8px;">${hasExactToday ? 'Перейти к сегодня' : 'Перейти к следующей неделе'}</button>
         `);
 
         const activeRow = $('calWeeksScroll').querySelector('.is-current-week');
@@ -4524,6 +4884,178 @@
       });
 
       /* ===== RENDER TAB 4: DIARY ===== */
+      function getEffectiveSubjectAttendance(d) {
+        const sessions = Array.isArray(d.sessions) ? d.sessions : [];
+        const countExcused = !!state.countExcusedAsAttended;
+        if (sessions.length) {
+          let presentCount = 0;
+          let sickCount = 0;
+          let excusedCount = 0;
+          let absentCount = 0;
+          const missedSessions = [];
+
+          sessions.forEach((s) => {
+            const st = s.status || 'present';
+            if (st === 'sick') {
+              sickCount += 1;
+              missedSessions.push(s);
+            } else if (st === 'excused') {
+              excusedCount += 1;
+              missedSessions.push(s);
+            } else if (st === 'absent') {
+              absentCount += 1;
+              missedSessions.push(s);
+            } else {
+              presentCount += 1;
+            }
+          });
+
+          const total = sessions.length;
+          const attended = presentCount + (countExcused ? (sickCount + excusedCount) : 0);
+          const pct = total ? Math.round((attended / total) * 100) : 0;
+          return { attended, total, presentCount, sickCount, excusedCount, absentCount, pct, missedSessions, sessions };
+        }
+
+        const total = d.total || 0;
+        const baseAtt = d.attended || 0;
+        const exc = d.excusedCount || 0;
+        const attended = Math.min(total, baseAtt + (countExcused ? exc : 0));
+        const pct = total ? Math.round((attended / total) * 100) : 0;
+        return {
+          attended,
+          total,
+          presentCount: baseAtt,
+          sickCount: 0,
+          excusedCount: exc,
+          absentCount: Math.max(0, total - baseAtt - exc),
+          pct,
+          missedSessions: [],
+          sessions: []
+        };
+      }
+
+      function getAbsenceMeta(status, rawVal) {
+        if (status === 'sick') {
+          return { code: rawVal || 'Б', label: 'Болезнь', badgeClass: 'warn' };
+        }
+        if (status === 'excused') {
+          return { code: rawVal || 'У', label: 'Уважительная', badgeClass: 'accent' };
+        }
+        return { code: rawVal || 'Н', label: 'Пропуск', badgeClass: 'danger' };
+      }
+
+      function getSubjectGradeEntries(d) {
+        if (Array.isArray(d.gradeEntries) && d.gradeEntries.length) {
+          return d.gradeEntries;
+        }
+        return (Array.isArray(d.grades) ? d.grades : []).map((g) => ({
+          value: String(g),
+          display: String(g),
+          date: '',
+          dateIso: '',
+          dow: '',
+          dowFull: '',
+          kind: String(g).toLowerCase().includes('атт') ? 'midterm' : 'lesson',
+          label: String(g).toLowerCase().includes('атт') ? 'Промежуточная аттестация' : 'Оценка'
+        }));
+      }
+
+      function getGradePillClass(entry) {
+        const val = String(entry.value || entry.display || '');
+        if (val === '2' || val === 'Незачёт') return 'fail';
+        if (entry.kind === 'midterm') return 'midterm';
+        if (val === '5' || val === 'Зачёт') return 'top';
+        return '';
+      }
+
+      function openDiaryAttendanceSheet(d) {
+        const stats = getEffectiveSubjectAttendance(d);
+        const countExcused = !!state.countExcusedAsAttended;
+        const missed = stats.missedSessions.slice().reverse();
+
+        let bodyHtml = '';
+        if (!stats.sessions.length && (stats.total - stats.presentCount) > 0) {
+          bodyHtml = `<div class="empty-day" style="padding:18px 8px;">
+            <strong>Нужно обновить дневник</strong>
+            <span>Нажмите кнопку обновления на вкладке «Дневник», чтобы подгрузить точные даты и типы пропусков.</span>
+          </div>`;
+        } else if (!missed.length) {
+          bodyHtml = `<div class="empty-day" style="padding:20px 8px;">
+            <strong>Пропусков нет</strong>
+            <span>По этому предмету посещены все прошедшие занятия.</span>
+          </div>`;
+        } else {
+          bodyHtml = `<div class="diary-detail-list">${missed.map((s) => {
+            const meta = getAbsenceMeta(s.status, s.value);
+            const isCounted = countExcused && (s.status === 'sick' || s.status === 'excused');
+            const dowText = s.dowFull || s.dow || '';
+            const dateLabel = dowText ? `${s.date} · ${dowText}` : (s.date || 'Дата не указана');
+            return `
+              <div class="diary-detail-row">
+                <div>
+                  <div class="row-title tabular">${escapeHtml(dateLabel)}</div>
+                  <div class="row-sub">${escapeHtml(meta.label)}${isCounted ? ' · засчитано как посещение' : ''}</div>
+                </div>
+                <span class="badge ${isCounted ? 'success' : meta.badgeClass}">${escapeHtml(meta.code)}</span>
+              </div>
+            `;
+          }).join('')}</div>`;
+        }
+
+        openSheet(`
+          <div class="sheet-title">${escapeHtml(d.subject)}</div>
+          <div class="sheet-sub tabular">Посещаемость: ${stats.pct}% (${stats.attended} из ${stats.total} пар)</div>
+          <div class="diary-kpi-chips">
+            <span class="badge success tabular">Был: ${stats.presentCount}</span>
+            <span class="badge danger tabular">Н: ${stats.absentCount}</span>
+            <span class="badge warn tabular">Б: ${stats.sickCount}</span>
+            <span class="badge accent tabular">У: ${stats.excusedCount}</span>
+          </div>
+          ${bodyHtml}
+          <button class="full-btn secondary" id="closeDiaryAttBtn">Закрыть</button>
+        `);
+
+        $('closeDiaryAttBtn').addEventListener('click', closeSheet);
+      }
+
+      function openDiaryGradesSheet(d) {
+        const entries = getSubjectGradeEntries(d).slice().reverse();
+
+        const bodyHtml = entries.length
+          ? `<div class="diary-detail-list">${entries.map((e) => {
+              const dowText = e.dowFull || e.dow || '';
+              const datePart = e.date
+                ? (dowText ? `${e.date} · ${dowText}` : e.date)
+                : 'Дата не указана';
+              const subText = e.kind === 'midterm'
+                ? `${e.label || 'Промежуточная аттестация'} (не итоговый зачёт)`
+                : (e.label || 'Занятие');
+              const pillCls = getGradePillClass(e);
+              return `
+                <div class="diary-detail-row">
+                  <div style="min-width:0;">
+                    <div class="row-title tabular">${escapeHtml(datePart)}</div>
+                    <div class="row-sub">${escapeHtml(subText)}</div>
+                  </div>
+                  <span class="grade-pill ${pillCls}">${escapeHtml(e.value || e.display)}</span>
+                </div>
+              `;
+            }).join('')}</div>`
+          : `<div class="empty-day" style="padding:20px 8px;">
+              <strong>Оценок пока нет</strong>
+              <span>Как только преподаватель выставит оценку или аттестацию, она появится здесь с датой.</span>
+            </div>`;
+
+        openSheet(`
+          <div class="sheet-title">${escapeHtml(d.subject)}</div>
+          <div class="sheet-sub">Итоговый контроль: ${escapeHtml(d.credit || 'Контроль')}</div>
+          ${bodyHtml}
+          <button class="full-btn secondary" id="closeDiaryGradesBtn">Закрыть</button>
+        `);
+
+        $('closeDiaryGradesBtn').addEventListener('click', closeSheet);
+      }
+
       function renderDiary() {
         const container = $('diaryContent');
         const list = Array.isArray(state.diary) ? state.diary : [];
@@ -4550,11 +5082,16 @@
           return;
         }
 
-        const totalAtt = list.reduce((a, d) => a + (d.attended || 0), 0);
-        const totalAll = list.reduce((a, d) => a + (d.total || 0), 0);
+        const perSubjectStats = list.map((d) => getEffectiveSubjectAttendance(d));
+        const totalAtt = perSubjectStats.reduce((a, s) => a + s.attended, 0);
+        const totalAll = perSubjectStats.reduce((a, s) => a + s.total, 0);
         const pct = totalAll ? Math.round((totalAtt / totalAll) * 100) : 0;
 
-        const numericGrades = list.flatMap((d) => (d.grades || []).map(Number).filter((n) => !Number.isNaN(n)));
+        const numericGrades = list.flatMap((d) =>
+          getSubjectGradeEntries(d)
+            .map((e) => Number(e.value))
+            .filter((n) => !Number.isNaN(n) && n >= 2 && n <= 5)
+        );
         const avgGrade = numericGrades.length
           ? (numericGrades.reduce((a, b) => a + b, 0) / numericGrades.length).toFixed(2)
           : '—';
@@ -4595,33 +5132,58 @@
         `;
 
         if (isAtt) {
+          html += `
+            <div class="diary-setting-card">
+              <div>
+                <div class="row-title">Засчитывать Б и У</div>
+                <div class="row-sub">Считать болезнь и уважительную как посещение</div>
+              </div>
+              <button class="switch" id="diaryExcusedSwitch" role="switch" aria-checked="${!!state.countExcusedAsAttended}"></button>
+            </div>
+          `;
+
           list.forEach((d, idx) => {
-            const p = d.total ? Math.round((d.attended / d.total) * 100) : 0;
-            const dots = (d.history || []).slice(-8).map((v) => `<span class="att-dot ${v ? '' : 'miss'}"></span>`).join('');
+            const st = perSubjectStats[idx];
+            const dots = st.sessions.length
+              ? st.sessions.slice(-8).map((s) => {
+                  if (s.status === 'present') return '<span class="att-dot"></span>';
+                  if (s.status === 'sick' || s.status === 'excused') return '<span class="att-dot excused"></span>';
+                  return '<span class="att-dot miss"></span>';
+                }).join('')
+              : (d.history || []).slice(-8).map((v) => `<span class="att-dot ${v ? '' : 'miss'}"></span>`).join('');
+
+            const excTotal = st.sickCount + st.excusedCount;
+            const missNote = st.absentCount > 0 || excTotal > 0
+              ? ` · пропусков: ${st.absentCount + excTotal}`
+              : '';
+
             html += `
-              <div class="diary-card anim-in" style="--d:${Math.min(idx * 35, 210)}ms">
+              <div class="diary-card tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-diary-att="${idx}">
                 <div class="diary-top">
                   <span class="diary-name">${escapeHtml(d.subject)}</span>
-                  <span class="diary-pct tabular">${p}%</span>
+                  <span class="diary-pct tabular">${st.pct}%</span>
                 </div>
                 <div class="bar-track">
-                  <div class="bar-fill ${p >= 85 ? 'high' : ''}" style="width:${p}%"></div>
+                  <div class="bar-fill ${st.pct >= 85 ? 'high' : ''}" style="width:${st.pct}%"></div>
                 </div>
                 <div class="diary-foot">
-                  <span class="tabular">${d.attended || 0} из ${d.total || 0} пар</span>
-                  <div class="dots-row" title="Последние занятия">${dots}</div>
+                  <span class="tabular">${st.attended} из ${st.total} пар${missNote}</span>
+                  <div class="dots-row" title="Нажмите для деталей">${dots}</div>
                 </div>
               </div>
             `;
           });
         } else {
           list.forEach((d, idx) => {
-            const grades = Array.isArray(d.grades) ? d.grades : [];
-            const pills = grades.length
-              ? grades.map((g) => `<span class="grade-pill ${g === '5' || g === 'Зачёт' ? 'top' : ''}">${escapeHtml(g)}</span>`).join('')
+            const entries = getSubjectGradeEntries(d);
+            const pills = entries.length
+              ? entries.map((e) => {
+                  const pillCls = getGradePillClass(e);
+                  return `<span class="grade-pill ${pillCls}">${escapeHtml(e.display || e.value)}</span>`;
+                }).join('')
               : '<span class="row-sub">Оценок пока нет</span>';
             html += `
-              <div class="diary-card anim-in" style="--d:${Math.min(idx * 35, 210)}ms">
+              <div class="diary-card tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-diary-grades="${idx}">
                 <div class="diary-top" style="margin-bottom:8px;">
                   <span class="diary-name">${escapeHtml(d.subject)}</span>
                   <span class="badge">${escapeHtml(d.credit || 'Контроль')}</span>
@@ -4639,6 +5201,30 @@
             state.diarySubTab = btn.dataset.diaryTab;
             saveState();
             renderDiary();
+          });
+        });
+
+        const excSw = $('diaryExcusedSwitch');
+        if (excSw) {
+          excSw.addEventListener('click', () => {
+            state.countExcusedAsAttended = !state.countExcusedAsAttended;
+            saveState();
+            renderDiary();
+            showToast(state.countExcusedAsAttended ? 'Б и У засчитываются как посещение' : 'Учитываются только реальные посещения');
+          });
+        }
+
+        container.querySelectorAll('[data-open-diary-att]').forEach((card) => {
+          card.addEventListener('click', () => {
+            const d = list[Number(card.dataset.openDiaryAtt)];
+            if (d) openDiaryAttendanceSheet(d);
+          });
+        });
+
+        container.querySelectorAll('[data-open-diary-grades]').forEach((card) => {
+          card.addEventListener('click', () => {
+            const d = list[Number(card.dataset.openDiaryGrades)];
+            if (d) openDiaryGradesSheet(d);
           });
         });
       }

@@ -3,6 +3,7 @@ package ru.sut.bonch;
 import android.content.Context;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -16,6 +17,11 @@ import org.json.JSONObject;
 
 public class DiaryMonitor {
     private long lastDiaryPollMillis = 0L;
+
+    private static final String[] DOW_SHORT = {"Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"};
+    private static final String[] DOW_FULL = {
+        "Воскресенье", "Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота"
+    };
 
     private static final Pattern TABLE_PAT = Pattern.compile(
         "<table[^>]*class=[\"'][^\"']*smalltab[^\"']*[\"'][^>]*>(.*?)</table>",
@@ -50,6 +56,12 @@ public class DiaryMonitor {
         "<option[^>]*value=[\"'](\\d+)[\"'][^>]*selected",
         Pattern.CASE_INSENSITIVE
     );
+    private static final Pattern ATTEST_NUM_PAT = Pattern.compile(
+        "(\\d)\\s*(?:-?[яй])?\\s*аттестац|аттестац[^\\d]{0,12}(\\d)",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern ISO_DATE_INLINE_PAT = Pattern.compile("(\\d{4}-\\d{2}-\\d{2})");
+    private static final Pattern RU_DATE_INLINE_PAT = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");
 
     public boolean isTimeForPeriodicPoll(AppStorage storage) {
         long intervalMs = storage.getAutoUpdateIntervalMillis();
@@ -191,9 +203,12 @@ public class DiaryMonitor {
     private static class SubjectDiaryStats {
         String subject;
         int attended = 0;
+        int excusedCount = 0;
         int total = 0;
         List<Integer> history = new ArrayList<>();
+        List<JSONObject> sessions = new ArrayList<>();
         List<String> grades = new ArrayList<>();
+        List<JSONObject> gradeEntries = new ArrayList<>();
         String credit = "Контроль";
     }
 
@@ -257,6 +272,7 @@ public class DiaryMonitor {
                 }
 
                 String shortDate = formatIsoToShortDate(dateIso);
+                String[] dow = parseDowFromIso(dateIso);
                 int maxCols = Math.min(tdTextList.size(), columns.size());
 
                 for (int col = 2; col < maxCols; col++) {
@@ -273,15 +289,40 @@ public class DiaryMonitor {
                     }
 
                     st.total++;
-                    boolean isMissed = isAbsenceValue(cellVal);
+                    String absenceStatus = classifyAbsence(cellVal);
+                    boolean isMissed = !absenceStatus.isEmpty();
+                    String sessionStatus = isMissed ? absenceStatus : "present";
+
                     if (isMissed) {
                         st.history.add(0);
+                        if ("sick".equals(absenceStatus) || "excused".equals(absenceStatus)) {
+                            st.excusedCount++;
+                        }
                     } else {
                         st.attended++;
                         st.history.add(1);
                     }
 
-                    extractGradesToStats(cellVal, st);
+                    JSONObject sessObj = new JSONObject();
+                    sessObj.put("date", shortDate);
+                    sessObj.put("dateIso", dateIso);
+                    sessObj.put("dow", dow[0]);
+                    sessObj.put("dowFull", dow[1]);
+                    sessObj.put("status", sessionStatus);
+                    sessObj.put("value", cellVal);
+                    st.sessions.add(sessObj);
+
+                    extractNumericGradesToStats(
+                        cellVal,
+                        st,
+                        shortDate,
+                        dateIso,
+                        dow[0],
+                        dow[1],
+                        "lesson",
+                        "Занятие",
+                        ""
+                    );
 
                     if (!cellVal.isEmpty()) {
                         recordEntry(
@@ -305,6 +346,15 @@ public class DiaryMonitor {
             String rowLabel = (tdTextList.get(0) + " " + tdTextList.get(1)).toLowerCase(Locale.ROOT);
             String controlType = detectControlType(rowLabel);
             if (!controlType.isEmpty()) {
+                boolean isMidterm = "Аттестация".equals(controlType);
+                String midtermNum = isMidterm ? extractAttestationNum(rowLabel) : "";
+                String controlLabel = isMidterm
+                    ? (midtermNum.isEmpty() ? "Промежуточная аттестация" : (midtermNum + "-я пром. аттестация"))
+                    : controlType;
+                String shortPrefix = isMidterm
+                    ? (midtermNum.isEmpty() ? "Пром. атт." : (midtermNum + " атт."))
+                    : "";
+
                 int maxCols = Math.min(tdTextList.size(), columns.size());
                 for (int col = 2; col < maxCols; col++) {
                     String subj = columns.get(col);
@@ -312,28 +362,49 @@ public class DiaryMonitor {
                     if (subj.isEmpty() || cellVal.isEmpty()) continue;
 
                     SubjectDiaryStats st = getOrCreateSubject(bySubject, subj);
-                    if (!"Аттестация".equals(controlType)) {
+                    if (!isMidterm) {
                         st.credit = controlType;
                     }
 
+                    Matcher titleMat = TITLE_ATTR_PAT.matcher(tdAttrsList.get(col));
+                    String rawAttrTitle = titleMat.find() ? titleMat.group(1).trim() : "";
+                    String ctrlDateIso = extractIsoDateFromText(rawAttrTitle);
+                    String ctrlShortDate = !ctrlDateIso.isEmpty()
+                        ? formatIsoToShortDate(ctrlDateIso)
+                        : (!rawAttrTitle.isEmpty() ? rawAttrTitle : controlLabel);
+                    String[] ctrlDow = parseDowFromIso(ctrlDateIso);
+
+                    String kind = isMidterm ? "midterm" : "final";
                     String lowVal = cellVal.toLowerCase(Locale.ROOT);
-                    if (lowVal.contains("аттест")) {
-                        if (!st.grades.contains("Зачёт")) {
-                            st.grades.add("Зачёт");
-                        }
-                    } else if (lowVal.contains("зач")) {
-                        st.grades.add("Зачёт");
+
+                    if (lowVal.contains("не аттест") || lowVal.contains("неаттест")
+                        || lowVal.contains("не зач") || lowVal.contains("незач")) {
+                        String val = "Незачёт";
+                        String display = isMidterm ? (shortPrefix + ": " + val) : val;
+                        addGradeEntry(st, val, display, ctrlShortDate, ctrlDateIso, ctrlDow[0], ctrlDow[1], kind, controlLabel);
+                    } else if (lowVal.contains("аттест") || lowVal.contains("зач")) {
+                        String val = "Зачёт";
+                        String display = isMidterm ? (shortPrefix + ": " + val) : val;
+                        addGradeEntry(st, val, display, ctrlShortDate, ctrlDateIso, ctrlDow[0], ctrlDow[1], kind, controlLabel);
                     } else {
-                        extractGradesToStats(cellVal, st);
+                        extractNumericGradesToStats(
+                            cellVal,
+                            st,
+                            ctrlShortDate,
+                            ctrlDateIso,
+                            ctrlDow[0],
+                            ctrlDow[1],
+                            kind,
+                            controlLabel,
+                            shortPrefix
+                        );
                     }
 
-                    Matcher titleMat = TITLE_ATTR_PAT.matcher(tdAttrsList.get(col));
-                    String attrDate = titleMat.find() ? titleMat.group(1).trim() : controlType;
                     recordEntry(
                         subj,
-                        attrDate,
-                        attrDate,
-                        "ctrl_" + controlType + "_" + col,
+                        ctrlShortDate,
+                        !ctrlDateIso.isEmpty() ? ctrlDateIso : ctrlShortDate,
+                        "ctrl_" + controlLabel + "_" + col,
                         cellVal,
                         hadBaseline,
                         oldSnap,
@@ -357,24 +428,74 @@ public class DiaryMonitor {
         return st;
     }
 
-    private static boolean isAbsenceValue(String val) {
-        if (val == null || val.isEmpty()) return false;
+    /**
+     * Классифицирует пропуск:
+     * "sick"    — Б (болезнь)
+     * "excused" — У (уважительная причина)
+     * "absent"  — Н / Н/Я / неявка / пропуск
+     * ""        — студент присутствовал
+     */
+    private static String classifyAbsence(String val) {
+        if (val == null || val.isEmpty()) return "";
         String up = val.trim().toUpperCase(Locale.ROOT);
-        return up.equals("Н")
+        if (up.equals("Б") || up.startsWith("Б ") || up.startsWith("Б/")) {
+            return "sick";
+        }
+        if (up.equals("У") || up.startsWith("У ") || up.startsWith("У/")) {
+            return "excused";
+        }
+        if (up.equals("Н")
             || up.equals("Н/Я")
-            || up.equals("Б")
-            || up.equals("У")
             || up.startsWith("Н ")
             || up.startsWith("Н/")
             || up.contains("НЕЯВК")
-            || up.contains("ПРОПУСК");
+            || up.contains("ПРОПУСК")) {
+            return "absent";
+        }
+        return "";
     }
 
-    private static void extractGradesToStats(String cellVal, SubjectDiaryStats st) {
+    private static void addGradeEntry(
+        SubjectDiaryStats st,
+        String value,
+        String display,
+        String shortDate,
+        String dateIso,
+        String dowShort,
+        String dowFull,
+        String kind,
+        String label
+    ) throws Exception {
+        st.grades.add(display);
+        JSONObject gObj = new JSONObject();
+        gObj.put("value", value);
+        gObj.put("display", display);
+        gObj.put("date", shortDate != null ? shortDate : "");
+        gObj.put("dateIso", dateIso != null ? dateIso : "");
+        gObj.put("dow", dowShort != null ? dowShort : "");
+        gObj.put("dowFull", dowFull != null ? dowFull : "");
+        gObj.put("kind", kind != null ? kind : "lesson");
+        gObj.put("label", label != null ? label : "Занятие");
+        st.gradeEntries.add(gObj);
+    }
+
+    private static void extractNumericGradesToStats(
+        String cellVal,
+        SubjectDiaryStats st,
+        String shortDate,
+        String dateIso,
+        String dowShort,
+        String dowFull,
+        String kind,
+        String label,
+        String shortPrefix
+    ) throws Exception {
         if (cellVal == null || cellVal.isEmpty()) return;
         Matcher gm = GRADE_NUM_PAT.matcher(cellVal);
         while (gm.find()) {
-            st.grades.add(gm.group(1));
+            String g = gm.group(1);
+            String display = (shortPrefix != null && !shortPrefix.isEmpty()) ? (shortPrefix + ": " + g) : g;
+            addGradeEntry(st, g, display, shortDate, dateIso, dowShort, dowFull, kind, label);
         }
     }
 
@@ -384,6 +505,49 @@ public class DiaryMonitor {
         if (rowLabel.contains("зачет") || rowLabel.contains("зачёт")) return "Зачёт";
         if (rowLabel.contains("аттестац")) return "Аттестация";
         return "";
+    }
+
+    private static String extractAttestationNum(String rowLabel) {
+        if (rowLabel == null || rowLabel.isEmpty()) return "";
+        Matcher m = ATTEST_NUM_PAT.matcher(rowLabel);
+        if (m.find()) {
+            String g1 = m.group(1);
+            if (g1 != null && !g1.isEmpty()) return g1;
+            String g2 = m.group(2);
+            if (g2 != null && !g2.isEmpty()) return g2;
+        }
+        return "";
+    }
+
+    private static String extractIsoDateFromText(String raw) {
+        if (raw == null || raw.isEmpty()) return "";
+        Matcher mIso = ISO_DATE_INLINE_PAT.matcher(raw);
+        if (mIso.find()) return mIso.group(1);
+        Matcher mRu = RU_DATE_INLINE_PAT.matcher(raw);
+        if (mRu.find()) {
+            String[] p = mRu.group(1).split("\\.");
+            if (p.length == 3) {
+                return p[2] + "-" + p[1] + "-" + p[0];
+            }
+        }
+        return "";
+    }
+
+    private static String[] parseDowFromIso(String dateIso) {
+        if (dateIso == null || dateIso.length() < 10) return new String[]{"", ""};
+        try {
+            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+            Date d = sdf.parse(dateIso.substring(0, 10));
+            if (d != null) {
+                Calendar cal = Calendar.getInstance();
+                cal.setTime(d);
+                int dow = cal.get(Calendar.DAY_OF_WEEK) - 1;
+                if (dow >= 0 && dow < 7) {
+                    return new String[]{DOW_SHORT[dow], DOW_FULL[dow]};
+                }
+            }
+        } catch (Exception ignored) {}
+        return new String[]{"", ""};
     }
 
     private static String formatIsoToShortDate(String iso) {
@@ -444,6 +608,7 @@ public class DiaryMonitor {
                 obj.put("id", "d_" + Math.abs(st.subject.hashCode()));
                 obj.put("subject", st.subject);
                 obj.put("attended", st.attended);
+                obj.put("excusedCount", st.excusedCount);
                 obj.put("total", st.total);
 
                 JSONArray histArr = new JSONArray();
@@ -453,11 +618,24 @@ public class DiaryMonitor {
                 }
                 obj.put("history", histArr);
 
+                JSONArray sessionsArr = new JSONArray();
+                for (JSONObject sess : st.sessions) {
+                    sessionsArr.put(sess);
+                }
+                obj.put("sessions", sessionsArr);
+
                 JSONArray gradesArr = new JSONArray();
                 for (String g : st.grades) {
                     gradesArr.put(g);
                 }
                 obj.put("grades", gradesArr);
+
+                JSONArray gradeEntriesArr = new JSONArray();
+                for (JSONObject ge : st.gradeEntries) {
+                    gradeEntriesArr.put(ge);
+                }
+                obj.put("gradeEntries", gradeEntriesArr);
+
                 obj.put("credit", st.credit);
                 summaryArr.put(obj);
             }
