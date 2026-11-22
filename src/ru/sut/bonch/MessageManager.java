@@ -1,6 +1,7 @@
 package ru.sut.bonch;
 
 import android.content.Context;
+import java.io.File;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -194,18 +195,16 @@ public class MessageManager {
                     continue;
                 }
 
-                // Извлекаем прикреплённый файл в строке сообщения (если есть <a href='.../subconto/sendto/...'>)
-                String attachmentNote = "";
+                // Извлекаем прикреплённые файлы в строке сообщения (<a href='.../subconto/sendto/...'>)
+                JSONArray rowAttachments = new JSONArray();
                 Matcher lm = linkPat.matcher(trInner);
                 while (lm.find()) {
                     String href = lm.group(1).trim();
                     if (href.toLowerCase(Locale.ROOT).contains("subconto/sendto")) {
+                        String absUrl = SutApiClient.resolveUrl(pageUrl, href);
                         String aName = cleanHtml(lm.group(2));
-                        if (aName.isEmpty()) aName = extractFilenameFromUrl(href);
-                        if (!aName.isEmpty()) {
-                            attachmentNote = "📎 " + aName;
-                            break;
-                        }
+                        if (aName.isEmpty()) aName = extractFilenameFromUrl(absUrl);
+                        addUniqueAttachment(rowAttachments, aName, absUrl);
                     }
                 }
 
@@ -253,19 +252,27 @@ public class MessageManager {
                 }
                 if (subject.isEmpty()) subject = "Личное сообщение";
 
-                // Открываем реальный текст сообщения через POST sendto2.php?id=<ID>&prosmotr
+                // Открываем реальный текст и вложения сообщения через POST sendto2.php?id=<ID>&prosmotr
                 String fullText = "";
+                String idinfo = "0";
+                String itemnumber = serverId;
                 if (!serverId.isEmpty() && cachedBodyByServerId.containsKey(serverId)) {
                     fullText = cachedBodyByServerId.get(serverId);
                 } else if (!serverId.isEmpty() && fetchedDetailsCount < maxDetailsToFetch) {
                     fetchedDetailsCount++;
-                    fullText = fetchMessageBodyViaSendto2(api, serverId);
+                    ParsedMessageDetail det = fetchMessageDetailViaSendto2(api, serverId);
+                    fullText = det.text;
+                    idinfo = det.idinfo;
+                    itemnumber = det.itemnumber;
+                    for (int ai = 0; ai < det.attachments.length(); ai++) {
+                        JSONObject aObj = det.attachments.optJSONObject(ai);
+                        if (aObj != null) {
+                            addUniqueAttachment(rowAttachments, aObj.optString("name", ""), aObj.optString("url", ""));
+                        }
+                    }
                 }
                 if (fullText.isEmpty()) {
                     fullText = !bodyPreview.isEmpty() ? bodyPreview : subject;
-                }
-                if (!attachmentNote.isEmpty() && !fullText.contains(attachmentNote)) {
-                    fullText = fullText + "\n" + attachmentNote;
                 }
 
                 boolean looksUnread = trLow.contains("<b")
@@ -298,6 +305,8 @@ public class MessageManager {
                     threadObj = new JSONObject();
                     threadObj.put("id", "m_" + Math.abs(sender.hashCode()));
                     threadObj.put("serverId", serverId);
+                    threadObj.put("itemnumber", itemnumber);
+                    threadObj.put("idinfo", idinfo);
                     threadObj.put("sender", sender);
                     threadObj.put("initials", buildInitials(sender));
                     threadObj.put("role", subject);
@@ -318,6 +327,9 @@ public class MessageManager {
                 bubble.put("text", fullText);
                 bubble.put("time", timeShort);
                 bubble.put("serverId", serverId);
+                if (rowAttachments.length() > 0) {
+                    bubble.put("attachments", rowAttachments);
+                }
                 threadObj.getJSONArray("thread").put(bubble);
 
                 rowCounter++;
@@ -365,29 +377,119 @@ public class MessageManager {
         }
     }
 
+    private static class ParsedMessageDetail {
+        String text = "";
+        String idinfo = "0";
+        String itemnumber = "";
+        JSONArray attachments = new JSONArray();
+    }
+
     /**
-     * Загружает текст конкретного сообщения через подтверждённый эндпоинт:
+     * Загружает и парсит JSON конкретного сообщения через подтверждённый эндпоинт:
      * POST https://lk.sut.ru/cabinet/project/cabinet/forms/sendto2.php?id=<ID>&prosmotr
      */
-    private String fetchMessageBodyViaSendto2(SutApiClient api, String serverId) {
+    private ParsedMessageDetail fetchMessageDetailViaSendto2(SutApiClient api, String serverId) {
+        ParsedMessageDetail det = new ParsedMessageDetail();
+        det.itemnumber = serverId;
         try {
             String url = SutApiClient.MESSAGE_READ_URL + "?id=" + URLEncoder.encode(serverId, "UTF-8") + "&prosmotr";
             String body = "id=" + URLEncoder.encode(serverId, "UTF-8") + "&prosmotr=1";
             String resp = api.httpRequestFast("POST", url, body);
-            if (resp == null || resp.trim().length() < 5) {
+            if (resp == null || resp.trim().length() < 2) {
                 resp = api.httpRequestFast("GET", url, null);
             }
-            if (resp == null || resp.trim().length() < 5 || isAuthExpiredHtml(resp)) {
-                return "";
+            if (resp == null || resp.trim().length() < 2 || isAuthExpiredHtml(resp)) {
+                return det;
             }
-            String text = cleanHtml(resp);
-            if (text.length() > 800) {
-                text = text.substring(0, 800) + "…";
+
+            String trimmed = resp.trim();
+            if (trimmed.startsWith("{")) {
+                JSONObject json = new JSONObject(trimmed);
+                det.itemnumber = json.optString("itemnumber", serverId);
+                det.idinfo = json.optString("idinfo", "0");
+
+                String annotation = json.optString("annotation", "");
+                det.text = cleanMessageText(annotation);
+
+                Object filesObj = json.opt("files");
+                if (filesObj instanceof String) {
+                    extractAttachmentsFromHtml((String) filesObj, SutApiClient.MESSAGE_IN_URL, det.attachments);
+                } else if (filesObj instanceof JSONArray) {
+                    JSONArray fArr = (JSONArray) filesObj;
+                    for (int i = 0; i < fArr.length(); i++) {
+                        Object item = fArr.opt(i);
+                        if (item instanceof String) {
+                            String fStr = ((String) item).trim();
+                            if (fStr.contains("<a")) {
+                                extractAttachmentsFromHtml(fStr, SutApiClient.MESSAGE_IN_URL, det.attachments);
+                            } else if (!fStr.isEmpty()) {
+                                String abs = fStr.startsWith("http") || fStr.startsWith("/")
+                                    ? SutApiClient.resolveUrl(fStr)
+                                    : (SutApiClient.ORIGIN_URL + "/cabinet/ini/subconto/sendto/101/" + det.itemnumber + "/" + fStr);
+                                addUniqueAttachment(det.attachments, extractFilenameFromUrl(abs), abs);
+                            }
+                        } else if (item instanceof JSONObject) {
+                            JSONObject fJson = (JSONObject) item;
+                            String href = fJson.optString("url", fJson.optString("href", ""));
+                            String name = fJson.optString("name", extractFilenameFromUrl(href));
+                            if (!href.isEmpty()) {
+                                addUniqueAttachment(det.attachments, name, SutApiClient.resolveUrl(href));
+                            }
+                        }
+                    }
+                }
+            } else {
+                det.text = cleanMessageText(trimmed);
+                extractAttachmentsFromHtml(trimmed, SutApiClient.MESSAGE_IN_URL, det.attachments);
             }
-            return text;
-        } catch (Exception e) {
-            return "";
+        } catch (Exception ignored) {}
+        return det;
+    }
+
+    private static void extractAttachmentsFromHtml(String html, String baseUrl, JSONArray target) {
+        if (html == null || html.isEmpty()) return;
+        Pattern linkPat = Pattern.compile("<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+        Matcher lm = linkPat.matcher(html);
+        while (lm.find()) {
+            String href = lm.group(1).trim();
+            if (href.isEmpty() || href.startsWith("#") || href.toLowerCase(Locale.ROOT).startsWith("javascript:")) continue;
+            String absUrl = SutApiClient.resolveUrl(baseUrl, href);
+            String name = cleanHtml(lm.group(2));
+            if (name.isEmpty()) name = extractFilenameFromUrl(absUrl);
+            addUniqueAttachment(target, name, absUrl);
         }
+    }
+
+    private static void addUniqueAttachment(JSONArray arr, String name, String url) {
+        if (url == null || url.isEmpty()) return;
+        for (int i = 0; i < arr.length(); i++) {
+            JSONObject ex = arr.optJSONObject(i);
+            if (ex != null && url.equals(ex.optString("url", ""))) return;
+        }
+        try {
+            JSONObject obj = new JSONObject();
+            obj.put("name", (name != null && !name.isEmpty()) ? name : extractFilenameFromUrl(url));
+            obj.put("url", url);
+            arr.put(obj);
+        } catch (Exception ignored) {}
+    }
+
+    private static String cleanMessageText(String raw) {
+        if (raw == null) return "";
+        return raw
+            .replaceAll("(?s)<script[^>]*>.*?</script>", " ")
+            .replaceAll("(?s)<style[^>]*>.*?</style>", " ")
+            .replaceAll("(?i)<br\\s*/?>", "\n")
+            .replaceAll("(?i)</p>", "\n")
+            .replaceAll("<[^>]+>", " ")
+            .replace("&nbsp;", " ")
+            .replace("&quot;", "\"")
+            .replace("&laquo;", "«")
+            .replace("&raquo;", "»")
+            .replace("&amp;", "&")
+            .replaceAll("[ \\t]+", " ")
+            .replaceAll("\\n{3,}", "\n\n")
+            .trim();
     }
 
     /**
@@ -469,15 +571,10 @@ public class MessageManager {
                     Matcher fm = fioPat.matcher(rowPlain);
                     String author = fm.find() ? fm.group(1) : "Преподаватель";
 
-                    String subject = "Файлы группы";
-                    for (String c : cells) {
-                        if (c.isEmpty() || c.equals(fileName) || c.equals(dateStr) || c.equals(author) || c.matches("^\\d+$")) {
-                            continue;
-                        }
-                        if (c.length() >= 3 && c.length() <= 80 && !c.contains(fileName)) {
-                            subject = c;
-                            break;
-                        }
+                    String subject = (cells.size() > 3 && !cells.get(3).isEmpty()) ? cells.get(3) : "Файлы группы";
+                    String comment = (cells.size() > 4) ? cells.get(4) : "";
+                    if (comment.equals(fileName) || comment.equals(dateStr) || comment.equals(author)) {
+                        comment = "";
                     }
 
                     String fileKey = !rowId.isEmpty() ? ("file_" + rowId) : ("file_" + Math.abs(absUrl.hashCode()));
@@ -487,6 +584,7 @@ public class MessageManager {
                     fObj.put("name", fileName);
                     fObj.put("ext", ext);
                     fObj.put("subject", subject);
+                    fObj.put("comment", comment);
                     fObj.put("size", sizeStr);
                     fObj.put("date", dateStr.isEmpty() ? "Недавно" : dateStr);
                     fObj.put("author", author);
@@ -574,8 +672,29 @@ public class MessageManager {
         String threadId,
         String replyText
     ) {
-        if (replyText == null || replyText.trim().isEmpty()) return false;
-        String cleanText = replyText.trim();
+        return sendReply(api, storage, login, password, threadId, replyText, null, null);
+    }
+
+    public synchronized boolean sendReply(
+        SutApiClient api,
+        AppStorage storage,
+        String login,
+        String password,
+        String threadId,
+        String replyText,
+        String filePath,
+        String fileName
+    ) {
+        String cleanText = replyText != null ? replyText.trim() : "";
+        File attachFile = (filePath != null && !filePath.isEmpty()) ? new File(filePath) : null;
+        boolean hasFile = attachFile != null && attachFile.exists() && attachFile.length() > 0;
+
+        if (cleanText.isEmpty() && !hasFile) return false;
+        if (hasFile && attachFile.length() > 5L * 1024L * 1024L) {
+            storage.addLog("Ошибка: файл больше 5 МБ");
+            return false;
+        }
+
         String nowTime = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
 
         try {
@@ -591,24 +710,37 @@ public class MessageManager {
 
             if (targetThread == null) return false;
 
-            String serverId = targetThread.optString("serverId", "");
-            String subject = targetThread.optString("role", "Ответ");
+            String item = targetThread.optString("itemnumber", targetThread.optString("serverId", ""));
+            String idinfo = targetThread.optString("idinfo", "0");
             boolean sentToServer = false;
 
-            if (!serverId.isEmpty() && (api.isAuthenticated() || api.authenticate(login, password, storage))) {
+            if (!item.isEmpty() && (api.isAuthenticated() || api.authenticate(login, password, storage))) {
                 try {
-                    String payload = "save=1&id=" + URLEncoder.encode(serverId, "UTF-8")
-                        + "&title=" + URLEncoder.encode("Re: " + subject, "UTF-8")
+                    if (hasFile) {
+                        Map<String, String> fields = new LinkedHashMap<>();
+                        fields.put("id", idinfo);
+                        fields.put("item", item);
+                        fields.put("upload", "Загрузить");
+                        api.httpPostMultipart(SutApiClient.MESSAGE_READ_URL, fields, "userfile", attachFile, fileName);
+                    }
+
+                    String payload = "item=" + URLEncoder.encode(item, "UTF-8")
+                        + "&idinfo=" + URLEncoder.encode(idinfo, "UTF-8")
                         + "&mes_otvet=" + URLEncoder.encode(cleanText, "UTF-8")
-                        + "&text=" + URLEncoder.encode(cleanText, "UTF-8");
-                    String resp = api.httpRequest("POST", SutApiClient.MESSAGE_READ_URL, payload);
+                        + "&saveotv=1";
+                    String resp = api.httpRequest("POST", SutApiClient.MESSAGE_SEND_URL, payload);
                     sentToServer = resp != null && !resp.toLowerCase(Locale.ROOT).contains("ошибка");
                 } catch (Exception ignored) {}
             }
 
             JSONObject bubble = new JSONObject();
             bubble.put("from", "me");
-            bubble.put("text", cleanText);
+            String displayText = cleanText;
+            if (hasFile) {
+                String safeName = (fileName != null && !fileName.isEmpty()) ? fileName : attachFile.getName();
+                displayText = displayText.isEmpty() ? ("📎 " + safeName) : (displayText + "\n📎 " + safeName);
+            }
+            bubble.put("text", displayText);
             bubble.put("time", nowTime);
             targetThread.getJSONArray("thread").put(bubble);
             targetThread.put("time", nowTime);
@@ -622,6 +754,10 @@ public class MessageManager {
         } catch (Exception e) {
             storage.addLog("Ошибка отправки сообщения: " + e.getMessage());
             return false;
+        } finally {
+            if (attachFile != null && attachFile.exists()) {
+                try { attachFile.delete(); } catch (Exception ignored) {}
+            }
         }
     }
 

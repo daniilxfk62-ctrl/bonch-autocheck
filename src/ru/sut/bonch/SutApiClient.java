@@ -2,6 +2,7 @@ package ru.sut.bonch;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -34,14 +35,14 @@ public class SutApiClient {
     // Подтверждённые реальные URL разделов ЛК СПбГУТ
     public static final String MESSAGE_IN_URL = BASE_URL + "/project/cabinet/forms/message.php?type=in";
     public static final String MESSAGE_READ_URL = BASE_URL + "/project/cabinet/forms/sendto2.php";
+    public static final String MESSAGE_SEND_URL = BASE_URL + "/project/cabinet/forms/message.php";
     public static final String GROUP_FILES_URL = BASE_URL + "/project/cabinet/forms/files_group_pr.php";
+    public static final String DIARY_URL = BASE_URL + "/project/cabinet/forms/jurnal_dnevnik.php";
 
     public static final String[] DIARY_URLS = {
+        DIARY_URL,
         BASE_URL + "/project/cabinet/forms/dnevnik.php",
-        BASE_URL + "/project/cabinet/forms/jurnal.php",
-        BASE_URL + "/project/cabinet/forms/stud_jurnal.php",
-        BASE_URL + "/project/cabinet/forms/usp.php",
-        BASE_URL + "/project/cabinet/forms/zach.php"
+        BASE_URL + "/project/cabinet/forms/jurnal.php"
     };
 
     public static final String[] MESSAGE_URLS = {
@@ -626,5 +627,92 @@ public class SutApiClient {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    public String httpPostMultipart(
+        String urlStr,
+        Map<String, String> fields,
+        String fileFieldName,
+        File file,
+        String fileName
+    ) throws Exception {
+        String boundary = "----PulseBoundary" + System.currentTimeMillis();
+        String lineEnd = "\r\n";
+        String twoHyphens = "--";
+
+        URL url = new URL(resolveUrl(urlStr));
+        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+        conn.setRequestMethod("POST");
+        conn.setDoOutput(true);
+        conn.setConnectTimeout(15000);
+        conn.setReadTimeout(30000);
+        conn.setRequestProperty("User-Agent", USER_AGENT);
+        conn.setRequestProperty("Referer", MESSAGE_IN_URL);
+        conn.setRequestProperty("Origin", ORIGIN_URL);
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+
+        String cookieHeader = getCookieHeaderForUrl(urlStr);
+        if (!cookieHeader.isEmpty()) {
+            conn.setRequestProperty("Cookie", cookieHeader);
+        }
+
+        try (OutputStream os = conn.getOutputStream()) {
+            if (fields != null) {
+                for (Map.Entry<String, String> entry : fields.entrySet()) {
+                    os.write((twoHyphens + boundary + lineEnd).getBytes("UTF-8"));
+                    os.write(("Content-Disposition: form-data; name=\"" + entry.getKey() + "\"" + lineEnd + lineEnd).getBytes("UTF-8"));
+                    os.write((entry.getValue() != null ? entry.getValue() : "").getBytes("UTF-8"));
+                    os.write(lineEnd.getBytes("UTF-8"));
+                }
+            }
+
+            if (file != null && file.exists()) {
+                String safeName = (fileName != null && !fileName.trim().isEmpty()) ? fileName.trim() : file.getName();
+                os.write((twoHyphens + boundary + lineEnd).getBytes("UTF-8"));
+                os.write(("Content-Disposition: form-data; name=\"" + fileFieldName + "\"; filename=\"" + safeName + "\"" + lineEnd).getBytes("UTF-8"));
+                os.write(("Content-Type: application/octet-stream" + lineEnd + lineEnd).getBytes("UTF-8"));
+
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = fis.read(buf)) != -1) {
+                        os.write(buf, 0, n);
+                    }
+                }
+                os.write(lineEnd.getBytes("UTF-8"));
+            }
+
+            os.write((twoHyphens + boundary + twoHyphens + lineEnd).getBytes("UTF-8"));
+            os.flush();
+        }
+
+        int code = conn.getResponseCode();
+        captureResponseCookies(conn);
+
+        String contentType = conn.getContentType();
+        String contentEncoding = conn.getContentEncoding();
+        InputStream rawStream = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+        if (rawStream == null) {
+            conn.disconnect();
+            return "";
+        }
+
+        InputStream is = (contentEncoding != null && contentEncoding.toLowerCase(Locale.ROOT).contains("gzip"))
+            ? new GZIPInputStream(rawStream)
+            : rawStream;
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int n;
+        try {
+            while ((n = is.read(buf)) != -1) {
+                baos.write(buf, 0, n);
+            }
+        } finally {
+            try { is.close(); } catch (Exception ignored) {}
+            conn.disconnect();
+        }
+
+        return decodeBytes(baos.toByteArray(), contentType);
     }
 }

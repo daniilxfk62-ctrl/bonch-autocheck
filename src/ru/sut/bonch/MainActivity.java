@@ -10,9 +10,14 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.PowerManager;
 import android.provider.Settings;
+import android.util.Base64;
 import android.webkit.JavascriptInterface;
+import android.webkit.ValueCallback;
+import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
+import java.io.File;
+import java.io.FileOutputStream;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -20,6 +25,8 @@ public class MainActivity extends Activity {
     private WebView webView;
     private AppStorage storage;
     private MessageManager messageManager;
+    private ValueCallback<Uri[]> filePathCallback;
+    private static final int FILE_CHOOSER_REQ_CODE = 2026;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -39,10 +46,46 @@ public class MainActivity extends Activity {
         ws.setDomStorageEnabled(true);
         ws.setAllowFileAccess(true);
         ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
+                if (filePathCallback != null) {
+                    filePathCallback.onReceiveValue(null);
+                }
+                filePathCallback = callback;
+                try {
+                    Intent intent = params.createIntent();
+                    startActivityForResult(intent, FILE_CHOOSER_REQ_CODE);
+                    return true;
+                } catch (Exception e) {
+                    filePathCallback = null;
+                    return false;
+                }
+            }
+        });
         webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
         setContentView(webView);
 
         webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == FILE_CHOOSER_REQ_CODE) {
+            if (filePathCallback != null) {
+                Uri[] results = null;
+                if (resultCode == Activity.RESULT_OK && data != null) {
+                    Uri uri = data.getData();
+                    if (uri != null) {
+                        results = new Uri[]{uri};
+                    }
+                }
+                filePathCallback.onReceiveValue(results);
+                filePathCallback = null;
+            }
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     private void requestBatteryOptimizationIfNeeded() {
@@ -312,6 +355,45 @@ public class MainActivity extends Activity {
             svc.putExtra("threadId", threadId);
             svc.putExtra("text", text.trim());
             sendDaemonIntent(svc);
+        }
+
+        @JavascriptInterface
+        public boolean sendMessageWithFile(String threadId, String text, String fileName, String base64Data) {
+            if (threadId == null || threadId.isEmpty()) return false;
+            String cleanText = text != null ? text.trim() : "";
+            String savedPath = "";
+            String safeName = (fileName != null && !fileName.trim().isEmpty())
+                ? fileName.trim().replaceAll("[\\\\/:*?\"<>|]", "_")
+                : "attachment";
+
+            if (base64Data != null && !base64Data.isEmpty()) {
+                try {
+                    byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
+                    if (bytes.length > 5 * 1024 * 1024) {
+                        storage.addLog("Ошибка: файл больше 5 МБ");
+                        return false;
+                    }
+                    File tmp = new File(getCacheDir(), "upload_" + System.currentTimeMillis() + "_" + safeName);
+                    try (FileOutputStream fos = new FileOutputStream(tmp)) {
+                        fos.write(bytes);
+                    }
+                    savedPath = tmp.getAbsolutePath();
+                } catch (Exception e) {
+                    storage.addLog("Ошибка подготовки файла: " + e.getMessage());
+                    return false;
+                }
+            }
+
+            if (cleanText.isEmpty() && savedPath.isEmpty()) return false;
+
+            Intent svc = new Intent(MainActivity.this, BonchBackgroundDaemon.class);
+            svc.putExtra("action", "send_message");
+            svc.putExtra("threadId", threadId);
+            svc.putExtra("text", cleanText);
+            svc.putExtra("filePath", savedPath);
+            svc.putExtra("fileName", safeName);
+            sendDaemonIntent(svc);
+            return true;
         }
 
         @JavascriptInterface

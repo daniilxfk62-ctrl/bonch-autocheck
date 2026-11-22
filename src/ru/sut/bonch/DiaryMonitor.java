@@ -4,14 +4,11 @@ import android.content.Context;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.json.JSONArray;
@@ -19,6 +16,40 @@ import org.json.JSONObject;
 
 public class DiaryMonitor {
     private long lastDiaryPollMillis = 0L;
+
+    private static final Pattern TABLE_PAT = Pattern.compile(
+        "<table[^>]*class=[\"'][^\"']*smalltab[^\"']*[\"'][^>]*>(.*?)</table>",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern TR_PAT = Pattern.compile(
+        "<tr([^>]*)>(.*?)</tr>",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern TH_PAT = Pattern.compile(
+        "<th[^>]*>(.*?)</th>",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern TD_PAT = Pattern.compile(
+        "<td([^>]*)>(.*?)</td>",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern DATE1_ATTR_PAT = Pattern.compile(
+        "date1\\s*=\\s*[\"'](\\d{4}-\\d{2}-\\d{2})[\"']",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern RASP_ATTR_PAT = Pattern.compile(
+        "rasp\\s*=\\s*[\"']?(\\d+)[\"']?",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern TITLE_ATTR_PAT = Pattern.compile(
+        "title\\s*=\\s*[\"']([^\"']+)[\"']",
+        Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern GRADE_NUM_PAT = Pattern.compile("\\b([2345])\\b");
+    private static final Pattern SELECT_GROUP_PAT = Pattern.compile(
+        "<option[^>]*value=[\"'](\\d+)[\"'][^>]*selected",
+        Pattern.CASE_INSENSITIVE
+    );
 
     public boolean isTimeForPeriodicPoll(AppStorage storage) {
         long intervalMs = storage.getAutoUpdateIntervalMillis();
@@ -41,6 +72,12 @@ public class DiaryMonitor {
         }
 
         try {
+            String html = fetchDiaryHtml(api, storage, login, password);
+            if (!isValidDiaryHtml(html)) {
+                if (manualTrigger) storage.addLog("📚 Дневник: таблица jurnal_dnevnik.php не найдена.");
+                return;
+            }
+
             String oldRaw = storage.readText(AppStorage.FILE_DIARY_SNAPSHOT, "");
             boolean hadBaseline = !oldRaw.isEmpty();
             JSONObject oldSnap = hadBaseline ? new JSONObject(oldRaw) : new JSONObject();
@@ -54,95 +91,24 @@ public class DiaryMonitor {
 
             List<JSONObject> recentEntries = new ArrayList<>();
             Map<String, JSONObject> uniqueAllEntries = new LinkedHashMap<>();
+            Map<String, SubjectDiaryStats> bySubject = new LinkedHashMap<>();
             List<String> newAlerts = new ArrayList<>();
 
-            JSONArray prevAllArr = storage.readJsonArray(AppStorage.FILE_DIARY_ALL);
-            for (int i = 0; i < prevAllArr.length(); i++) {
-                JSONObject obj = prevAllArr.optJSONObject(i);
-                if (obj != null) {
-                    String uk = obj.optString("key", obj.optString("subject") + "||" + obj.optString("date") + "||" + i);
-                    uniqueAllEntries.put(uk, obj);
-                }
+            parseJurnalDnevnikTable(
+                html,
+                hadBaseline,
+                oldSnap,
+                newSnap,
+                bySubject,
+                recentEntries,
+                uniqueAllEntries,
+                newAlerts
+            );
+
+            if (bySubject.isEmpty()) {
+                if (manualTrigger) storage.addLog("📚 Дневник: предметов в таблице не обнаружено.");
+                return;
             }
-
-            String todayDateShort = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
-            Set<String> fetchedSubPages = new HashSet<>();
-
-            Set<String> candidateUrls = new LinkedHashSet<>();
-            String discovered = storage.getDiscoveredEndpoints().optString("diary", "").trim();
-            if (!discovered.isEmpty()) candidateUrls.add(discovered);
-            for (String u : SutApiClient.DIARY_URLS) candidateUrls.add(u);
-
-            boolean foundWorkingDiaryUrl = false;
-            int maxSubPages = manualTrigger ? 25 : 8;
-
-            for (String url : candidateUrls) {
-                String html = "";
-                try {
-                    html = api.httpRequestFast("POST", url, "");
-                    if (!isValidDiaryHtml(html)) {
-                        html = api.httpRequestFast("GET", url, null);
-                    }
-                } catch (Exception ignored) {}
-
-                if (html != null && (html.toLowerCase(Locale.ROOT).contains("autentification") || html.toLowerCase(Locale.ROOT).contains("name=\"parole\""))) {
-                    if (api.authenticate(login, password, storage)) {
-                        try {
-                            html = api.httpRequestFast("POST", url, "");
-                            if (!isValidDiaryHtml(html)) {
-                                html = api.httpRequestFast("GET", url, null);
-                            }
-                        } catch (Exception ignored) {}
-                    }
-                }
-
-                if (!isValidDiaryHtml(html)) continue;
-
-                int beforeCount = uniqueAllEntries.size();
-                parseDiaryHtmlDocument(
-                    html,
-                    todayDateShort,
-                    hadBaseline,
-                    oldSnap,
-                    newSnap,
-                    recentEntries,
-                    uniqueAllEntries,
-                    newAlerts
-                );
-
-                Pattern subCallPat = Pattern.compile("(?:open_uch|open_jurnal|show_jurnal|open_predm)\\s*\\(\\s*['\"]?(\\d+)['\"]?", Pattern.CASE_INSENSITIVE);
-                Matcher subMat = subCallPat.matcher(html);
-                while (subMat.find() && fetchedSubPages.size() < maxSubPages) {
-                    String subId = subMat.group(1);
-                    if (fetchedSubPages.contains(url + "#" + subId)) continue;
-                    fetchedSubPages.add(url + "#" + subId);
-                    try {
-                        String body = "id=" + subId + "&predm=" + subId + "&uch=" + subId + "&open=1";
-                        String subHtml = api.httpRequestFast("POST", url + "?" + body, body);
-                        if (subHtml != null && subHtml.toLowerCase(Locale.ROOT).contains("<table")) {
-                            parseDiaryHtmlDocument(
-                                subHtml,
-                                todayDateShort,
-                                hadBaseline,
-                                oldSnap,
-                                newSnap,
-                                recentEntries,
-                                uniqueAllEntries,
-                                newAlerts
-                            );
-                        }
-                    } catch (Exception ignored) {}
-                }
-
-                if (uniqueAllEntries.size() > beforeCount || !fetchedSubPages.isEmpty()) {
-                    storage.saveDiscoveredEndpoint("diary", url);
-                    foundWorkingDiaryUrl = true;
-                    // Не тратим время на перебор оставшихся запасных URL при автоматической синхронизации
-                    if (!manualTrigger) break;
-                }
-            }
-
-            syncAttendanceFromScheduleDays(storage, uniqueAllEntries, recentEntries);
 
             storage.writeText(AppStorage.FILE_DIARY_SNAPSHOT, newSnap.toString());
 
@@ -159,7 +125,7 @@ public class DiaryMonitor {
             }
             storage.writeText(AppStorage.FILE_DIARY_RECENT, recentJson.toString());
 
-            buildAndSavePulseSummary(storage, uniqueAllEntries);
+            saveSummary(storage, bySubject);
 
             if (!newAlerts.isEmpty() && storage.isNotifyDiaryEnabled()) {
                 for (String alertText : newAlerts) {
@@ -168,9 +134,9 @@ public class DiaryMonitor {
                     NotificationHelper.sendAlert(ctx, title, alertText);
                 }
             } else if (manualTrigger) {
-                storage.addLog("📚 Дневник обновлён (записей: " + uniqueAllEntries.size() + ", новых: " + newAlerts.size() + ").");
-            } else if (foundWorkingDiaryUrl) {
-                storage.addLog("📚 Дневник синхронизирован (записей: " + uniqueAllEntries.size() + ")");
+                storage.addLog("📚 Дневник обновлён (предметов: " + bySubject.size() + ", записей: " + uniqueAllEntries.size() + ")");
+            } else {
+                storage.addLog("📚 Дневник синхронизирован (предметов: " + bySubject.size() + ")");
             }
         } catch (Exception e) {
             if (manualTrigger) {
@@ -179,12 +145,47 @@ public class DiaryMonitor {
         }
     }
 
+    private String fetchDiaryHtml(
+        SutApiClient api,
+        AppStorage storage,
+        String login,
+        String password
+    ) throws Exception {
+        String url = SutApiClient.DIARY_URL;
+        String html = api.httpRequest("GET", url, null);
+        if (isAuthExpired(html)) {
+            if (api.authenticate(login, password, storage)) {
+                html = api.httpRequest("GET", url, null);
+            }
+        }
+        if (!isValidDiaryHtml(html)) {
+            html = api.httpRequest("POST", url, "");
+        }
+        if (html != null && !TABLE_PAT.matcher(html).find()) {
+            Matcher gm = SELECT_GROUP_PAT.matcher(html);
+            if (gm.find()) {
+                String grpId = gm.group(1);
+                String withGrp = api.httpRequest("GET", url + "?selectgroups=" + grpId, null);
+                if (isValidDiaryHtml(withGrp)) {
+                    return withGrp;
+                }
+            }
+        }
+        return html != null ? html : "";
+    }
+
+    private boolean isAuthExpired(String html) {
+        if (html == null || html.isEmpty()) return false;
+        String low = html.toLowerCase(Locale.ROOT);
+        return low.contains("autentification") || low.contains("name=\"parole\"") || low.contains("name='parole'");
+    }
+
     private boolean isValidDiaryHtml(String html) {
         if (html == null || html.trim().length() < 60) return false;
+        if (isAuthExpired(html)) return false;
         String low = html.toLowerCase(Locale.ROOT);
-        if (low.contains("autentification") || low.contains("name=\"parole\"")) return false;
-        if (low.contains("404 not found") || low.contains("страница не найдена")) return false;
-        return low.contains("<table") || low.contains("<tr");
+        if (low.contains("404 not found") || low.contains("403 forbidden")) return false;
+        return low.contains("<table") && (low.contains("smalltab") || low.contains("date1="));
     }
 
     private static class SubjectDiaryStats {
@@ -196,41 +197,247 @@ public class DiaryMonitor {
         String credit = "Контроль";
     }
 
-    public void buildAndSavePulseSummary(AppStorage storage, Map<String, JSONObject> uniqueAllEntries) {
-        try {
-            Map<String, SubjectDiaryStats> bySubject = new LinkedHashMap<>();
-            for (JSONObject entry : uniqueAllEntries.values()) {
-                if (entry == null) continue;
-                String subj = entry.optString("subject", "").trim();
-                String val = entry.optString("value", "").trim();
-                if (subj.isEmpty() || val.isEmpty()) continue;
+    private void parseJurnalDnevnikTable(
+        String html,
+        boolean hadBaseline,
+        JSONObject oldSnap,
+        JSONObject newSnap,
+        Map<String, SubjectDiaryStats> bySubject,
+        List<JSONObject> recentEntries,
+        Map<String, JSONObject> uniqueAllEntries,
+        List<String> newAlerts
+    ) throws Exception {
+        String tableInner = html;
+        Matcher tm = TABLE_PAT.matcher(html);
+        if (tm.find()) {
+            tableInner = tm.group(1);
+        }
 
-                SubjectDiaryStats st = bySubject.get(subj);
-                if (st == null) {
-                    st = new SubjectDiaryStats();
-                    st.subject = subj;
-                    bySubject.put(subj, st);
-                }
+        List<String> columns = new ArrayList<>();
+        String todayIso = new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
 
-                String low = val.toLowerCase(Locale.ROOT);
-                if ("+".equals(val) || low.contains("присутств")) {
-                    st.attended++;
-                    st.total++;
-                    st.history.add(1);
-                } else if ("н".equals(low) || "н/я".equals(low) || low.contains("неявк") || low.contains("пропуск")) {
-                    st.total++;
-                    st.history.add(0);
-                } else if (low.contains("зач")) {
-                    st.grades.add("Зачёт");
-                    st.credit = "Зачёт";
-                } else if (val.matches("^[2345]$")) {
-                    st.grades.add(val);
-                    st.credit = "Экзамен";
-                } else if (val.matches("^\\d+(?:[.,]\\d+)?$")) {
-                    st.grades.add(val);
+        Matcher trMat = TR_PAT.matcher(tableInner);
+        while (trMat.find()) {
+            String trAttrs = trMat.group(1);
+            String trInner = trMat.group(2);
+
+            if (columns.isEmpty() && trInner.toLowerCase(Locale.ROOT).contains("<th")) {
+                Matcher thMat = TH_PAT.matcher(trInner);
+                while (thMat.find()) {
+                    columns.add(cleanText(thMat.group(1)));
                 }
+                for (int i = 2; i < columns.size(); i++) {
+                    String subj = columns.get(i);
+                    if (!subj.isEmpty() && !bySubject.containsKey(subj)) {
+                        SubjectDiaryStats st = new SubjectDiaryStats();
+                        st.subject = subj;
+                        bySubject.put(subj, st);
+                    }
+                }
+                continue;
             }
 
+            if (columns.size() < 3) continue;
+
+            List<String> tdAttrsList = new ArrayList<>();
+            List<String> tdTextList = new ArrayList<>();
+            Matcher tdMat = TD_PAT.matcher(trInner);
+            while (tdMat.find()) {
+                tdAttrsList.add(tdMat.group(1));
+                tdTextList.add(cleanText(tdMat.group(2)));
+            }
+            if (tdTextList.size() < 3) continue;
+
+            Matcher date1Mat = DATE1_ATTR_PAT.matcher(trAttrs);
+            String dateIso = date1Mat.find() ? date1Mat.group(1) : "";
+
+            if (!dateIso.isEmpty()) {
+                if (dateIso.compareTo(todayIso) > 0) {
+                    continue;
+                }
+
+                String shortDate = formatIsoToShortDate(dateIso);
+                int maxCols = Math.min(tdTextList.size(), columns.size());
+
+                for (int col = 2; col < maxCols; col++) {
+                    String subj = columns.get(col);
+                    if (subj.isEmpty()) continue;
+                    SubjectDiaryStats st = getOrCreateSubject(bySubject, subj);
+
+                    String cellAttrs = tdAttrsList.get(col);
+                    String cellVal = tdTextList.get(col);
+                    boolean hasRasp = RASP_ATTR_PAT.matcher(cellAttrs).find();
+
+                    if (!hasRasp && cellVal.isEmpty()) {
+                        continue;
+                    }
+
+                    st.total++;
+                    boolean isMissed = isAbsenceValue(cellVal);
+                    if (isMissed) {
+                        st.history.add(0);
+                    } else {
+                        st.attended++;
+                        st.history.add(1);
+                    }
+
+                    extractGradesToStats(cellVal, st);
+
+                    if (!cellVal.isEmpty()) {
+                        recordEntry(
+                            subj,
+                            shortDate,
+                            dateIso,
+                            "d_" + dateIso + "_" + col,
+                            cellVal,
+                            hadBaseline,
+                            oldSnap,
+                            newSnap,
+                            recentEntries,
+                            uniqueAllEntries,
+                            newAlerts
+                        );
+                    }
+                }
+                continue;
+            }
+
+            String rowLabel = (tdTextList.get(0) + " " + tdTextList.get(1)).toLowerCase(Locale.ROOT);
+            String controlType = detectControlType(rowLabel);
+            if (!controlType.isEmpty()) {
+                int maxCols = Math.min(tdTextList.size(), columns.size());
+                for (int col = 2; col < maxCols; col++) {
+                    String subj = columns.get(col);
+                    String cellVal = tdTextList.get(col);
+                    if (subj.isEmpty() || cellVal.isEmpty()) continue;
+
+                    SubjectDiaryStats st = getOrCreateSubject(bySubject, subj);
+                    if (!"Аттестация".equals(controlType)) {
+                        st.credit = controlType;
+                    }
+
+                    String lowVal = cellVal.toLowerCase(Locale.ROOT);
+                    if (lowVal.contains("аттест")) {
+                        if (!st.grades.contains("Зачёт")) {
+                            st.grades.add("Зачёт");
+                        }
+                    } else if (lowVal.contains("зач")) {
+                        st.grades.add("Зачёт");
+                    } else {
+                        extractGradesToStats(cellVal, st);
+                    }
+
+                    Matcher titleMat = TITLE_ATTR_PAT.matcher(tdAttrsList.get(col));
+                    String attrDate = titleMat.find() ? titleMat.group(1).trim() : controlType;
+                    recordEntry(
+                        subj,
+                        attrDate,
+                        attrDate,
+                        "ctrl_" + controlType + "_" + col,
+                        cellVal,
+                        hadBaseline,
+                        oldSnap,
+                        newSnap,
+                        recentEntries,
+                        uniqueAllEntries,
+                        newAlerts
+                    );
+                }
+            }
+        }
+    }
+
+    private static SubjectDiaryStats getOrCreateSubject(Map<String, SubjectDiaryStats> map, String subj) {
+        SubjectDiaryStats st = map.get(subj);
+        if (st == null) {
+            st = new SubjectDiaryStats();
+            st.subject = subj;
+            map.put(subj, st);
+        }
+        return st;
+    }
+
+    private static boolean isAbsenceValue(String val) {
+        if (val == null || val.isEmpty()) return false;
+        String up = val.trim().toUpperCase(Locale.ROOT);
+        return up.equals("Н")
+            || up.equals("Н/Я")
+            || up.equals("Б")
+            || up.equals("У")
+            || up.startsWith("Н ")
+            || up.startsWith("Н/")
+            || up.contains("НЕЯВК")
+            || up.contains("ПРОПУСК");
+    }
+
+    private static void extractGradesToStats(String cellVal, SubjectDiaryStats st) {
+        if (cellVal == null || cellVal.isEmpty()) return;
+        Matcher gm = GRADE_NUM_PAT.matcher(cellVal);
+        while (gm.find()) {
+            st.grades.add(gm.group(1));
+        }
+    }
+
+    private static String detectControlType(String rowLabel) {
+        if (rowLabel.contains("экзамен")) return "Экзамен";
+        if (rowLabel.contains("зачет с оценк") || rowLabel.contains("зачёт с оценк")) return "Диф. зачёт";
+        if (rowLabel.contains("зачет") || rowLabel.contains("зачёт")) return "Зачёт";
+        if (rowLabel.contains("аттестац")) return "Аттестация";
+        return "";
+    }
+
+    private static String formatIsoToShortDate(String iso) {
+        if (iso != null && iso.length() >= 10) {
+            return iso.substring(8, 10) + "." + iso.substring(5, 7);
+        }
+        return iso != null ? iso : "";
+    }
+
+    private static String cleanText(String raw) {
+        if (raw == null) return "";
+        return raw
+            .replaceAll("<[^>]+>", " ")
+            .replace("&nbsp;", " ")
+            .replace("&quot;", "\"")
+            .replace("&amp;", "&")
+            .replaceAll("\\s+", " ")
+            .trim();
+    }
+
+    private void recordEntry(
+        String subj,
+        String shortDate,
+        String fullDate,
+        String colId,
+        String cleanVal,
+        boolean hadBaseline,
+        JSONObject oldSnap,
+        JSONObject newSnap,
+        List<JSONObject> recentEntries,
+        Map<String, JSONObject> uniqueAllEntries,
+        List<String> newAlerts
+    ) throws Exception {
+        String cellKey = subj + "||" + shortDate + "||" + colId;
+        String prevVal = oldSnap.optString(cellKey, "");
+        newSnap.put(cellKey, cleanVal);
+
+        JSONObject entry = new JSONObject();
+        entry.put("key", cellKey);
+        entry.put("subject", subj);
+        entry.put("date", shortDate);
+        entry.put("fullDate", fullDate);
+        entry.put("value", cleanVal);
+
+        recentEntries.add(entry);
+        uniqueAllEntries.put(cellKey, entry);
+
+        if (hadBaseline && !cleanVal.equals(prevVal)) {
+            newAlerts.add("Предмет: " + subj + " • " + shortDate + " • «" + cleanVal + "»");
+        }
+    }
+
+    private void saveSummary(AppStorage storage, Map<String, SubjectDiaryStats> bySubject) {
+        try {
             JSONArray summaryArr = new JSONArray();
             for (SubjectDiaryStats st : bySubject.values()) {
                 JSONObject obj = new JSONObject();
@@ -254,247 +461,7 @@ public class DiaryMonitor {
                 obj.put("credit", st.credit);
                 summaryArr.put(obj);
             }
-
             storage.writeText(AppStorage.FILE_DIARY_SUMMARY, summaryArr.toString());
-        } catch (Exception ignored) {}
-    }
-
-    private void parseDiaryHtmlDocument(
-        String html,
-        String todayDateShort,
-        boolean hadBaseline,
-        JSONObject oldSnap,
-        JSONObject newSnap,
-        List<JSONObject> recentEntries,
-        Map<String, JSONObject> uniqueAllEntries,
-        List<String> newAlerts
-    ) throws Exception {
-        Pattern trPattern = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-        Pattern cellPattern = Pattern.compile("<t[dh][^>]*>(.*?)</t[dh]>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-        Pattern dateRegex = Pattern.compile("(\\d{2}\\.\\d{2}(?:\\.\\d{2,4})?)");
-        Pattern cyrillicSubjectRegex = Pattern.compile("[А-Яа-яЁё]{3,}");
-        Pattern gradeOrNRegex = Pattern.compile("^(?:[2345]|[1-9]\\d?(?:[.,]\\d+)?|[Нн]|н/я|неявка|зач(?:ет|тено)?|\\+|присутств.*)$", Pattern.CASE_INSENSITIVE);
-
-        Matcher trMat = trPattern.matcher(html);
-        List<String> currentHeaderDates = new ArrayList<>();
-        String currentSectionSubject = "";
-
-        while (trMat.find()) {
-            String trInner = trMat.group(1);
-            Matcher tdMat = cellPattern.matcher(trInner);
-            List<String> cells = new ArrayList<>();
-            while (tdMat.find()) {
-                String cText = tdMat.group(1)
-                    .replaceAll("<[^>]+>", " ")
-                    .replaceAll("&nbsp;", " ")
-                    .replaceAll("\\s+", " ")
-                    .trim();
-                cells.add(cText);
-            }
-            if (cells.isEmpty()) continue;
-
-            int dateCountInRow = 0;
-            for (String c : cells) {
-                if (dateRegex.matcher(c).find()) dateCountInRow++;
-            }
-            if (dateCountInRow >= 2 && cells.size() >= 3) {
-                currentHeaderDates.clear();
-                for (String c : cells) {
-                    Matcher dm = dateRegex.matcher(c);
-                    currentHeaderDates.add(dm.find() ? dm.group(1) : c);
-                }
-                continue;
-            }
-
-            if (cells.size() == 1 && cyrillicSubjectRegex.matcher(cells.get(0)).find()
-                && cells.get(0).length() > 4 && cells.get(0).length() < 110) {
-                String cand = cells.get(0);
-                if (!cand.toLowerCase(Locale.ROOT).contains("дисциплин") && !cand.toLowerCase(Locale.ROOT).contains("расписани")) {
-                    currentSectionSubject = cand;
-                }
-                continue;
-            }
-
-            String rowSubj = "";
-            int firstDataCol = 1;
-            for (int cIdx = 0; cIdx < Math.min(3, cells.size()); cIdx++) {
-                String candidate = cells.get(cIdx);
-                if (cyrillicSubjectRegex.matcher(candidate).find()
-                    && !candidate.matches("^\\d+$")
-                    && !dateRegex.matcher(candidate).matches()
-                    && !gradeOrNRegex.matcher(candidate).matches()
-                    && !candidate.equalsIgnoreCase("лекция")
-                    && !candidate.equalsIgnoreCase("практика")
-                    && !candidate.toLowerCase(Locale.ROOT).contains("практические")
-                    && !candidate.toLowerCase(Locale.ROOT).contains("лабораторн")) {
-                    rowSubj = candidate;
-                    firstDataCol = cIdx + 1;
-                    break;
-                }
-            }
-
-            if (!rowSubj.isEmpty() && !currentHeaderDates.isEmpty() && cells.size() >= 3) {
-                int maxCols = Math.min(cells.size(), currentHeaderDates.size());
-                for (int col = firstDataCol; col < maxCols; col++) {
-                    String cellVal = cells.get(col).trim();
-                    if (cellVal.isEmpty() || "-".equals(cellVal) || "—".equals(cellVal) || ".".equals(cellVal)) continue;
-                    String dateLabel = currentHeaderDates.get(col);
-                    if (dateLabel == null || dateLabel.isEmpty() || !dateRegex.matcher(dateLabel).find()) {
-                        dateLabel = todayDateShort;
-                    }
-                    recordDiaryCell(rowSubj, dateLabel, "col" + col, cellVal, hadBaseline, oldSnap, newSnap, recentEntries, uniqueAllEntries, newAlerts);
-                }
-                continue;
-            }
-
-            String foundDate = "";
-            int dateColIdx = -1;
-            for (int i = 0; i < cells.size(); i++) {
-                Matcher dm = dateRegex.matcher(cells.get(i));
-                if (dm.find()) {
-                    foundDate = dm.group(1);
-                    dateColIdx = i;
-                    break;
-                }
-            }
-
-            if (!foundDate.isEmpty() && cells.size() >= 2) {
-                String subjName = !rowSubj.isEmpty() ? rowSubj : (!currentSectionSubject.isEmpty() ? currentSectionSubject : "");
-                if (subjName.isEmpty()) continue;
-
-                String extractedVal = "";
-                for (int i = cells.size() - 1; i >= 0; i--) {
-                    if (i == dateColIdx) continue;
-                    String v = cells.get(i).trim();
-                    if (v.isEmpty() || v.equals(subjName) || "-".equals(v) || "—".equals(v)) continue;
-                    if (gradeOrNRegex.matcher(v).matches()) {
-                        extractedVal = v;
-                        break;
-                    }
-                    String vl = v.toLowerCase(Locale.ROOT);
-                    if (vl.equals("н") || vl.equals("н/я") || vl.contains("неявк") || vl.contains("пропуск")) {
-                        extractedVal = "Н";
-                        break;
-                    }
-                    if (vl.contains("присутств") || vl.contains("отмечен")) {
-                        extractedVal = "+";
-                        break;
-                    }
-                    Matcher numInside = Pattern.compile("(?:оценка|балл|отметка)?\\s*[:=-]?\\s*([2345])\\b", Pattern.CASE_INSENSITIVE).matcher(v);
-                    if (numInside.find()) {
-                        extractedVal = numInside.group(1);
-                        break;
-                    }
-                }
-
-                if (!extractedVal.isEmpty()) {
-                    recordDiaryCell(subjName, foundDate, "row_" + cells.get(0), extractedVal, hadBaseline, oldSnap, newSnap, recentEntries, uniqueAllEntries, newAlerts);
-                }
-            }
-        }
-    }
-
-    private void recordDiaryCell(
-        String subj,
-        String dateStr,
-        String colId,
-        String rawVal,
-        boolean hadBaseline,
-        JSONObject oldSnap,
-        JSONObject newSnap,
-        List<JSONObject> recentEntries,
-        Map<String, JSONObject> uniqueAllEntries,
-        List<String> newAlerts
-    ) throws Exception {
-        String cleanVal = rawVal.trim();
-        if (cleanVal.equalsIgnoreCase("н/я") || cleanVal.equalsIgnoreCase("неявка") || cleanVal.equalsIgnoreCase("пропуск") || cleanVal.equalsIgnoreCase("н")) {
-            cleanVal = "Н";
-        }
-        String shortDate = dateStr.length() >= 5 ? dateStr.substring(0, 5) : dateStr;
-        String cellKey = subj + "||" + shortDate + "||" + colId;
-        String prevVal = oldSnap.optString(cellKey, "");
-        newSnap.put(cellKey, cleanVal);
-
-        JSONObject entry = new JSONObject();
-        entry.put("key", cellKey);
-        entry.put("subject", subj);
-        entry.put("date", shortDate);
-        entry.put("fullDate", dateStr);
-        entry.put("value", cleanVal);
-
-        recentEntries.add(entry);
-        uniqueAllEntries.put(cellKey, entry);
-
-        if (hadBaseline && !cleanVal.equals(prevVal) && !"+".equals(cleanVal)) {
-            newAlerts.add("Предмет: " + subj + " • Число: " + shortDate + " • В клетке: «" + cleanVal + "»");
-        }
-    }
-
-    private void syncAttendanceFromScheduleDays(
-        AppStorage storage,
-        Map<String, JSONObject> uniqueAllEntries,
-        List<JSONObject> recentEntries
-    ) {
-        try {
-            JSONArray days = storage.readJsonArray(AppStorage.FILE_SEMESTER_DAYS);
-            if (days == null || days.length() == 0) return;
-
-            SimpleDateFormat df = new SimpleDateFormat("dd.MM.yyyy", Locale.US);
-            Date now = new Date();
-            String todayStr = df.format(now);
-
-            for (int i = 0; i < days.length(); i++) {
-                JSONObject d = days.optJSONObject(i);
-                if (d == null) continue;
-                String dStr = d.optString("dateStr", "");
-                String shortDate = d.optString("shortDate", dStr.length() >= 5 ? dStr.substring(0, 5) : dStr);
-                int dowIdx = d.optInt("dowIdx", -1);
-                if (dStr.isEmpty()) continue;
-
-                Date lessonDate = df.parse(dStr);
-                if (lessonDate == null || lessonDate.after(now)) continue;
-                boolean isToday = todayStr.equals(dStr);
-
-                JSONArray lessons = d.optJSONArray("lessons");
-                if (lessons == null) continue;
-
-                for (int k = 0; k < lessons.length(); k++) {
-                    JSONObject les = lessons.optJSONObject(k);
-                    if (les == null) continue;
-                    String subj = les.optString("subjectTitle", "");
-                    String st = les.optString("startTime", "");
-                    String teach = les.optString("teacher", "");
-                    String rm = les.optString("room", "");
-                    boolean checked = les.optBoolean("checked", false);
-
-                    if (subj.isEmpty() || !storage.isSubgroupAllowed(dowIdx, st, subj, teach, rm)) {
-                        continue;
-                    }
-
-                    if (isToday && !checked) continue;
-
-                    String schedKey = subj + "||" + shortDate + "||sched_" + st;
-                    boolean alreadyHasJournalEntry = false;
-                    for (String existingKey : uniqueAllEntries.keySet()) {
-                        if (existingKey.startsWith(subj + "||" + shortDate + "||") && !existingKey.contains("sched_")) {
-                            alreadyHasJournalEntry = true;
-                            break;
-                        }
-                    }
-                    if (alreadyHasJournalEntry) continue;
-
-                    JSONObject entry = new JSONObject();
-                    entry.put("key", schedKey);
-                    entry.put("subject", subj);
-                    entry.put("date", shortDate);
-                    entry.put("fullDate", dStr);
-                    entry.put("value", checked ? "+" : "Н");
-                    uniqueAllEntries.put(schedKey, entry);
-                    if (recentEntries.size() < 30) {
-                        recentEntries.add(entry);
-                    }
-                }
-            }
         } catch (Exception ignored) {}
     }
 }

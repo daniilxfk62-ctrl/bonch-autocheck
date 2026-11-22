@@ -161,10 +161,12 @@ public class BonchBackgroundDaemon extends Service {
         if ("send_message".equals(action) && intent != null) {
             final String threadId = intent.getStringExtra("threadId");
             final String text = intent.getStringExtra("text");
+            final String filePath = intent.getStringExtra("filePath");
+            final String fileName = intent.getStringExtra("fileName");
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    messageManager.sendReply(apiClient, storage, login, pass, threadId, text);
+                    messageManager.sendReply(apiClient, storage, login, pass, threadId, text, filePath, fileName);
                     flushState();
                 }
             }).start();

@@ -347,8 +347,9 @@ public class ScheduleManager {
     }
 
     /**
-     * Форматирует аудиторию из lk.sut.ru (например "404; Б22/1" -> "404 · Б22/1"),
-     * сохраняя номер кабинета и корпус/подкорпус.
+     * Форматирует аудиторию из lk.sut.ru:
+     * "702; Б22/1" -> "702 |1"
+     * "Спортивный комплекс; Б22/1" -> "Спортивный комплекс"
      */
     public static String formatRoomClean(String rawRoom) {
         if (rawRoom == null) return "";
@@ -358,24 +359,106 @@ public class ScheduleManager {
             .trim();
         if (s.isEmpty() || "-".equals(s) || "—".equals(s)) return "";
 
-        // Сокращаем "пр. Большевиков, 22/1" -> "Б22/1"
+        // Для физкультуры оставляем только название спортивного комплекса
+        if (s.toLowerCase(Locale.ROOT).contains("спорт")) {
+            String sportPart = s.split("[;·]")[0].trim();
+            return sportPart.isEmpty() ? "Спорткомплекс" : sportPart;
+        }
+
+        // Приводим "пр. Большевиков, 22/1" -> "Б22/1"
         s = s.replaceAll("(?i)пр\\.?\\s*Большевиков[,\\s]*22\\s*/\\s*(\\d+)", "Б22/$1");
         s = s.replaceAll("(?i)пр\\.?\\s*Большевиков[,\\s]*22\\b", "Б22");
 
-        // Точный формат "404; Б22/1" -> "404 · Б22/1"
-        Matcher cm = ROOM_CORPUS_PAT.matcher(s);
+        // Паттерн "702; Б22/1" или "702 Б22/1" -> "702 |1"
+        Matcher cm = Pattern.compile("(?:;|\\s+)[^\\s;]+/(\\d+)\\b").matcher(s);
         if (cm.find()) {
-            String corpus = cm.group(1).trim(); // например "Б22/1"
-            String roomPart = s.substring(0, cm.start()).replaceAll("^[;,\\s]+|[;,\\s]+$", "").trim();
+            String corpusNum = cm.group(1).trim();
+            String roomPart = s.substring(0, cm.start()).replaceAll("^[;,·\\s]+|[;,·\\s]+$", "").trim();
             if (!roomPart.isEmpty()) {
-                return roomPart + " · " + corpus;
+                return roomPart + " |" + corpusNum;
             }
-            return corpus;
+            return "|" + corpusNum;
         }
 
-        s = s.replaceAll("\\s*;\\s*", " · ");
+        s = s.replaceAll("\\s*;\\s*", " ");
         s = s.replaceAll("^[;,·\\s]+|[;,·\\s]+$", "");
         return s.trim();
+    }
+
+    private static String mergeRooms(String r1, String r2) {
+        String a = r1 != null ? r1.trim() : "";
+        String b = r2 != null ? r2.trim() : "";
+        if (a.isEmpty()) return b;
+        if (b.isEmpty() || a.equalsIgnoreCase(b)) return a;
+
+        int pipeA = a.lastIndexOf('|');
+        int pipeB = b.lastIndexOf('|');
+        if (pipeA > 0 && pipeB > 0) {
+            String corpA = a.substring(pipeA).trim();
+            String corpB = b.substring(pipeB).trim();
+            if (corpA.equalsIgnoreCase(corpB)) {
+                String numA = a.substring(0, pipeA).trim();
+                String numB = b.substring(0, pipeB).trim();
+                List<String> nums = new ArrayList<>();
+                for (String p : numA.split("/")) {
+                    String t = p.trim();
+                    if (!t.isEmpty() && !nums.contains(t)) nums.add(t);
+                }
+                for (String p : numB.split("/")) {
+                    String t = p.trim();
+                    if (!t.isEmpty() && !nums.contains(t)) nums.add(t);
+                }
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < nums.size(); i++) {
+                    if (i > 0) sb.append("/");
+                    sb.append(nums.get(i));
+                }
+                return sb.toString() + " " + corpA;
+            }
+        }
+
+        if (!a.contains(b)) return a + " / " + b;
+        return a;
+    }
+
+    private static List<JSONObject> mergeDuplicateLessons(List<JSONObject> rawLessons) {
+        if (rawLessons == null || rawLessons.size() <= 1) return rawLessons;
+        Map<String, JSONObject> merged = new LinkedHashMap<>();
+        for (JSONObject les : rawLessons) {
+            if (les == null) continue;
+            String key = les.optString("startTime", "")
+                + "||" + les.optString("subjectTitle", "").trim().toLowerCase(Locale.ROOT)
+                + "||" + les.optString("lessonType", "").trim().toLowerCase(Locale.ROOT);
+            JSONObject existing = merged.get(key);
+            if (existing == null) {
+                merged.put(key, les);
+            } else {
+                try {
+                    String newRoom = mergeRooms(existing.optString("room", ""), les.optString("room", ""));
+                    existing.put("room", newRoom);
+
+                    String t1 = existing.optString("teacher", "").trim();
+                    String t2 = les.optString("teacher", "").trim();
+                    if (!t2.isEmpty() && !t1.contains(t2)) {
+                        existing.put("teacher", t1.isEmpty() ? t2 : (t1 + ", " + t2));
+                    }
+
+                    boolean checked = existing.optBoolean("checked", false) || les.optBoolean("checked", false);
+                    boolean waitT = (existing.optBoolean("waitingTeacher", false) || les.optBoolean("waitingTeacher", false)) && !checked;
+                    existing.put("checked", checked);
+                    existing.put("waitingTeacher", waitT);
+
+                    if (existing.optString("raspId", "").isEmpty() && !les.optString("raspId", "").isEmpty()) {
+                        existing.put("raspId", les.optString("raspId", ""));
+                        existing.put("weekId", les.optString("weekId", ""));
+                    }
+                    if (existing.optString("checkTime", "").isEmpty() && !les.optString("checkTime", "").isEmpty()) {
+                        existing.put("checkTime", les.optString("checkTime", ""));
+                    }
+                } catch (Exception ignored) {}
+            }
+        }
+        return new ArrayList<>(merged.values());
     }
 
     private static String normalizeDateStr(String raw) {
@@ -1029,6 +1112,7 @@ public class ScheduleManager {
                     dayJson.put("dateStr", dStr);
                     dayJson.put("title", RU_DAYS_FULL[dIdx] + " " + dStr);
                     dayJson.put("isOrange", todayStr.equals(dStr));
+                    dayLessons = mergeDuplicateLessons(dayLessons);
                     dayJson.put("lessons", new JSONArray(dayLessons));
                     currentWeekDays.put(dStr, dayJson);
                     cal.add(Calendar.DAY_OF_MONTH, 1);
@@ -1300,7 +1384,8 @@ public class ScheduleManager {
                         dayJson.put("dateStr", dStr);
                         dayJson.put("title", RU_DAYS_FULL[dIdx] + " " + dStr);
                         dayJson.put("isOrange", todayStr.equals(dStr));
-                        dayJson.put("lessons", new JSONArray(dayLessons));
+                        dayLessons = mergeDuplicateLessons(dayLessons);
+                    dayJson.put("lessons", new JSONArray(dayLessons));
 
                         allDaysMap.put(dDate.getTime(), dayJson);
                         cal.add(Calendar.DAY_OF_MONTH, 1);

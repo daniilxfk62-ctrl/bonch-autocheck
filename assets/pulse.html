@@ -809,6 +809,18 @@
       font-weight: 600;
       padding: 0 8px;
       letter-spacing: -0.01em;
+      cursor: pointer;
+      border-radius: 999px;
+      line-height: 28px;
+      transition: background-color 0.18s ease, transform 0.18s var(--spring-bounce);
+    }
+
+    .week-label:hover {
+      background: var(--surface-hover);
+    }
+
+    .week-label:active {
+      transform: scale(0.93);
     }
 
     .pill-btn {
@@ -878,8 +890,12 @@
       background: var(--ink);
       pointer-events: none;
       z-index: 1;
-      transition: transform 0.36s var(--spring);
+      transition: transform 0.12s var(--spring-snappy);
       will-change: transform;
+    }
+
+    .rail-pill.tracking {
+      transition: none;
     }
 
     .rail-day {
@@ -1027,6 +1043,138 @@
       border-radius: 18px;
       background: var(--surface);
       border: 1px solid var(--border);
+      transition: opacity 0.22s ease, filter 0.22s ease, transform 0.22s var(--spring);
+    }
+
+    .mini-lesson.is-past {
+      opacity: 0.52;
+      filter: saturate(0.62);
+    }
+
+    .mini-lesson.is-past:hover,
+    .mini-lesson.is-past:active {
+      opacity: 0.88;
+      filter: saturate(1);
+    }
+
+    /* Schedule Calendar Sheet */
+    .cal-header-row {
+      display: grid;
+      grid-template-columns: 38px repeat(6, 1fr);
+      gap: 4px;
+      padding: 0 4px 8px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .cal-weeks {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 330px;
+      overflow-y: auto;
+      padding-bottom: 8px;
+      scrollbar-width: none;
+    }
+
+    .cal-weeks::-webkit-scrollbar {
+      display: none;
+    }
+
+    .cal-week-row {
+      display: grid;
+      grid-template-columns: 38px repeat(6, 1fr);
+      gap: 4px;
+      align-items: center;
+      padding: 4px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .cal-week-row.is-current-week {
+      border-color: var(--accent-ring);
+    }
+
+    .cal-week-tag {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .cal-cell {
+      position: relative;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      transition: transform 0.16s var(--spring-bounce), background-color 0.16s ease, border-color 0.16s ease;
+    }
+
+    .cal-cell:hover {
+      background: var(--surface-hover);
+    }
+
+    .cal-cell:active {
+      transform: scale(0.88);
+    }
+
+    .cal-cell.is-past {
+      color: var(--text-muted);
+    }
+
+    .cal-cell.is-today {
+      border-color: var(--accent-ring);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .cal-cell.is-active {
+      background: var(--ink);
+      color: var(--ink-text);
+      border-color: var(--ink);
+      font-weight: 600;
+    }
+
+    .cal-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 2.5px;
+      height: 4px;
+    }
+
+    .cal-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+    }
+
+    .avatar.is-profile {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
+
+    .avatar.is-guest {
+      background: var(--surface-hover);
+      border-color: var(--border);
+      color: var(--text-muted);
     }
 
     .mini-time {
@@ -2569,6 +2717,9 @@
             </div>
             <div class="sched-actions">
               <button class="pill-btn" id="jumpTodayBtn" style="display:none;">Сегодня</button>
+              <button class="icon-btn sm" id="scheduleCalendarBtn" aria-label="Календарь" title="Открыть календарь">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg>
+              </button>
               <button class="icon-btn sm" id="scheduleFilterBtn" aria-label="Фильтр занятий" title="Фильтр занятий">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
                 <span class="filter-dot" id="scheduleFilterDot" style="display:none;"></span>
@@ -2710,7 +2861,7 @@
                 </div>
                 <div>
                   <div class="pillar-title">Локальная приватность</div>
-                  <div class="pillar-desc">Пароль и cookie хранятся только на твоём телефоне, а защита сессии не выбивает вход на ПК.</div>
+                  <div class="pillar-desc">Пароль и данные сессии хранятся только на твоём телефоне и передаются напрямую в личный кабинет вуза.</div>
                 </div>
               </div>
 
@@ -2768,16 +2919,6 @@
                 </button>
                 <div class="faq-body"><div class="faq-inner">
                   <div class="faq-text">Да. Учётные данные хранятся локально на твоём устройстве и отправляются напрямую в личный кабинет вуза. В любой момент ты можешь выйти из аккаунта и очистить сессию одной кнопкой.</div>
-                </div></div>
-              </div>
-
-              <div class="faq-item">
-                <button class="faq-trigger" data-faq>
-                  <span>Не выкинет ли из кабинета на ПК?</span>
-                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-                <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">В настройках включена «Защита сессии»: клиент переиспользует активную cookie-сессию и избегает лишних повторных входов, поэтому открытый кабинет на компьютере остаётся активным.</div>
                 </div></div>
               </div>
 
@@ -2939,12 +3080,13 @@
 
       let state = loadState();
       let toastTimer = null;
-      let loginPollTimer = null;
       let checkingIds = new Set();
       let lastMtimes = { days: -1, cat: -1, diary: -1, messages: -1, files: -1, profile: -1 };
       let currentWeekNum = 0;
+      let lastTodayStamp = '';
       let versionTapCount = 0;
       let versionTapTimer = null;
+      let loginAttempt = { pending: false, startedAt: 0, prevLogCount: 0, timeoutId: null };
 
       const $ = (id) => document.getElementById(id);
 
@@ -2969,6 +3111,61 @@
         const m = String(hm).match(/(\d{1,2})[:.](\d{2})/);
         if (!m) return -1;
         return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+      }
+
+      function parseDateStrToMidnight(dateStr) {
+        if (!dateStr) return null;
+        const parts = String(dateStr).split('.');
+        if (parts.length < 3) return null;
+        const dd = parseInt(parts[0], 10);
+        const mm = parseInt(parts[1], 10);
+        const yyyy = parseInt(parts[2], 10);
+        if (Number.isNaN(dd) || Number.isNaN(mm) || Number.isNaN(yyyy)) return null;
+        return new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+      }
+
+      function isDatePast(dateStr) {
+        const d = parseDateStrToMidnight(dateStr);
+        if (!d) return false;
+        const now = new Date();
+        const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        return d.getTime() < todayMid.getTime();
+      }
+
+      function isLessonPast(dateStr, start, end) {
+        const d = parseDateStrToMidnight(dateStr);
+        if (!d) return false;
+        const now = new Date();
+        const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        if (d.getTime() < todayMid.getTime()) return true;
+        if (d.getTime() > todayMid.getTime()) return false;
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const sM = parseHmToMins(start);
+        const eM = parseHmToMins(end) > 0 ? parseHmToMins(end) : (sM >= 0 ? sM + 95 : -1);
+        return eM > 0 && nowMins > eM;
+      }
+
+      function getRealInitials(name) {
+        const raw = String(name || '').trim();
+        if (!raw) return '';
+        const lower = raw.toLowerCase();
+        if (lower.includes('студент') || lower.includes('спбгут') || lower === 'пользователь' || lower === 'лк') {
+          return '';
+        }
+        const words = raw.split(/\s+/).filter(Boolean);
+        if (!words.length) return '';
+        return words.slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+      }
+
+      function getProfileAvatarHtml(acc) {
+        if (!acc || !acc.loggedIn) {
+          return `<div class="avatar is-guest" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
+        }
+        const realInit = getRealInitials(acc.name);
+        if (realInit) {
+          return `<div class="avatar is-profile">${escapeHtml(realInit)}</div>`;
+        }
+        return `<div class="avatar is-profile" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
       }
 
       function formatTodayHeader() {
@@ -3096,7 +3293,7 @@
           const monthIdx = dParts.length >= 2 ? parseInt(dParts[1], 10) - 1 : now.getMonth();
           const monthName = MONTHS_NOM[monthIdx] || '';
           const dowIdx = typeof d.dowIdx === 'number' && d.dowIdx >= 0 && d.dowIdx < 6 ? d.dowIdx : (dayIdx % 6);
-          const isToday = !!d.isOrange || dateStr === todayStr;
+          const isToday = dateStr === todayStr;
           if (isToday) foundTodayWeek = wNum;
 
           const lessons = (Array.isArray(d.lessons) ? d.lessons : []).map((l, lIdx) => {
@@ -3159,7 +3356,8 @@
         currentWeekNum = foundTodayWeek;
         state.semesterWeeks = weeks;
         state.todayClasses = todayLessons;
-        if (state.activeGlobalDayIdx === 0) {
+        if (lastTodayStamp !== todayStr) {
+          lastTodayStamp = todayStr;
           state.activeGlobalDayIdx = getTodayGlobalIdx();
         }
         formatTodayHeader();
@@ -3199,14 +3397,23 @@
           if (force || st.profileMtime !== lastMtimes.profile) {
             lastMtimes.profile = st.profileMtime || 0;
             const prof = safeParse(bridge.getProfile(), {});
+            const resolvedName = prof.fio || prof.fullName || prof.name || '';
             state.account = {
               loggedIn: !!prof.loggedIn,
-              name: prof.name || (prof.loggedIn ? 'Студент СПбГУТ' : ''),
+              name: resolvedName || (prof.loggedIn ? 'Аккаунт ЛК СПбГУТ' : ''),
               group: prof.group || '',
               email: prof.email || ''
             };
             needToday = true;
             needSettings = true;
+          }
+
+          if (loginAttempt.pending) {
+            if (st.authState === 'ok' || state.account.loggedIn) {
+              handleLoginResult(true);
+            } else if (st.authState === 'error') {
+              handleLoginResult(false, st.authError || 'Неверный логин или пароль от lk.sut.ru');
+            }
           }
 
           if (force || st.catMtime !== lastMtimes.cat) {
@@ -3348,10 +3555,6 @@
       }
 
       function closeSheet() {
-        if (loginPollTimer) {
-          clearInterval(loginPollTimer);
-          loginPollTimer = null;
-        }
         const sheet = $('sheet');
         sheet.style.transform = '';
         sheet.classList.remove('dragging');
@@ -3711,8 +3914,9 @@
             ? filtered.map((l) => {
                 const autoActive = isClassAutoActive(l);
                 const tKey = getTypeKey(l.type);
+                const lessonPast = isLessonPast(day.dateStr, l.start, l.end);
                 return `
-                  <div class="mini-lesson tap" data-sched-lesson="${encodeURIComponent(JSON.stringify(l))}">
+                  <div class="mini-lesson tap ${lessonPast ? 'is-past' : ''}" data-sched-lesson="${encodeURIComponent(JSON.stringify(l))}">
                     <div class="mini-time tabular">
                       <strong>${escapeHtml(l.start)}</strong>
                       <span>${escapeHtml(l.end)}</span>
@@ -3839,22 +4043,126 @@
         renderScheduleHeaderControls(flatDays);
       }
 
-      let feedScrollTimer = null;
+      let feedRafId = 0;
+      let feedTrackEndTimer = null;
       $('dayFeed').addEventListener('scroll', () => {
-        clearTimeout(feedScrollTimer);
-        feedScrollTimer = setTimeout(() => {
+        if (feedRafId) return;
+        feedRafId = requestAnimationFrame(() => {
+          feedRafId = 0;
           const feed = $('dayFeed');
           const flatDays = getAllDaysFlat();
           if (!flatDays.length) return;
           const h = feed.clientHeight || 1;
-          const idx = Math.round(feed.scrollTop / h);
-          const clamped = Math.max(0, Math.min(idx, flatDays.length - 1));
-          if (clamped !== state.activeGlobalDayIdx) {
-            state.activeGlobalDayIdx = clamped;
+          const exactIdx = feed.scrollTop / h;
+          const idx = Math.max(0, Math.min(Math.round(exactIdx), flatDays.length - 1));
+          if (idx !== state.activeGlobalDayIdx) {
+            state.activeGlobalDayIdx = idx;
             renderScheduleHeaderControls(flatDays);
           }
-        }, 55);
-      });
+          const activeDay = flatDays[state.activeGlobalDayIdx];
+          const pill = $('railPill');
+          if (activeDay && pill) {
+            const weekStartIdx = flatDays.findIndex((d) => d.week === activeDay.week && d.dayInWeek === 0);
+            const weekDaysCount = (state.semesterWeeks[activeDay.week] || []).length;
+            const relPos = Math.max(0, Math.min(exactIdx - weekStartIdx, Math.max(0, weekDaysCount - 1)));
+            pill.classList.add('tracking');
+            pill.style.transform = `translate3d(0, ${relPos * 32}px, 0)`;
+            clearTimeout(feedTrackEndTimer);
+            feedTrackEndTimer = setTimeout(() => {
+              const pEl = $('railPill');
+              if (pEl) {
+                pEl.classList.remove('tracking');
+                const cur = flatDays[state.activeGlobalDayIdx];
+                if (cur) pEl.style.transform = `translate3d(0, ${cur.dayInWeek * 32}px, 0)`;
+              }
+            }, 90);
+          }
+        });
+      }, { passive: true });
+
+      function openScheduleCalendarSheet() {
+        const flatDays = getAllDaysFlat();
+        if (!flatDays.length) {
+          showToast('Расписание ещё не загружено');
+          return;
+        }
+        const weekNums = Object.keys(state.semesterWeeks).map(Number).sort((a, b) => a - b);
+        const activeDay = flatDays[state.activeGlobalDayIdx] || flatDays[0];
+        const todayIdx = getTodayGlobalIdx();
+        const hasToday = flatDays[todayIdx] && flatDays[todayIdx].isToday;
+
+        const rowsHtml = weekNums.map((w) => {
+          const days = state.semesterWeeks[w] || [];
+          const weekStartIdx = flatDays.findIndex((d) => d.week === w && d.dayInWeek === 0);
+          const isCurWeek = activeDay && activeDay.week === w;
+          const cells = [];
+          for (let i = 0; i < 6; i++) {
+            const d = days[i];
+            if (!d) {
+              cells.push('<div></div>');
+              continue;
+            }
+            const gIdx = weekStartIdx + i;
+            const isAct = gIdx === state.activeGlobalDayIdx;
+            const isPast = !d.isToday && isDatePast(d.dateStr);
+            const typeSet = new Set((d.lessons || []).map((l) => getTypeKey(l.type)));
+            const dots = ['lecture', 'practice', 'lab']
+              .filter((t) => typeSet.has(t))
+              .map((t) => `<span class="cal-dot dot-${t}"></span>`)
+              .join('');
+
+            cells.push(`
+              <button class="cal-cell tabular ${isAct ? 'is-active' : ''} ${d.isToday ? 'is-today' : ''} ${isPast ? 'is-past' : ''}" data-cal-idx="${gIdx}" aria-label="${escapeHtml(d.weekday)}, ${escapeHtml(d.num)} ${escapeHtml(d.month)}">
+                <span>${escapeHtml(d.num)}</span>
+                <span class="cal-dots">${dots}</span>
+              </button>
+            `);
+          }
+          return `
+            <div class="cal-week-row ${isCurWeek ? 'is-current-week' : ''}" data-cal-week="${w}">
+              <span class="cal-week-tag tabular">${w}н</span>
+              ${cells.join('')}
+            </div>
+          `;
+        }).join('');
+
+        openSheet(`
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+            <div class="sheet-title" style="margin-bottom:0;">Календарь</div>
+            <span class="badge accent tabular">${activeDay ? activeDay.week + ' нед. · ' + escapeHtml(activeDay.month) : ''}</span>
+          </div>
+          <div class="sheet-sub">Выберите день для быстрого перехода</div>
+          <div class="cal-header-row">
+            <span>Нед</span><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span>
+          </div>
+          <div class="cal-weeks" id="calWeeksScroll">${rowsHtml}</div>
+          ${hasToday ? '<button class="full-btn secondary" id="calJumpTodayBtn" style="margin-top:8px;">Перейти к сегодня</button>' : ''}
+        `);
+
+        const activeRow = $('calWeeksScroll').querySelector('.is-current-week');
+        if (activeRow) {
+          requestAnimationFrame(() => activeRow.scrollIntoView({ block: 'center' }));
+        }
+
+        $('sheetContent').querySelectorAll('[data-cal-idx]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const target = Number(btn.dataset.calIdx);
+            closeSheet();
+            scrollToGlobalDay(target, true);
+          });
+        });
+
+        const jumpToday = $('calJumpTodayBtn');
+        if (jumpToday) {
+          jumpToday.addEventListener('click', () => {
+            closeSheet();
+            scrollToGlobalDay(todayIdx, true);
+          });
+        }
+      }
+
+      $('scheduleCalendarBtn').addEventListener('click', openScheduleCalendarSheet);
+      $('weekLabel').addEventListener('click', openScheduleCalendarSheet);
 
       $('prevWeekBtn').addEventListener('click', () => {
         const flatDays = getAllDaysFlat();
@@ -4024,7 +4332,7 @@
                     <div class="msg-row">
                       <span class="msg-name">${escapeHtml(f.name)}</span>
                     </div>
-                    <div class="msg-preview">${escapeHtml(f.subject || '')} · ${escapeHtml(f.size || '')} · ${escapeHtml(f.date || '')}</div>
+                    <div class="msg-preview">${escapeHtml(f.subject || '')}${f.comment ? ' · ' + escapeHtml(f.comment) : ''} · ${escapeHtml(f.date || '')}</div>
                   </div>
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-secondary);flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </div>
@@ -4055,9 +4363,17 @@
           renderMessages();
         }
 
-        const bubbles = (msg.thread || []).map((b) =>
-          `<div class="bubble ${b.from === 'me' ? 'me' : ''}">${escapeHtml(b.text)}<span class="bubble-time tabular">${escapeHtml(b.time || '')}</span></div>`
-        ).join('');
+        const bubbles = (msg.thread || []).map((b) => {
+          const atts = Array.isArray(b.attachments) ? b.attachments : [];
+          const attHtml = atts.length
+            ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${atts.map((a) =>
+                `<button type="button" class="pill-btn" data-dl-url="${escapeHtml(a.url || '')}" data-dl-name="${escapeHtml(a.name || 'file')}" style="height:28px;font-size:11.5px;padding:0 10px;">📎 ${escapeHtml(a.name || 'Файл')}</button>`
+              ).join('')}</div>`
+            : '';
+          return `<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${escapeHtml(b.text)}${attHtml}<span class="bubble-time tabular">${escapeHtml(b.time || '')}</span></div>`;
+        }).join('');
+
+        let pendingFile = null;
 
         openSheet(`
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
@@ -4068,7 +4384,15 @@
             <button class="pill-btn" id="muteSenderBtn">${msg.muted ? 'Уведомления выкл' : 'Уведомления вкл'}</button>
           </div>
           <div class="chat-list" id="chatList">${bubbles}</div>
+          <div id="pendingFileRow" style="display:none;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;margin-bottom:8px;border-radius:12px;background:var(--surface);border:1px solid var(--border);font-size:12px;">
+            <span id="pendingFileName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <button type="button" id="clearPendingFileBtn" style="border:none;background:transparent;color:var(--danger);font-size:14px;cursor:pointer;">✕</button>
+          </div>
           <form class="chat-compose" id="chatForm">
+            <input type="file" id="chatFileInput" style="display:none;" />
+            <button type="button" class="icon-btn" id="attachFileBtn" aria-label="Прикрепить файл" title="Прикрепить файл (до 5 МБ)" style="width:42px;height:42px;flex-shrink:0;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
             <input type="text" id="chatInput" placeholder="Ответить..." autocomplete="off" />
             <button type="submit" class="send-btn" aria-label="Отправить">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -4078,6 +4402,47 @@
 
         const listEl = $('chatList');
         listEl.scrollTop = listEl.scrollHeight;
+
+        listEl.querySelectorAll('[data-dl-url]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            if (!HAS_BRIDGE) {
+              showToast('Скачивание доступно только в приложении', 'error');
+              return;
+            }
+            const ok = window.AndroidBridge.downloadGroupFile(btn.dataset.dlUrl, btn.dataset.dlName);
+            showToast(ok ? `Загрузка: ${btn.dataset.dlName}` : 'Не удалось скачать файл', ok ? 'success' : 'error');
+          });
+        });
+
+        $('attachFileBtn').addEventListener('click', () => {
+          $('chatFileInput').click();
+        });
+
+        $('chatFileInput').addEventListener('change', (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          if (file.size > 5 * 1024 * 1024) {
+            showToast('Файл больше 5 МБ', 'error');
+            e.target.value = '';
+            return;
+          }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = String(reader.result || '');
+            const commaIdx = res.indexOf(',');
+            const b64 = commaIdx >= 0 ? res.slice(commaIdx + 1) : res;
+            pendingFile = { name: file.name, base64: b64 };
+            $('pendingFileName').textContent = `📎 ${file.name} (${(file.size / 1024).toFixed(0)} КБ)`;
+            $('pendingFileRow').style.display = 'flex';
+          };
+          reader.readAsDataURL(file);
+        });
+
+        $('clearPendingFileBtn').addEventListener('click', () => {
+          pendingFile = null;
+          $('chatFileInput').value = '';
+          $('pendingFileRow').style.display = 'none';
+        });
 
         $('muteSenderBtn').addEventListener('click', () => {
           if (!HAS_BRIDGE) {
@@ -4093,13 +4458,23 @@
           e.preventDefault();
           if (!requireBackendConnected()) return;
           const val = $('chatInput').value.trim();
-          if (!val) return;
+          if (!val && !pendingFile) return;
           const now = new Date();
           const t = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
           if (!Array.isArray(msg.thread)) msg.thread = [];
-          msg.thread.push({ from: 'me', text: val, time: t });
+          const displayText = pendingFile
+            ? (val ? `${val}
+📎 ${pendingFile.name}` : `📎 ${pendingFile.name}`)
+            : val;
+          msg.thread.push({ from: 'me', text: displayText, time: t });
           msg.time = t;
-          try { window.AndroidBridge.sendMessage(msg.id, val); } catch (err) {}
+          try {
+            if (pendingFile && window.AndroidBridge.sendMessageWithFile) {
+              window.AndroidBridge.sendMessageWithFile(msg.id, val, pendingFile.name, pendingFile.base64);
+            } else {
+              window.AndroidBridge.sendMessage(msg.id, val);
+            }
+          } catch (err) {}
           renderMessages();
           openMessageSheet(id);
           showToast('Сообщение отправлено', 'success');
@@ -4120,6 +4495,7 @@
             <div class="settings-row">
               <div><div class="row-title">Дата</div><div class="row-sub">${escapeHtml(f.date || '—')}</div></div>
             </div>
+            ${f.comment ? `<div class="settings-row"><div><div class="row-title">Комментарий преподавателя</div><div class="row-sub" style="white-space:pre-wrap;">${escapeHtml(f.comment)}</div></div></div>` : ''}
           </div>
           <button class="full-btn" id="downloadFileBtn">Скачать файл</button>
         `);
@@ -4280,9 +4656,7 @@
       function renderSettings() {
         const container = $('settingsContent');
         const acc = state.account;
-        const initials = acc.loggedIn && acc.name
-          ? acc.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
-          : (acc.loggedIn ? 'ЛК' : '—');
+        const avatarHtml = getProfileAvatarHtml(acc);
 
         const delays = [
           { key: 'instant', label: 'Сразу' },
@@ -4309,9 +4683,9 @@
         container.innerHTML = `
           <div class="account-card tap" id="accountCard">
             <div class="account-left">
-              <div class="avatar">${escapeHtml(initials)}</div>
+              ${avatarHtml}
               <div style="min-width:0;">
-                <div class="row-title">${acc.loggedIn ? escapeHtml(acc.name || 'Студент СПбГУТ') : 'Войти в аккаунт вуза'}</div>
+                <div class="row-title">${acc.loggedIn ? escapeHtml(acc.name || 'Аккаунт ЛК СПбГУТ') : 'Войти в аккаунт вуза'}</div>
                 <div class="row-sub">${acc.loggedIn ? escapeHtml((acc.group ? acc.group + ' · ' : '') + (acc.email || 'lk.sut.ru')) : 'Личный кабинет lk.sut.ru'}</div>
               </div>
             </div>
@@ -4351,13 +4725,6 @@
               </div>
             </div>
 
-            <div class="settings-row">
-              <div>
-                <div class="row-title">Защита сессии</div>
-                <div class="row-sub">Не сбрасывать вход на компьютере</div>
-              </div>
-              <button class="switch" id="setAntiKick" role="switch" aria-checked="${state.antiKick}"></button>
-            </div>
           </div>
 
           <div class="section-label"><span>Синхронизация</span></div>
@@ -4412,13 +4779,6 @@
         $('accountCard').addEventListener('click', openAccountSheet);
         $('openRulesRow').addEventListener('click', openSubjectRulesSheet);
         $('setAutoSwitch').addEventListener('click', toggleMasterAutoCheck);
-
-        $('setAntiKick').addEventListener('click', () => {
-          state.antiKick = !state.antiKick;
-          persistPulseSettingsToBridge();
-          renderSettings();
-          showToast(state.antiKick ? 'Защита сессии включена' : 'Защита сессии выключена');
-        });
 
         container.querySelectorAll('[data-delay-chip]').forEach((btn) => {
           btn.addEventListener('click', () => {
@@ -4729,16 +5089,51 @@
         renderSchedule();
       }
 
+      function handleLoginResult(success, errorMsg) {
+        if (loginAttempt.timeoutId) {
+          clearTimeout(loginAttempt.timeoutId);
+          loginAttempt.timeoutId = null;
+        }
+        loginAttempt.pending = false;
+
+        const submitBtn = $('loginSubmitBtn');
+        const errEl = $('loginError');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Войти и синхронизировать';
+        }
+
+        if (success) {
+          if ($('loginForm')) closeSheet();
+          const welcomeName = getRealInitials(state.account.name) ? `, ${state.account.name.split(' ')[0]}` : '';
+          showToast(`Вход выполнен успешно${welcomeName}`, 'success');
+        } else {
+          const msg = errorMsg || 'Не удалось войти. Проверьте логин и пароль.';
+          showToast(msg, 'error');
+          if (errEl) {
+            errEl.textContent = msg;
+            const formEl = $('loginForm');
+            if (formEl) {
+              formEl.classList.remove('shake');
+              void formEl.offsetWidth;
+              formEl.classList.add('shake');
+            }
+          }
+        }
+      }
+
+      window.onPulseLoginResult = handleLoginResult;
+
       function openAccountSheet() {
         const acc = state.account;
         if (acc.loggedIn) {
           openSheet(`
-            <div class="sheet-title">${escapeHtml(acc.name || 'Студент СПбГУТ')}</div>
+            <div class="sheet-title">${escapeHtml(acc.name || 'Аккаунт ЛК СПбГУТ')}</div>
             <div class="sheet-sub">${escapeHtml((acc.group ? acc.group + ' · ' : '') + (acc.email || ''))}</div>
             <div class="settings-group">
               <div class="settings-row">
-                <div><div class="row-title">Статус сессии</div><div class="row-sub">Cookie хранится локально на устройстве</div></div>
-                <span class="badge accent">OK</span>
+                <div><div class="row-title">Статус</div><div class="row-sub">Данные хранятся локально на устройстве</div></div>
+                <span class="badge accent">Подключён</span>
               </div>
             </div>
             <button class="full-btn danger" id="logoutBtn">Выйти из аккаунта</button>
@@ -4762,7 +5157,7 @@
         } else {
           openSheet(`
             <div class="sheet-title">Вход в ЛК СПбГУТ</div>
-            <div class="sheet-sub">Данные проверяются напрямую через lk.sut.ru и хранятся только на устройстве</div>
+            <div class="sheet-sub">Данные хранятся только на вашем устройстве</div>
             <form id="loginForm">
               <div class="field">
                 <label for="loginEmail">Логин или почта от lk.sut.ru</label>
@@ -4773,91 +5168,58 @@
                 <input id="loginPass" type="password" required placeholder="••••••••" />
               </div>
               <div class="field-error" id="loginError"></div>
-              <button type="submit" class="full-btn" id="loginSubmitBtn">Войти и синхронизировать</button>
+              <button type="submit" class="full-btn" id="loginSubmitBtn" style="margin-top:6px;">Войти и синхронизировать</button>
             </form>
           `);
-
-          const formEl = $('loginForm');
-          const emailInput = $('loginEmail');
-          const passInput = $('loginPass');
-          const errEl = $('loginError');
-          const submitBtn = $('loginSubmitBtn');
-
-          const clearLoginErr = () => {
-            emailInput.classList.remove('is-error');
-            passInput.classList.remove('is-error');
-            errEl.textContent = '';
-          };
-          emailInput.addEventListener('input', clearLoginErr);
-          passInput.addEventListener('input', clearLoginErr);
-
-          formEl.addEventListener('submit', (e) => {
+          $('loginForm').addEventListener('submit', (e) => {
             e.preventDefault();
+            const errEl = $('loginError');
+            if (errEl) errEl.textContent = '';
             if (!HAS_BRIDGE) {
-              errEl.textContent = 'Вход доступен только внутри Android-приложения';
-              showToast('Нет подключения к Android-службе', 'error');
+              handleLoginResult(false, 'Вход доступен только внутри Android-приложения');
               return;
             }
-            const email = emailInput.value.trim();
-            const pass = passInput.value.trim();
-            if (!email || !pass) {
-              errEl.textContent = 'Введите логин и пароль';
-              return;
+            const email = $('loginEmail').value.trim();
+            const pass = $('loginPass').value.trim();
+            if (!email || !pass) return;
+
+            const btn = $('loginSubmitBtn');
+            if (btn) {
+              btn.disabled = true;
+              btn.innerHTML = '<span class="spinner"></span>Подключение...';
             }
 
-            clearLoginErr();
-            submitBtn.disabled = true;
-            emailInput.disabled = true;
-            passInput.disabled = true;
-            submitBtn.innerHTML = '<span class="spinner"></span> Проверка входа...';
+            if (loginAttempt.timeoutId) clearTimeout(loginAttempt.timeoutId);
+            loginAttempt = {
+              pending: true,
+              startedAt: Date.now(),
+              prevLogCount: Array.isArray(state.logs) ? state.logs.length : 0,
+              timeoutId: setTimeout(() => {
+                if (loginAttempt.pending && !state.account.loggedIn) {
+                  handleLoginResult(false, 'Не удалось войти: проверьте логин, пароль и интернет');
+                }
+              }, 12000)
+            };
 
             try {
-              window.AndroidBridge.loginAccount(email, pass);
+              const res = window.AndroidBridge.loginAccount(email, pass);
+              if (res === false) {
+                handleLoginResult(false, 'Неверный логин или пароль');
+                return;
+              }
+              if (typeof res === 'string' && /(error|fail|ошибк|неверн)/i.test(res)) {
+                handleLoginResult(false, res);
+                return;
+              }
             } catch (err) {
-              submitBtn.disabled = false;
-              emailInput.disabled = false;
-              passInput.disabled = false;
-              submitBtn.textContent = 'Войти и синхронизировать';
-              errEl.textContent = 'Не удалось запустить проверку входа';
+              handleLoginResult(false, 'Ошибка при обращении к службе входа');
               return;
             }
 
-            const startedAt = Date.now();
-            if (loginPollTimer) clearInterval(loginPollTimer);
-            loginPollTimer = setInterval(() => {
-              let st = {};
-              try {
-                st = safeParse(window.AndroidBridge.getState(), {});
-              } catch (err) {}
-
-              const authState = st.authState || '';
-              if (authState === 'ok') {
-                clearInterval(loginPollTimer);
-                loginPollTimer = null;
-                syncFromAndroid(true);
-                closeSheet();
-                showToast('Вход подтверждён', 'success');
-                return;
-              }
-
-              if (authState === 'error' || (Date.now() - startedAt) > 25000) {
-                clearInterval(loginPollTimer);
-                loginPollTimer = null;
-                submitBtn.disabled = false;
-                emailInput.disabled = false;
-                passInput.disabled = false;
-                submitBtn.textContent = 'Войти и синхронизировать';
-                emailInput.classList.add('is-error');
-                passInput.classList.add('is-error');
-                errEl.textContent = authState === 'error'
-                  ? (st.authError || 'Неверный логин или пароль от lk.sut.ru')
-                  : 'Превышено время ожидания ответа от lk.sut.ru';
-                formEl.classList.remove('shake');
-                void formEl.offsetWidth;
-                formEl.classList.add('shake');
-                showToast(errEl.textContent, 'error');
-              }
-            }, 300);
+            showToast('Проверка данных в lk.sut.ru...');
+            setTimeout(() => syncFromAndroid(true), 700);
+            setTimeout(() => { if (loginAttempt.pending) syncFromAndroid(true); }, 1800);
+            setTimeout(() => { if (loginAttempt.pending) syncFromAndroid(true); }, 3500);
           });
         }
       }
