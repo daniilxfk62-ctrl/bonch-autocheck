@@ -8,7 +8,6 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -21,10 +20,14 @@ import org.json.JSONObject;
 public class MessageManager {
     private long lastMessagesPollMillis = 0L;
 
+    // Точные паттерны строк lk.sut.ru: <tr id='tr_3908722'> и onclick="tr_click(3908722);"
+    private static final Pattern TR_ID_PAT = Pattern.compile("id\\s*=\\s*['\"]?tr_(\\d+)['\"]?", Pattern.CASE_INSENSITIVE);
+    private static final Pattern TR_CLICK_PAT = Pattern.compile("tr_click\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*\\)", Pattern.CASE_INSENSITIVE);
+
     public boolean isTimeForPeriodicPoll(AppStorage storage) {
         long intervalMs = storage.getAutoUpdateIntervalMillis();
         if (intervalMs <= 0L) return false;
-        long effectiveInterval = Math.min(intervalMs, 1800000L); // не реже раза в 30 мин, если автообновление включено
+        long effectiveInterval = Math.min(intervalMs, 1800000L);
         return (System.currentTimeMillis() - lastMessagesPollMillis) >= effectiveInterval;
     }
 
@@ -44,69 +47,83 @@ public class MessageManager {
             return;
         }
 
-        int msgCount = pollPersonalMessages(ctx, api, storage, manualTrigger);
-        int fileCount = pollGroupFiles(ctx, api, storage, manualTrigger);
+        int msgCount = pollPersonalMessages(ctx, api, storage, login, password, manualTrigger);
+        int fileCount = pollGroupFiles(ctx, api, storage, login, password, manualTrigger);
 
         if (manualTrigger) {
             storage.addLog("💬 Синхронизация завершена (диалогов: " + msgCount + ", файлов группы: " + fileCount + ")");
         }
     }
 
-    private List<String> buildCandidateUrls(AppStorage storage, String endpointKey, String[] fallbacks) {
-        Set<String> urls = new LinkedHashSet<>();
-        String discovered = storage.getDiscoveredEndpoints().optString(endpointKey, "").trim();
-        if (!discovered.isEmpty()) {
-            urls.add(discovered);
-        }
-        for (String u : fallbacks) {
-            urls.add(u);
-        }
-        return new ArrayList<>(urls);
-    }
+    private String fetchExactPage(
+        SutApiClient api,
+        AppStorage storage,
+        String login,
+        String password,
+        String primaryUrl
+    ) {
+        try {
+            String html = api.httpRequest("POST", primaryUrl, "");
+            if (isAuthExpiredHtml(html)) {
+                if (api.authenticate(login, password, storage)) {
+                    html = api.httpRequest("POST", primaryUrl, "");
+                }
+            }
+            if (isValidContentHtml(html)) return html;
 
-    private String fetchWorkingPage(SutApiClient api, List<String> candidates, String[] outUsedUrl) {
-        for (String url : candidates) {
-            try {
-                String html = api.httpRequest("POST", url, "");
-                if (isValidContentHtml(html)) {
-                    outUsedUrl[0] = url;
-                    return html;
+            html = api.httpRequest("GET", primaryUrl, null);
+            if (isAuthExpiredHtml(html)) {
+                if (api.authenticate(login, password, storage)) {
+                    html = api.httpRequest("GET", primaryUrl, null);
                 }
-                html = api.httpRequest("GET", url, null);
-                if (isValidContentHtml(html)) {
-                    outUsedUrl[0] = url;
-                    return html;
-                }
-            } catch (Exception ignored) {}
-        }
+            }
+            if (isValidContentHtml(html)) return html;
+        } catch (Exception ignored) {}
         return "";
     }
 
-    private boolean isValidContentHtml(String html) {
-        if (html == null || html.trim().length() < 60) return false;
+    private boolean isAuthExpiredHtml(String html) {
+        if (html == null || html.isEmpty()) return false;
         String low = html.toLowerCase(Locale.ROOT);
-        if (low.contains("autentification") || low.contains("name=\"parole\"")) return false;
-        if (low.contains("404 not found") || low.contains("страница не найдена")) return false;
-        return low.contains("<table") || low.contains("<a ") || low.contains("<tr") || low.contains("сообщен") || low.contains("файл");
+        return low.contains("autentification") || low.contains("name=\"parole\"") || low.contains("name='parole'");
     }
 
-    private int pollPersonalMessages(Context ctx, SutApiClient api, AppStorage storage, boolean manualTrigger) {
+    private boolean isValidContentHtml(String html) {
+        if (html == null || html.trim().length() < 40) return false;
+        String low = html.toLowerCase(Locale.ROOT);
+        if (isAuthExpiredHtml(html)) return false;
+        if (low.contains("404 not found") || low.contains("страница не найдена")) return false;
+        return low.contains("<table") || low.contains("<tr") || low.contains("tr_click") || low.contains("subconto/sendto");
+    }
+
+    private String extractRowServerId(String trAttrs, String trInner) {
+        Matcher m1 = TR_ID_PAT.matcher(trAttrs != null ? trAttrs : "");
+        if (m1.find()) return m1.group(1);
+        Matcher m2 = TR_CLICK_PAT.matcher((trAttrs != null ? trAttrs : "") + " " + (trInner != null ? trInner : ""));
+        if (m2.find()) return m2.group(1);
+        return "";
+    }
+
+    private int pollPersonalMessages(
+        Context ctx,
+        SutApiClient api,
+        AppStorage storage,
+        String login,
+        String password,
+        boolean manualTrigger
+    ) {
         try {
-            String[] usedUrl = new String[]{""};
-            List<String> candidates = buildCandidateUrls(storage, "messages", SutApiClient.MESSAGE_URLS);
-            String html = fetchWorkingPage(api, candidates, usedUrl);
+            String pageUrl = SutApiClient.MESSAGE_IN_URL;
+            String html = fetchExactPage(api, storage, login, password, pageUrl);
             if (html.isEmpty()) {
                 return storage.readJsonArray(AppStorage.FILE_MESSAGES).length();
             }
 
-            if (!usedUrl[0].isEmpty()) {
-                storage.saveDiscoveredEndpoint("messages", usedUrl[0]);
-            }
-
-            // Загружаем локальное состояние (чтобы не терять отметки «прочитано» и локальные ответы)
             JSONArray existingArr = storage.readJsonArray(AppStorage.FILE_MESSAGES);
             Map<String, JSONObject> existingBySender = new LinkedHashMap<>();
+            Map<String, String> cachedBodyByServerId = new LinkedHashMap<>();
             Set<String> readLocallyIds = new HashSet<>();
+
             for (int i = 0; i < existingArr.length(); i++) {
                 JSONObject obj = existingArr.optJSONObject(i);
                 if (obj == null) continue;
@@ -117,6 +134,18 @@ public class MessageManager {
                 if (!obj.optBoolean("unread", false)) {
                     readLocallyIds.add(obj.optString("id", ""));
                     readLocallyIds.add(obj.optString("serverId", ""));
+                }
+                JSONArray th = obj.optJSONArray("thread");
+                if (th != null) {
+                    for (int j = 0; j < th.length(); j++) {
+                        JSONObject b = th.optJSONObject(j);
+                        if (b == null) continue;
+                        String sid = b.optString("serverId", "");
+                        String txt = b.optString("text", "");
+                        if (!sid.isEmpty() && !txt.isEmpty()) {
+                            cachedBodyByServerId.put(sid, txt);
+                        }
+                    }
                 }
             }
 
@@ -135,12 +164,13 @@ public class MessageManager {
 
             Pattern trPat = Pattern.compile("<tr([^>]*)>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern tdPat = Pattern.compile("<t[dh][^>]*>(.*?)</t[dh]>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            Pattern linkPat = Pattern.compile("<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern datePat = Pattern.compile("(\\d{2}\\.\\d{2}(?:\\.\\d{2,4})?(?:\\s+\\d{1,2}:\\d{2})?|\\d{1,2}:\\d{2})");
-            Pattern msgIdPat = Pattern.compile("(?:show_message|open_message|read_message|show_mes|prosmotr|del_mes)\\s*\\(\\s*['\"]?(\\d+)['\"]?", Pattern.CASE_INSENSITIVE);
-            Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.[А-ЯЁ]\\.|[А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ][а-яё]+)?)");
+            Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.|[А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ][а-яё]+)?)");
 
             Matcher trMat = trPat.matcher(html);
             int fetchedDetailsCount = 0;
+            int maxDetailsToFetch = manualTrigger ? 12 : 6;
             int rowCounter = 0;
 
             while (trMat.find()) {
@@ -148,20 +178,35 @@ public class MessageManager {
                 String trInner = trMat.group(2);
                 String trLow = (trAttrs + " " + trInner).toLowerCase(Locale.ROOT);
 
-                // Пропускаем шапки таблиц и служебные скрытые строки без ячеек
                 if (trLow.contains("<th") && !trLow.contains("<td")) continue;
+
+                String serverId = extractRowServerId(trAttrs, trInner);
 
                 Matcher tdMat = tdPat.matcher(trInner);
                 List<String> cells = new ArrayList<>();
                 while (tdMat.find()) {
-                    String text = cleanHtml(tdMat.group(1));
-                    cells.add(text);
+                    cells.add(cleanHtml(tdMat.group(1)));
                 }
                 if (cells.size() < 2) continue;
 
                 String joinedLow = cleanHtml(trInner).toLowerCase(Locale.ROOT);
                 if (joinedLow.startsWith("дата") && (joinedLow.contains("тема") || joinedLow.contains("отправител"))) {
                     continue;
+                }
+
+                // Извлекаем прикреплённый файл в строке сообщения (если есть <a href='.../subconto/sendto/...'>)
+                String attachmentNote = "";
+                Matcher lm = linkPat.matcher(trInner);
+                while (lm.find()) {
+                    String href = lm.group(1).trim();
+                    if (href.toLowerCase(Locale.ROOT).contains("subconto/sendto")) {
+                        String aName = cleanHtml(lm.group(2));
+                        if (aName.isEmpty()) aName = extractFilenameFromUrl(href);
+                        if (!aName.isEmpty()) {
+                            attachmentNote = "📎 " + aName;
+                            break;
+                        }
+                    }
                 }
 
                 String foundDate = "";
@@ -174,10 +219,7 @@ public class MessageManager {
                         break;
                     }
                 }
-                if (foundDate.isEmpty() && cells.size() < 3) continue;
-
-                Matcher idMat = msgIdPat.matcher(trInner);
-                String serverId = idMat.find() ? idMat.group(1) : "";
+                if (serverId.isEmpty() && foundDate.isEmpty() && cells.size() < 3) continue;
 
                 String sender = "";
                 String subject = "";
@@ -189,7 +231,10 @@ public class MessageManager {
                     if (c.isEmpty() || c.matches("^\\d+$") || c.equalsIgnoreCase("удалить") || c.equalsIgnoreCase("ответить")) {
                         continue;
                     }
-                    if (sender.isEmpty() && (fioPat.matcher(c).find() || c.toLowerCase(Locale.ROOT).contains("деканат") || c.toLowerCase(Locale.ROOT).contains("отдел"))) {
+                    if (sender.isEmpty() && (fioPat.matcher(c).find()
+                        || c.toLowerCase(Locale.ROOT).contains("деканат")
+                        || c.toLowerCase(Locale.ROOT).contains("отдел")
+                        || c.toLowerCase(Locale.ROOT).contains("кафедр"))) {
                         sender = c;
                     } else if (subject.isEmpty()) {
                         subject = c;
@@ -208,17 +253,19 @@ public class MessageManager {
                 }
                 if (subject.isEmpty()) subject = "Личное сообщение";
 
-                // Если текст сообщения скрыт за кликом — пробуем подгрузить тело для первых 12 свежих писем
-                String fullText = bodyPreview;
-                if (fullText.isEmpty() && !serverId.isEmpty() && fetchedDetailsCount < 12 && !usedUrl[0].isEmpty()) {
+                // Открываем реальный текст сообщения через POST sendto2.php?id=<ID>&prosmotr
+                String fullText = "";
+                if (!serverId.isEmpty() && cachedBodyByServerId.containsKey(serverId)) {
+                    fullText = cachedBodyByServerId.get(serverId);
+                } else if (!serverId.isEmpty() && fetchedDetailsCount < maxDetailsToFetch) {
                     fetchedDetailsCount++;
-                    String fetched = fetchMessageBody(api, usedUrl[0], serverId);
-                    if (!fetched.isEmpty()) {
-                        fullText = fetched;
-                    }
+                    fullText = fetchMessageBodyViaSendto2(api, serverId);
                 }
                 if (fullText.isEmpty()) {
-                    fullText = subject;
+                    fullText = !bodyPreview.isEmpty() ? bodyPreview : subject;
+                }
+                if (!attachmentNote.isEmpty() && !fullText.contains(attachmentNote)) {
+                    fullText = fullText + "\n" + attachmentNote;
                 }
 
                 boolean looksUnread = trLow.contains("<b")
@@ -237,7 +284,6 @@ public class MessageManager {
                 boolean isUnread = looksUnread && !readLocallyIds.contains(msgKey) && !readLocallyIds.contains(serverId);
                 boolean isMuted = storage.isSenderMuted(sender);
 
-                // Проверяем новизну для уведомлений
                 if (!oldSnap.has(msgKey)) {
                     newSnap.put(msgKey, fullText.substring(0, Math.min(80, fullText.length())));
                     if (hadBaseline && !isMuted) {
@@ -278,7 +324,6 @@ public class MessageManager {
                 if (rowCounter >= 60) break;
             }
 
-            // Сохраняем локальные ответы пользователя ("from": "me") из старого кэша
             for (Map.Entry<String, JSONObject> entry : threadsBySender.entrySet()) {
                 JSONObject oldThread = existingBySender.get(entry.getKey());
                 if (oldThread == null) continue;
@@ -299,9 +344,8 @@ public class MessageManager {
             for (JSONObject t : threadsBySender.values()) {
                 resultArr.put(t);
             }
-            if (resultArr.length() > 0 || existingArr.length() == 0) {
-                storage.writeText(AppStorage.FILE_MESSAGES, resultArr.toString());
-            }
+            storage.writeText(AppStorage.FILE_MESSAGES, resultArr.toString());
+            storage.addLog("💬 Личные сообщения обновлены (диалогов: " + resultArr.length() + ")");
 
             if (!newMessageAlerts.isEmpty() && storage.isNotifyMessagesEnabled()) {
                 for (String[] alert : newMessageAlerts) {
@@ -321,34 +365,49 @@ public class MessageManager {
         }
     }
 
-    private String fetchMessageBody(SutApiClient api, String baseUrl, String serverId) {
+    /**
+     * Загружает текст конкретного сообщения через подтверждённый эндпоинт:
+     * POST https://lk.sut.ru/cabinet/project/cabinet/forms/sendto2.php?id=<ID>&prosmotr
+     */
+    private String fetchMessageBodyViaSendto2(SutApiClient api, String serverId) {
         try {
-            String body = "id=" + serverId + "&prosmotr=1&open=1";
-            String resp = api.httpRequest("POST", baseUrl + "?" + body, body);
-            if (resp == null || resp.trim().length() < 10) return "";
-            if (resp.toLowerCase(Locale.ROOT).contains("<table") && resp.length() > 4000) {
-                // Сервер вернул всю страницу целиком вместо текста одного сообщения
+            String url = SutApiClient.MESSAGE_READ_URL + "?id=" + URLEncoder.encode(serverId, "UTF-8") + "&prosmotr";
+            String body = "id=" + URLEncoder.encode(serverId, "UTF-8") + "&prosmotr=1";
+            String resp = api.httpRequestFast("POST", url, body);
+            if (resp == null || resp.trim().length() < 5) {
+                resp = api.httpRequestFast("GET", url, null);
+            }
+            if (resp == null || resp.trim().length() < 5 || isAuthExpiredHtml(resp)) {
                 return "";
             }
             String text = cleanHtml(resp);
-            if (text.length() > 600) text = text.substring(0, 600) + "…";
+            if (text.length() > 800) {
+                text = text.substring(0, 800) + "…";
+            }
             return text;
         } catch (Exception e) {
             return "";
         }
     }
 
-    private int pollGroupFiles(Context ctx, SutApiClient api, AppStorage storage, boolean manualTrigger) {
+    /**
+     * Загружает файлы группы строго с подтверждённого эндпоинта:
+     * https://lk.sut.ru/cabinet/project/cabinet/forms/files_group_pr.php
+     * Строки вида <tr id='tr_3909552' onclick="tr_click(3909552);"> с прямой ссылкой <a href='.../subconto/sendto/...'>.
+     */
+    private int pollGroupFiles(
+        Context ctx,
+        SutApiClient api,
+        AppStorage storage,
+        String login,
+        String password,
+        boolean manualTrigger
+    ) {
         try {
-            String[] usedUrl = new String[]{""};
-            List<String> candidates = buildCandidateUrls(storage, "groupFiles", SutApiClient.GROUP_FILES_URLS);
-            String html = fetchWorkingPage(api, candidates, usedUrl);
+            String pageUrl = SutApiClient.GROUP_FILES_URL;
+            String html = fetchExactPage(api, storage, login, password, pageUrl);
             if (html.isEmpty()) {
                 return storage.readJsonArray(AppStorage.FILE_GROUP_FILES).length();
-            }
-
-            if (!usedUrl[0].isEmpty()) {
-                storage.saveDiscoveredEndpoint("groupFiles", usedUrl[0]);
             }
 
             String snapRaw = storage.readText(AppStorage.FILE_MESSAGES_SNAPSHOT, "");
@@ -359,18 +418,20 @@ public class MessageManager {
             Set<String> seenUrls = new HashSet<>();
             List<String> newFileAlerts = new ArrayList<>();
 
-            Pattern trPat = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            Pattern trPat = Pattern.compile("<tr([^>]*)>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern tdPat = Pattern.compile("<td[^>]*>(.*?)</td>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern linkPat = Pattern.compile("<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern datePat = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{2,4})");
             Pattern sizePat = Pattern.compile("(\\d+(?:[.,]\\d+)?\\s*(?:Б|КБ|МБ|ГБ|KB|MB|GB))", Pattern.CASE_INSENSITIVE);
-            Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.[А-ЯЁ]\\.)");
+            Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.|[А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ][а-яё]+)?)");
 
             Matcher trMat = trPat.matcher(html);
-            int idx = 0;
 
             while (trMat.find()) {
-                String trInner = trMat.group(1);
+                String trAttrs = trMat.group(1);
+                String trInner = trMat.group(2);
+                String rowId = extractRowServerId(trAttrs, trInner);
+
                 Matcher lm = linkPat.matcher(trInner);
                 while (lm.find()) {
                     String href = lm.group(1).trim();
@@ -378,21 +439,22 @@ public class MessageManager {
                     if (href.isEmpty() || href.startsWith("#") || href.toLowerCase(Locale.ROOT).startsWith("javascript:")) {
                         continue;
                     }
+
                     String lowHref = href.toLowerCase(Locale.ROOT);
-                    boolean looksLikeFile = lowHref.matches(".*\\.(pdf|docx?|pptx?|xlsx?|zip|rar|7z|txt|rtf|png|jpe?g|csv|py|cpp|java|c|h)(\\?.*)?$")
+                    boolean looksLikeFile = lowHref.contains("subconto/sendto")
+                        || lowHref.matches(".*\\.(pdf|docx?|pptx?|xlsx?|zip|rar|7z|txt|rtf|png|jpe?g|csv|py|cpp|java|c|h|odt|djvu)(\\?.*)?$")
                         || lowHref.contains("download")
                         || lowHref.contains("file")
                         || lowHref.contains("upload");
                     if (!looksLikeFile) continue;
 
-                    String absUrl = SutApiClient.resolveUrl(href);
+                    String absUrl = SutApiClient.resolveUrl(pageUrl, href);
                     if (seenUrls.contains(absUrl)) continue;
                     seenUrls.add(absUrl);
 
                     String fileName = !linkText.isEmpty() ? linkText : extractFilenameFromUrl(absUrl);
                     String ext = extractExtension(fileName, absUrl);
 
-                    // Парсим соседние ячейки строки (предмет, автор, дата, размер)
                     List<String> cells = new ArrayList<>();
                     Matcher tdMat = tdPat.matcher(trInner);
                     while (tdMat.find()) {
@@ -412,16 +474,16 @@ public class MessageManager {
                         if (c.isEmpty() || c.equals(fileName) || c.equals(dateStr) || c.equals(author) || c.matches("^\\d+$")) {
                             continue;
                         }
-                        if (c.length() >= 3 && c.length() <= 70 && !c.contains(fileName)) {
+                        if (c.length() >= 3 && c.length() <= 80 && !c.contains(fileName)) {
                             subject = c;
                             break;
                         }
                     }
 
-                    idx++;
-                    String fileKey = "file_" + Math.abs(absUrl.hashCode());
+                    String fileKey = !rowId.isEmpty() ? ("file_" + rowId) : ("file_" + Math.abs(absUrl.hashCode()));
                     JSONObject fObj = new JSONObject();
                     fObj.put("id", fileKey);
+                    fObj.put("serverId", rowId);
                     fObj.put("name", fileName);
                     fObj.put("ext", ext);
                     fObj.put("subject", subject);
@@ -446,9 +508,8 @@ public class MessageManager {
             for (JSONObject f : filesList) {
                 outArr.put(f);
             }
-            if (outArr.length() > 0 || storage.readJsonArray(AppStorage.FILE_GROUP_FILES).length() == 0) {
-                storage.writeText(AppStorage.FILE_GROUP_FILES, outArr.toString());
-            }
+            storage.writeText(AppStorage.FILE_GROUP_FILES, outArr.toString());
+            storage.addLog("📎 Файлы группы обновлены (файлов: " + outArr.length() + ")");
 
             if (!newFileAlerts.isEmpty() && storage.isNotifyMessagesEnabled()) {
                 String msg = newFileAlerts.size() == 1
@@ -535,14 +596,12 @@ public class MessageManager {
             boolean sentToServer = false;
 
             if (!serverId.isEmpty() && (api.isAuthenticated() || api.authenticate(login, password, storage))) {
-                List<String> candidates = buildCandidateUrls(storage, "messages", SutApiClient.MESSAGE_URLS);
-                String targetUrl = candidates.get(0);
                 try {
                     String payload = "save=1&id=" + URLEncoder.encode(serverId, "UTF-8")
                         + "&title=" + URLEncoder.encode("Re: " + subject, "UTF-8")
                         + "&mes_otvet=" + URLEncoder.encode(cleanText, "UTF-8")
                         + "&text=" + URLEncoder.encode(cleanText, "UTF-8");
-                    String resp = api.httpRequest("POST", targetUrl, payload);
+                    String resp = api.httpRequest("POST", SutApiClient.MESSAGE_READ_URL, payload);
                     sentToServer = resp != null && !resp.toLowerCase(Locale.ROOT).contains("ошибка");
                 } catch (Exception ignored) {}
             }

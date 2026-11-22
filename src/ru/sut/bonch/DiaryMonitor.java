@@ -73,17 +73,32 @@ public class DiaryMonitor {
             if (!discovered.isEmpty()) candidateUrls.add(discovered);
             for (String u : SutApiClient.DIARY_URLS) candidateUrls.add(u);
 
+            boolean foundWorkingDiaryUrl = false;
+            int maxSubPages = manualTrigger ? 25 : 8;
+
             for (String url : candidateUrls) {
                 String html = "";
                 try {
-                    html = api.httpRequest("POST", url, "");
-                    if (html.length() < 80 || !html.toLowerCase(Locale.ROOT).contains("<table")) {
-                        html = api.httpRequest("GET", url, null);
+                    html = api.httpRequestFast("POST", url, "");
+                    if (!isValidDiaryHtml(html)) {
+                        html = api.httpRequestFast("GET", url, null);
                     }
                 } catch (Exception ignored) {}
 
-                if (html == null || html.length() < 40) continue;
+                if (html != null && (html.toLowerCase(Locale.ROOT).contains("autentification") || html.toLowerCase(Locale.ROOT).contains("name=\"parole\""))) {
+                    if (api.authenticate(login, password, storage)) {
+                        try {
+                            html = api.httpRequestFast("POST", url, "");
+                            if (!isValidDiaryHtml(html)) {
+                                html = api.httpRequestFast("GET", url, null);
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                }
 
+                if (!isValidDiaryHtml(html)) continue;
+
+                int beforeCount = uniqueAllEntries.size();
                 parseDiaryHtmlDocument(
                     html,
                     todayDateShort,
@@ -97,13 +112,13 @@ public class DiaryMonitor {
 
                 Pattern subCallPat = Pattern.compile("(?:open_uch|open_jurnal|show_jurnal|open_predm)\\s*\\(\\s*['\"]?(\\d+)['\"]?", Pattern.CASE_INSENSITIVE);
                 Matcher subMat = subCallPat.matcher(html);
-                while (subMat.find() && fetchedSubPages.size() < 25) {
+                while (subMat.find() && fetchedSubPages.size() < maxSubPages) {
                     String subId = subMat.group(1);
                     if (fetchedSubPages.contains(url + "#" + subId)) continue;
                     fetchedSubPages.add(url + "#" + subId);
                     try {
                         String body = "id=" + subId + "&predm=" + subId + "&uch=" + subId + "&open=1";
-                        String subHtml = api.httpRequest("POST", url + "?" + body, body);
+                        String subHtml = api.httpRequestFast("POST", url + "?" + body, body);
                         if (subHtml != null && subHtml.toLowerCase(Locale.ROOT).contains("<table")) {
                             parseDiaryHtmlDocument(
                                 subHtml,
@@ -117,6 +132,13 @@ public class DiaryMonitor {
                             );
                         }
                     } catch (Exception ignored) {}
+                }
+
+                if (uniqueAllEntries.size() > beforeCount || !fetchedSubPages.isEmpty()) {
+                    storage.saveDiscoveredEndpoint("diary", url);
+                    foundWorkingDiaryUrl = true;
+                    // Не тратим время на перебор оставшихся запасных URL при автоматической синхронизации
+                    if (!manualTrigger) break;
                 }
             }
 
@@ -137,7 +159,6 @@ public class DiaryMonitor {
             }
             storage.writeText(AppStorage.FILE_DIARY_RECENT, recentJson.toString());
 
-            // Формируем сводку в формате Pulse UI (посещаемость + история + оценки)
             buildAndSavePulseSummary(storage, uniqueAllEntries);
 
             if (!newAlerts.isEmpty() && storage.isNotifyDiaryEnabled()) {
@@ -148,12 +169,22 @@ public class DiaryMonitor {
                 }
             } else if (manualTrigger) {
                 storage.addLog("📚 Дневник обновлён (записей: " + uniqueAllEntries.size() + ", новых: " + newAlerts.size() + ").");
+            } else if (foundWorkingDiaryUrl) {
+                storage.addLog("📚 Дневник синхронизирован (записей: " + uniqueAllEntries.size() + ")");
             }
         } catch (Exception e) {
             if (manualTrigger) {
                 storage.addLog("Ошибка проверки Дневника: " + e.getMessage());
             }
         }
+    }
+
+    private boolean isValidDiaryHtml(String html) {
+        if (html == null || html.trim().length() < 60) return false;
+        String low = html.toLowerCase(Locale.ROOT);
+        if (low.contains("autentification") || low.contains("name=\"parole\"")) return false;
+        if (low.contains("404 not found") || low.contains("страница не найдена")) return false;
+        return low.contains("<table") || low.contains("<tr");
     }
 
     private static class SubjectDiaryStats {

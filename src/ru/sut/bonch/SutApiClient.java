@@ -5,21 +5,21 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.CookieHandler;
-import java.net.CookieManager;
-import java.net.CookiePolicy;
-import java.net.CookieStore;
-import java.net.HttpCookie;
 import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
-import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.nio.charset.Charset;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.GZIPInputStream;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -57,8 +57,19 @@ public class SutApiClient {
         BASE_URL + "/project/cabinet/forms/lichnye_dannye.php"
     };
 
-    private CookieManager cookieManager;
+    private static final String USER_AGENT =
+        "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36";
+
+    private static final int DEFAULT_CONNECT_TIMEOUT_MS = 8000;
+    private static final int DEFAULT_READ_TIMEOUT_MS = 15000;
+    private static final int FAST_CONNECT_TIMEOUT_MS = 5000;
+    private static final int FAST_READ_TIMEOUT_MS = 9000;
+    private static final int MAX_REDIRECTS = 5;
+
+    private final Map<String, String> cookieJar = new LinkedHashMap<>();
     private volatile boolean authenticated = false;
+    private volatile boolean lastAuthBadCredentials = false;
+    private volatile String lastAuthError = "";
     private boolean cookiesRestored = false;
     private String lastLogin = "";
     private String lastPass = "";
@@ -68,53 +79,50 @@ public class SutApiClient {
     }
 
     public synchronized void resetCookies() {
-        try {
-            if (cookieManager != null) {
-                CookieStore store = cookieManager.getCookieStore();
-                if (store != null) store.removeAll();
-            }
-            cookieManager = new CookieManager(null, CookiePolicy.ACCEPT_ALL);
-            CookieHandler.setDefault(cookieManager);
-            cookiesRestored = false;
-        } catch (Exception ignored) {}
+        cookieJar.clear();
+        cookiesRestored = false;
+    }
+
+    public synchronized boolean hasCookies() {
+        return !cookieJar.isEmpty();
+    }
+
+    public boolean wasLastAuthBadCredentials() {
+        return lastAuthBadCredentials;
+    }
+
+    public String getLastAuthError() {
+        return lastAuthError;
     }
 
     public synchronized void restoreCookiesFromStorage(AppStorage storage) {
         if (storage == null) return;
         try {
             JSONArray arr = storage.readJsonArray(AppStorage.FILE_COOKIES);
-            if (arr.length() == 0) return;
-            CookieStore store = cookieManager.getCookieStore();
-            URI baseUri = new URI(ORIGIN_URL);
+            cookieJar.clear();
             for (int i = 0; i < arr.length(); i++) {
                 JSONObject obj = arr.optJSONObject(i);
                 if (obj == null) continue;
-                String name = obj.optString("name", "");
-                String value = obj.optString("value", "");
-                if (name.isEmpty()) continue;
-                HttpCookie cookie = new HttpCookie(name, value);
-                cookie.setDomain(obj.optString("domain", "lk.sut.ru"));
-                cookie.setPath(obj.optString("path", "/"));
-                cookie.setVersion(0);
-                store.add(baseUri, cookie);
+                String name = obj.optString("name", "").trim();
+                String value = obj.optString("value", "").trim();
+                if (!name.isEmpty() && !"deleted".equalsIgnoreCase(value)) {
+                    cookieJar.put(name, value);
+                }
             }
             cookiesRestored = true;
         } catch (Exception ignored) {}
     }
 
     public synchronized void persistCookiesToStorage(AppStorage storage) {
-        if (storage == null || cookieManager == null) return;
+        if (storage == null) return;
         try {
-            CookieStore store = cookieManager.getCookieStore();
-            List<HttpCookie> cookies = store.getCookies();
             JSONArray arr = new JSONArray();
-            for (HttpCookie c : cookies) {
-                if (c.hasExpired()) continue;
+            for (Map.Entry<String, String> entry : cookieJar.entrySet()) {
                 JSONObject obj = new JSONObject();
-                obj.put("name", c.getName());
-                obj.put("value", c.getValue());
-                obj.put("domain", c.getDomain() != null ? c.getDomain() : "lk.sut.ru");
-                obj.put("path", c.getPath() != null ? c.getPath() : "/");
+                obj.put("name", entry.getKey());
+                obj.put("value", entry.getValue());
+                obj.put("domain", "lk.sut.ru");
+                obj.put("path", "/");
                 arr.put(obj);
             }
             storage.writeText(AppStorage.FILE_COOKIES, arr.toString());
@@ -122,20 +130,41 @@ public class SutApiClient {
     }
 
     public synchronized String getCookieHeaderForUrl(String urlStr) {
-        if (cookieManager == null) return "";
-        try {
-            CookieStore store = cookieManager.getCookieStore();
-            List<HttpCookie> cookies = store.getCookies();
-            StringBuilder sb = new StringBuilder();
-            for (HttpCookie c : cookies) {
-                if (c.hasExpired()) continue;
-                if (sb.length() > 0) sb.append("; ");
-                sb.append(c.getName()).append("=").append(c.getValue());
-            }
-            return sb.toString();
-        } catch (Exception e) {
-            return "";
+        if (cookieJar.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, String> entry : cookieJar.entrySet()) {
+            if (sb.length() > 0) sb.append("; ");
+            sb.append(entry.getKey()).append("=").append(entry.getValue());
         }
+        return sb.toString();
+    }
+
+    private synchronized void captureResponseCookies(HttpURLConnection conn) {
+        try {
+            Map<String, List<String>> headers = conn.getHeaderFields();
+            if (headers == null) return;
+            for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+                String key = entry.getKey();
+                if (key == null || !key.equalsIgnoreCase("Set-Cookie")) continue;
+                List<String> values = entry.getValue();
+                if (values == null) continue;
+                for (String headerVal : values) {
+                    if (headerVal == null || headerVal.isEmpty()) continue;
+                    int semi = headerVal.indexOf(';');
+                    String pair = semi >= 0 ? headerVal.substring(0, semi) : headerVal;
+                    int eq = pair.indexOf('=');
+                    if (eq <= 0) continue;
+                    String name = pair.substring(0, eq).trim();
+                    String val = pair.substring(eq + 1).trim();
+                    if (name.isEmpty()) continue;
+                    if ("deleted".equalsIgnoreCase(val) || val.isEmpty()) {
+                        cookieJar.remove(name);
+                    } else {
+                        cookieJar.put(name, val);
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     public boolean isAuthenticated() {
@@ -150,8 +179,11 @@ public class SutApiClient {
     public void checkCredentialsChanged(String login, String pass) {
         if (!login.equals(lastLogin) || !pass.equals(lastPass)) {
             authenticated = false;
+            lastAuthBadCredentials = false;
+            lastAuthError = "";
             lastLogin = login;
             lastPass = pass;
+            resetCookies();
         }
     }
 
@@ -166,17 +198,34 @@ public class SutApiClient {
     }
 
     public String httpRequest(String method, String urlStr, String postBody) throws Exception {
+        return httpRequestInternal(method, urlStr, postBody, 2, DEFAULT_CONNECT_TIMEOUT_MS, DEFAULT_READ_TIMEOUT_MS);
+    }
+
+    public String httpRequestFast(String method, String urlStr, String postBody) throws Exception {
+        return httpRequestInternal(method, urlStr, postBody, 1, FAST_CONNECT_TIMEOUT_MS, FAST_READ_TIMEOUT_MS);
+    }
+
+    private String httpRequestInternal(
+        String method,
+        String urlStr,
+        String postBody,
+        int maxAttempts,
+        int connectTimeoutMs,
+        int readTimeoutMs
+    ) throws Exception {
         Exception lastErr = null;
-        for (int attempt = 1; attempt <= 3; attempt++) {
+        for (int attempt = 1; attempt <= maxAttempts; attempt++) {
             try {
-                return executeSingleRequest(method, urlStr, postBody);
+                return executeSingleRequest(method, urlStr, postBody, connectTimeoutMs, readTimeoutMs);
             } catch (SocketTimeoutException te) {
                 lastErr = te;
-                try { Thread.sleep(1500L * attempt); } catch (InterruptedException ignored) {}
+                if (attempt < maxAttempts) {
+                    try { Thread.sleep(600L * attempt); } catch (InterruptedException ignored) {}
+                }
             } catch (Exception e) {
                 lastErr = e;
-                if (attempt < 2) {
-                    try { Thread.sleep(1200L); } catch (InterruptedException ignored) {}
+                if (attempt < maxAttempts) {
+                    try { Thread.sleep(500L); } catch (InterruptedException ignored) {}
                 } else {
                     break;
                 }
@@ -196,45 +245,21 @@ public class SutApiClient {
         return count;
     }
 
-    private String executeSingleRequest(String method, String urlStr, String postBody) throws Exception {
-        URL url = new URL(resolveUrl(urlStr));
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod(method);
-        conn.setConnectTimeout(25000);
-        conn.setReadTimeout(40000);
-        conn.setInstanceFollowRedirects(true);
-        conn.setRequestProperty("Connection", "close");
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/128.0.0.0 Mobile Safari/537.36");
-        conn.setRequestProperty("Referer", LOGIN_PAGE_URL);
-        conn.setRequestProperty("Origin", ORIGIN_URL);
-        conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");
+    private String decodeBytes(byte[] bytes, String contentType) {
+        if (bytes == null || bytes.length == 0) return "";
+        String ctLow = contentType != null ? contentType.toLowerCase(Locale.ROOT) : "";
 
-        if ("POST".equals(method)) {
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
-            byte[] out = (postBody != null ? postBody : "").getBytes("UTF-8");
-            try (OutputStream os = conn.getOutputStream()) {
-                os.write(out);
-            }
+        if (ctLow.contains("windows-1251") || ctLow.contains("cp1251")) {
+            return new String(bytes, Charset.forName("windows-1251"));
         }
 
-        int code = conn.getResponseCode();
-        InputStream is = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
-        if (is == null) {
-            conn.disconnect();
-            return "";
-        }
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        byte[] buf = new byte[4096];
-        int n;
-        while ((n = is.read(buf)) != -1) {
-            baos.write(buf, 0, n);
-        }
-        conn.disconnect();
-
-        byte[] bytes = baos.toByteArray();
         String utf8 = new String(bytes, Charset.forName("UTF-8"));
-        if (utf8.trim().equals("1")) return utf8;
+        String cleanUtf8 = utf8.replace("\uFEFF", "").trim();
+        if ("1".equals(cleanUtf8)) return cleanUtf8;
+
+        if (ctLow.contains("utf-8") && utf8.indexOf('\uFFFD') == -1) {
+            return utf8;
+        }
 
         String cp1251 = new String(bytes, Charset.forName("windows-1251"));
         int cyrUtf8 = countValidCyrillic(utf8);
@@ -249,15 +274,118 @@ public class SutApiClient {
         return utf8;
     }
 
-    /**
-     * Проверяет, жива ли текущая cookie-сессия без повторного входа (для режима «Анти-кик»).
-     */
+    private String executeSingleRequest(
+        String method,
+        String urlStr,
+        String postBody,
+        int connectTimeoutMs,
+        int readTimeoutMs
+    ) throws Exception {
+        String currentUrl = resolveUrl(urlStr);
+        String currentMethod = method;
+        String currentBody = postBody;
+
+        for (int redirect = 0; redirect <= MAX_REDIRECTS; redirect++) {
+            URL url = new URL(currentUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod(currentMethod);
+            conn.setConnectTimeout(connectTimeoutMs);
+            conn.setReadTimeout(readTimeoutMs);
+            conn.setInstanceFollowRedirects(false);
+            conn.setRequestProperty("User-Agent", USER_AGENT);
+            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            conn.setRequestProperty("Accept-Language", "ru-RU,ru;q=0.9,en-US;q=0.8");
+            conn.setRequestProperty("Accept-Encoding", "gzip");
+            conn.setRequestProperty("Referer", LOGIN_PAGE_URL);
+            conn.setRequestProperty("Origin", ORIGIN_URL);
+
+            if ("POST".equalsIgnoreCase(currentMethod)) {
+                conn.setRequestProperty("X-Requested-With", "XMLHttpRequest");
+            }
+
+            String cookieHeader = getCookieHeaderForUrl(currentUrl);
+            if (!cookieHeader.isEmpty()) {
+                conn.setRequestProperty("Cookie", cookieHeader);
+            }
+
+            if ("POST".equalsIgnoreCase(currentMethod)) {
+                conn.setDoOutput(true);
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8");
+                byte[] out = (currentBody != null ? currentBody : "").getBytes("UTF-8");
+                try (OutputStream os = conn.getOutputStream()) {
+                    os.write(out);
+                }
+            }
+
+            int code = conn.getResponseCode();
+            captureResponseCookies(conn);
+
+            if (code == HttpURLConnection.HTTP_MOVED_PERM
+                || code == HttpURLConnection.HTTP_MOVED_TEMP
+                || code == HttpURLConnection.HTTP_SEE_OTHER
+                || code == 307
+                || code == 308) {
+                String location = conn.getHeaderField("Location");
+                conn.disconnect();
+                if (location == null || location.trim().isEmpty()) {
+                    return "";
+                }
+                currentUrl = resolveUrl(location);
+                if (code == HttpURLConnection.HTTP_SEE_OTHER || code == HttpURLConnection.HTTP_MOVED_TEMP || code == HttpURLConnection.HTTP_MOVED_PERM) {
+                    currentMethod = "GET";
+                    currentBody = null;
+                }
+                continue;
+            }
+
+            String contentType = conn.getContentType();
+            String contentEncoding = conn.getContentEncoding();
+            InputStream rawStream = code >= 400 ? conn.getErrorStream() : conn.getInputStream();
+            if (rawStream == null) {
+                conn.disconnect();
+                return "";
+            }
+
+            InputStream is = (contentEncoding != null && contentEncoding.toLowerCase(Locale.ROOT).contains("gzip"))
+                ? new GZIPInputStream(rawStream)
+                : rawStream;
+
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[] buf = new byte[8192];
+            int n;
+            try {
+                while ((n = is.read(buf)) != -1) {
+                    baos.write(buf, 0, n);
+                }
+            } finally {
+                try { is.close(); } catch (Exception ignored) {}
+                conn.disconnect();
+            }
+
+            if (code == 404 || code >= 500) {
+                return "";
+            }
+
+            return decodeBytes(baos.toByteArray(), contentType);
+        }
+        return "";
+    }
+
+    private boolean isLoginFormHtml(String html) {
+        if (html == null || html.trim().isEmpty()) return true;
+        String low = html.toLowerCase(Locale.ROOT);
+        return low.contains("name=\"parole\"")
+            || low.contains("name='parole'")
+            || low.contains("autentificationok.php");
+    }
+
     private boolean checkSessionAlive() {
+        if (!hasCookies()) return false;
         try {
-            String html = executeSingleRequest("POST", SCHEDULE_URL, "");
+            String html = executeSingleRequest("POST", SCHEDULE_URL, "", FAST_CONNECT_TIMEOUT_MS, FAST_READ_TIMEOUT_MS);
             if (html == null || html.trim().length() < 60) return false;
+            if (isLoginFormHtml(html)) return false;
             String low = html.toLowerCase(Locale.ROOT);
-            if (low.contains("autentification") || low.contains("name=\"parole\"")) return false;
             return low.contains("<table") || low.contains("расписани");
         } catch (Exception e) {
             return false;
@@ -265,21 +393,33 @@ public class SutApiClient {
     }
 
     public synchronized boolean authenticate(String login, String password, AppStorage storage) {
+        lastAuthBadCredentials = false;
+        lastAuthError = "";
+
+        if (login == null || login.trim().isEmpty() || password == null || password.trim().isEmpty()) {
+            authenticated = false;
+            lastAuthBadCredentials = true;
+            lastAuthError = "Введите логин и пароль от lk.sut.ru";
+            return false;
+        }
+
         try {
-            // Защита сессии (Анти-кик): сначала пробуем переиспользовать сохранённые cookies
-            if (storage != null && storage.isAntiKickEnabled()) {
+            if (storage != null && storage.isAntiKickEnabled()
+                && login.equals(lastLogin) && password.equals(lastPass)) {
                 if (!cookiesRestored) {
                     restoreCookiesFromStorage(storage);
                 }
-                if (checkSessionAlive()) {
+                if (hasCookies() && checkSessionAlive()) {
                     authenticated = true;
                     lastLogin = login;
                     lastPass = password;
                     storage.addLog("Сессия восстановлена без повторного входа (Анти-кик)");
                     if (storage.getProfile().optString("name", "").isEmpty()) {
                         try {
-                            String cabHtml = httpRequest("GET", LOGIN_PAGE_URL, null);
-                            parseMenuAndProfile(cabHtml, login, storage);
+                            String cabHtml = httpRequestFast("GET", LOGIN_PAGE_URL, null);
+                            if (!isLoginFormHtml(cabHtml)) {
+                                parseMenuAndProfile(cabHtml, login, storage);
+                            }
                         } catch (Exception ignored) {}
                     }
                     return true;
@@ -287,53 +427,97 @@ public class SutApiClient {
             }
 
             resetCookies();
-            httpRequest("GET", LOGIN_PAGE_URL, null);
+
+            // 1. Проверяем связь с сервером и получаем стартовую cookie сессии
+            String initPage = httpRequest("GET", LOGIN_PAGE_URL, null);
+            if (initPage == null || initPage.trim().length() < 20) {
+                authenticated = false;
+                lastAuthError = "Сервер lk.sut.ru не отвечает. Проверьте интернет.";
+                if (storage != null) storage.addLog(lastAuthError);
+                return false;
+            }
+
+            // 2. Отправляем логин и пароль
             String data = "users=" + URLEncoder.encode(login, "UTF-8")
                         + "&parole=" + URLEncoder.encode(password, "UTF-8");
-            String resp = httpRequest("POST", AUTH_URL + "?" + data, data);
-            String trimmed = resp != null ? resp.trim() : "";
+            String resp = httpRequest("POST", AUTH_URL, data);
+            String trimmed = resp != null ? resp.replace("\uFEFF", "").trim() : "";
+
+            if (trimmed.isEmpty()) {
+                resp = httpRequest("POST", AUTH_URL + "?" + data, data);
+                trimmed = resp != null ? resp.replace("\uFEFF", "").trim() : "";
+            }
 
             boolean authOk = "1".equals(trimmed)
                 || trimmed.startsWith("1\n")
                 || trimmed.startsWith("1\r")
                 || trimmed.startsWith("1 ");
 
-            if (authOk) {
-                httpRequest("GET", INI_URL, null);
-                String cabHtml = httpRequest("GET", LOGIN_PAGE_URL, null);
-                authenticated = true;
-                lastLogin = login;
-                lastPass = password;
-                persistCookiesToStorage(storage);
-                parseMenuAndProfile(cabHtml, login, storage);
-                storage.addLog("Вход в ЛК выполнен (" + login + ")");
-                return true;
+            if (!authOk) {
+                authenticated = false;
+                lastAuthBadCredentials = true;
+                lastAuthError = "Неверный логин или пароль от lk.sut.ru";
+                if (storage != null) storage.addLog(lastAuthError);
+                return false;
             }
-            authenticated = false;
-            storage.addLog("Неверный логин или пароль от lk.sut.ru");
+
+            // 3. Инициализируем PHP-сессию кабинета
+            httpRequest("GET", INI_URL, null);
+
+            // 4. Жёсткая проверка: загружаем страницу кабинета и убеждаемся, что мы реально вошли
+            String cabHtml = httpRequest("GET", LOGIN_PAGE_URL, null);
+            boolean confirmed = !isLoginFormHtml(cabHtml) && cabHtml.length() > 200;
+            if (!confirmed) {
+                confirmed = checkSessionAlive();
+            }
+
+            if (!confirmed) {
+                authenticated = false;
+                lastAuthBadCredentials = true;
+                lastAuthError = "ЛК не подтвердил вход. Проверьте логин и пароль.";
+                if (storage != null) storage.addLog(lastAuthError);
+                return false;
+            }
+
+            authenticated = true;
+            lastLogin = login;
+            lastPass = password;
+            persistCookiesToStorage(storage);
+            parseMenuAndProfile(cabHtml, login, storage);
+            if (storage != null) {
+                storage.addLog("Вход в ЛК подтверждён (" + login + ")");
+            }
+            return true;
+        } catch (UnknownHostException uhe) {
+            invalidateSession();
+            lastAuthError = "Нет подключения к интернету (lk.sut.ru недоступен)";
+            if (storage != null) storage.addLog(lastAuthError);
+            return false;
+        } catch (SocketTimeoutException ste) {
+            invalidateSession();
+            lastAuthError = "Сервер lk.sut.ru слишком долго отвечает. Попробуйте снова.";
+            if (storage != null) storage.addLog(lastAuthError);
             return false;
         } catch (Exception e) {
             invalidateSession();
-            storage.addLog("Сервер ЛК долго отвечает (" + e.getMessage() + "), повтор...");
+            lastAuthError = "Ошибка подключения к lk.sut.ru: " + e.getMessage();
+            if (storage != null) storage.addLog(lastAuthError);
             return false;
         }
     }
 
-    /**
-     * Извлекает ФИО, учебную группу и реальные URL разделов (Сообщения, Файлы группы, Дневник)
-     * из HTML главной страницы ЛК после авторизации.
-     */
     private void parseMenuAndProfile(String cabHtml, String login, AppStorage storage) {
         if (cabHtml == null || cabHtml.isEmpty() || storage == null) return;
         try {
-            // 1. Автообнаружение URL форм из меню ЛК
             Pattern formUrlPat = Pattern.compile(
                 "(project/cabinet/forms/[a-zA-Z0-9_\\-]+\\.php(?:\\?[^'\"\\s<>)]*)?)",
                 Pattern.CASE_INSENSITIVE
             );
             Matcher fm = formUrlPat.matcher(cabHtml);
+            Set<String> foundForms = new LinkedHashSet<>();
             while (fm.find()) {
                 String rel = fm.group(1);
+                foundForms.add(rel);
                 String low = rel.toLowerCase(Locale.ROOT);
                 String abs = resolveUrl(rel);
                 if (low.contains("message") || low.contains("soobsch")) {
@@ -346,8 +530,10 @@ public class SutApiClient {
                     storage.saveDiscoveredEndpoint("profile", abs);
                 }
             }
+            if (!foundForms.isEmpty()) {
+                storage.addLog("Найдены разделы ЛК: " + foundForms.toString());
+            }
 
-            // 2. Извлечение ФИО и группы из текста шапки ЛК
             String plain = cabHtml
                 .replaceAll("(?s)<script[^>]*>.*?</script>", " ")
                 .replaceAll("(?s)<style[^>]*>.*?</style>", " ")
@@ -362,7 +548,7 @@ public class SutApiClient {
             if (nm.find()) {
                 String[] parts = nm.group(1).trim().split("\\s+");
                 if (parts.length >= 2) {
-                    foundName = parts[1] + " " + parts[0]; // Имя Фамилия
+                    foundName = parts[1] + " " + parts[0];
                 } else {
                     foundName = nm.group(1).trim();
                 }
@@ -393,19 +579,20 @@ public class SutApiClient {
         }
     }
 
-    /**
-     * Скачивает файл из ЛК (например, из «Файлов группы») с текущими cookies сессии.
-     */
     public boolean downloadToFile(String fileUrl, File destFile) {
         try {
             URL url = new URL(resolveUrl(fileUrl));
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
-            conn.setConnectTimeout(25000);
+            conn.setConnectTimeout(15000);
             conn.setReadTimeout(60000);
             conn.setInstanceFollowRedirects(true);
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Mobile) Chrome/128.0.0.0 Mobile Safari/537.36");
+            conn.setRequestProperty("User-Agent", USER_AGENT);
             conn.setRequestProperty("Referer", LOGIN_PAGE_URL);
+            String cookieHeader = getCookieHeaderForUrl(fileUrl);
+            if (!cookieHeader.isEmpty()) {
+                conn.setRequestProperty("Cookie", cookieHeader);
+            }
 
             int code = conn.getResponseCode();
             if (code >= 400) {

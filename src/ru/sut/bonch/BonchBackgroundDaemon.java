@@ -9,9 +9,12 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONObject;
 
 public class BonchBackgroundDaemon extends Service {
+    public static final String FILE_AUTH_STATUS = "auth_status_v4.json";
+
     private AppStorage storage;
     private SutApiClient apiClient;
     private ScheduleManager scheduleManager;
@@ -20,6 +23,7 @@ public class BonchBackgroundDaemon extends Service {
 
     private PowerManager.WakeLock wakeLock;
     private Thread workerThread;
+    private final AtomicBoolean syncInProgress = new AtomicBoolean(false);
 
     private volatile boolean active = false;
     private volatile boolean singleCheckMode = false;
@@ -53,6 +57,16 @@ public class BonchBackgroundDaemon extends Service {
         flushState();
     }
 
+    private void saveAuthStatus(String authState, String authError) {
+        try {
+            JSONObject obj = new JSONObject();
+            obj.put("authState", authState != null ? authState : "");
+            obj.put("authError", authError != null ? authError : "");
+            obj.put("updatedAt", System.currentTimeMillis());
+            storage.writeText(FILE_AUTH_STATUS, obj.toString());
+        } catch (Exception ignored) {}
+    }
+
     private void flushState() {
         storage.saveRuntimeState(
             active,
@@ -62,6 +76,29 @@ public class BonchBackgroundDaemon extends Service {
             serviceStartMillis,
             scheduleManager.getTodayDayIdx()
         );
+    }
+
+    private void runParallelSecondarySync(final String login, final String pass, final boolean manualTrigger) {
+        Thread diaryThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, pass, manualTrigger);
+                flushState();
+            }
+        });
+        Thread msgThread = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                messageManager.pollAll(BonchBackgroundDaemon.this, apiClient, storage, login, pass, manualTrigger);
+                flushState();
+            }
+        });
+        diaryThread.start();
+        msgThread.start();
+        try {
+            diaryThread.join(25000L);
+            msgThread.join(25000L);
+        } catch (InterruptedException ignored) {}
     }
 
     @Override
@@ -82,6 +119,7 @@ public class BonchBackgroundDaemon extends Service {
         if ("logout".equals(action)) {
             singleCheckMode = false;
             storage.clearSessionData();
+            saveAuthStatus("", "");
             apiClient.invalidateSession();
             stopDaemon();
             return START_NOT_STICKY;
@@ -159,26 +197,74 @@ public class BonchBackgroundDaemon extends Service {
         }
 
         if ("login_and_sync".equals(action)) {
+            if (!syncInProgress.compareAndSet(false, true)) {
+                return active ? START_STICKY : START_NOT_STICKY;
+            }
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    if (login.isEmpty() || pass.isEmpty()) return;
-                    apiClient.checkCredentialsChanged(login, pass);
-                    if (apiClient.authenticate(login, pass, storage)) {
-                        String[] win = scheduleManager.getCurrentWindowState(mode, storage);
-                        scheduleManager.pollCurrentWeekAndCheckIn(
-                            BonchBackgroundDaemon.this, apiClient, storage, login, pass, win != null ? win[0] : null
-                        );
-                        diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
-                        messageManager.pollAll(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
+                    try {
+                        if (login.isEmpty() || pass.isEmpty()) {
+                            storage.saveProfile(false, "", "", login);
+                            saveAuthStatus("error", "Введите логин и пароль от lk.sut.ru");
+                            flushState();
+                            return;
+                        }
+
+                        saveAuthStatus("checking", "");
+                        statusText = "Проверка входа в lk.sut.ru...";
                         flushState();
-                        if (scheduleManager.needsSemesterScan() && !scanningSemester) {
-                            scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, pass);
-                            diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
+
+                        apiClient.checkCredentialsChanged(login, pass);
+                        if (apiClient.authenticate(login, pass, storage)) {
+                            // Вход подтверждён сервером — сразу открываем доступ в UI
+                            saveAuthStatus("ok", "");
+                            statusText = "Загрузка расписания...";
+                            flushState();
+
+                            // 1. Загружаем текущую неделю и сразу отдаём в UI
+                            String[] win = scheduleManager.getCurrentWindowState(mode, storage);
+                            scheduleManager.pollCurrentWeekAndCheckIn(
+                                BonchBackgroundDaemon.this, apiClient, storage, login, pass, win != null ? win[0] : null
+                            );
+                            flushState();
+
+                            // 2. Параллельно грузим Дневник и Сообщения/Файлы
+                            runParallelSecondarySync(login, pass, false);
+                            lastAutoSyncMillis = System.currentTimeMillis();
+                            if (!active) {
+                                statusText = "Подключено";
+                            }
+                            flushState();
+
+                            // 3. Сканирование всего семестра запускаем в фоне
+                            if (scheduleManager.needsSemesterScan() && !scanningSemester) {
+                                new Thread(new Runnable() {
+                                    @Override
+                                    public void run() {
+                                        scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, pass);
+                                        diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
+                                        flushState();
+                                    }
+                                }).start();
+                            }
+                        } else {
+                            // Ошибка входа или нет сети — не пускаем в аккаунт
+                            String errMsg = apiClient.getLastAuthError();
+                            if (errMsg == null || errMsg.isEmpty()) {
+                                errMsg = "Не удалось войти в lk.sut.ru";
+                            }
+                            if (apiClient.wasLastAuthBadCredentials()) {
+                                storage.clearSessionData();
+                            } else {
+                                storage.saveProfile(false, "", "", login);
+                            }
+                            saveAuthStatus("error", errMsg);
+                            statusText = errMsg;
                             flushState();
                         }
-                    } else {
-                        flushState();
+                    } finally {
+                        syncInProgress.set(false);
                     }
                 }
             }).start();
@@ -218,8 +304,7 @@ public class BonchBackgroundDaemon extends Service {
                     }
                     if (scanningSemester) return;
                     scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, pass);
-                    diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
-                    messageManager.pollAll(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
+                    runParallelSecondarySync(login, pass, false);
                     flushState();
                 }
             }).start();
@@ -227,26 +312,39 @@ public class BonchBackgroundDaemon extends Service {
         }
 
         if ("check_once".equals(action) || "sync_all".equals(action)) {
+            if (!syncInProgress.compareAndSet(false, true)) {
+                return active ? START_STICKY : START_NOT_STICKY;
+            }
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    if (login.isEmpty() || pass.isEmpty()) {
-                        storage.addLog("Сначала войдите в аккаунт в Настройках!");
+                    try {
+                        if (login.isEmpty() || pass.isEmpty()) {
+                            storage.addLog("Сначала войдите в аккаунт в Настройках!");
+                            flushState();
+                            return;
+                        }
+                        storage.addLog("Синхронизация расписания, дневника и сообщений...");
                         flushState();
-                        return;
-                    }
-                    storage.addLog("Синхронизация расписания, дневника и сообщений...");
-                    flushState();
-                    String[] win = scheduleManager.getCurrentWindowState(mode, storage);
-                    scheduleManager.pollCurrentWeekAndCheckIn(
-                        BonchBackgroundDaemon.this, apiClient, storage, login, pass, win != null ? win[0] : null
-                    );
-                    diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
-                    messageManager.pollAll(BonchBackgroundDaemon.this, apiClient, storage, login, pass, false);
-                    flushState();
-                    if (win == null && scheduleManager.needsSemesterScan() && !scanningSemester) {
-                        scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, pass);
+                        String[] win = scheduleManager.getCurrentWindowState(mode, storage);
+                        scheduleManager.pollCurrentWeekAndCheckIn(
+                            BonchBackgroundDaemon.this, apiClient, storage, login, pass, win != null ? win[0] : null
+                        );
                         flushState();
+                        runParallelSecondarySync(login, pass, false);
+                        lastAutoSyncMillis = System.currentTimeMillis();
+                        flushState();
+                        if (win == null && scheduleManager.needsSemesterScan() && !scanningSemester) {
+                            new Thread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    scheduleManager.scanFullSemester(apiClient, storage, BonchBackgroundDaemon.this, login, pass);
+                                    flushState();
+                                }
+                            }).start();
+                        }
+                    } finally {
+                        syncInProgress.set(false);
                     }
                 }
             }).start();
@@ -380,8 +478,8 @@ public class BonchBackgroundDaemon extends Service {
                         scheduleManager.pollCurrentWeekAndCheckIn(
                             BonchBackgroundDaemon.this, apiClient, storage, login, password, initWin != null ? initWin[0] : null
                         );
-                        diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
-                        messageManager.pollAll(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
+                        flushState();
+                        runParallelSecondarySync(login, password, false);
                         lastAutoSyncMillis = System.currentTimeMillis();
                         flushState();
                         if (singleCheckMode && scheduleManager.lastPollMarkedAny) {
@@ -430,8 +528,7 @@ public class BonchBackgroundDaemon extends Service {
                         scheduleManager.pollCurrentWeekAndCheckIn(
                             BonchBackgroundDaemon.this, apiClient, storage, login, password, null
                         );
-                        diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
-                        messageManager.pollAll(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
+                        runParallelSecondarySync(login, password, false);
                         flushState();
                     } else if (!busyCatchingButton && storage.isNotifyMessagesEnabled() && messageManager.isTimeForPeriodicPoll(storage)) {
                         messageManager.pollAll(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);

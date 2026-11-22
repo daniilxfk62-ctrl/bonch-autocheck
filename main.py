@@ -2,8 +2,7 @@ import datetime as dt
 import json
 import re
 import threading
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Set, Tuple
 
@@ -58,13 +57,15 @@ class SutDirectClient:
                 ),
                 "Referer": LOGIN_PAGE_URL,
                 "Origin": "https://lk.sut.ru",
-                "X-Requested-With": "XMLHttpRequest",
             }
         )
         self.is_authenticated = False
 
     def _decode_response(self, resp: requests.Response) -> str:
         """Корректное декодирование ответа lk.sut.ru (защита от кракозябр)."""
+        ct = (resp.headers.get("Content-Type") or "").lower()
+        if "windows-1251" in ct or "cp1251" in ct:
+            return resp.content.decode("windows-1251", errors="replace")
         for enc in ("utf-8", "windows-1251", resp.apparent_encoding or "utf-8"):
             try:
                 text = resp.content.decode(enc)
@@ -79,18 +80,27 @@ class SutDirectClient:
             return False, "Введите логин и пароль"
         try:
             self.session.cookies.clear()
-            self.session.get(LOGIN_PAGE_URL, timeout=15)
+            self.session.get(LOGIN_PAGE_URL, timeout=10)
             resp = self.session.post(
                 AUTH_URL,
-                params={"users": self.login, "parole": self.password},
                 data={"users": self.login, "parole": self.password},
-                timeout=15,
+                headers={"X-Requested-With": "XMLHttpRequest"},
+                timeout=10,
             )
-            text = resp.text.strip()
-            if text == "1" or "1" in text[:5]:
-                # Инициализируем PHP-сессию кабинета
-                self.session.get(INI_URL, timeout=15)
-                self.session.get(LOGIN_PAGE_URL, timeout=15)
+            text = resp.text.replace("\ufeff", "").strip()
+            if not text:
+                resp = self.session.post(
+                    AUTH_URL,
+                    params={"users": self.login, "parole": self.password},
+                    data={"users": self.login, "parole": self.password},
+                    headers={"X-Requested-With": "XMLHttpRequest"},
+                    timeout=10,
+                )
+                text = resp.text.replace("\ufeff", "").strip()
+
+            if text == "1" or text.startswith(("1\n", "1\r", "1 ")):
+                # Инициализируем PHP-сессию кабинета без лишнего повторного GET
+                self.session.get(INI_URL, timeout=10)
                 self.is_authenticated = True
                 return True, f"Успешный вход в ЛК ({self.login})"
 
@@ -99,6 +109,18 @@ class SutDirectClient:
         except Exception as exc:
             self.is_authenticated = False
             return False, f"Ошибка сети: {exc}"
+
+    def _fetch_schedule_html(self) -> str:
+        resp = self.session.post(
+            SCHEDULE_URL,
+            headers={"X-Requested-With": "XMLHttpRequest"},
+            timeout=12,
+        )
+        html = self._decode_response(resp)
+        if len(html.strip()) < 50 or "<table" not in html.lower():
+            resp = self.session.get(SCHEDULE_URL, timeout=12)
+            html = self._decode_response(resp)
+        return html
 
     def fetch_schedule_and_checkin(self, marked_ids: Set[str]) -> Tuple[List[LessonItem], List[str], str]:
         if not self.is_authenticated:
@@ -110,16 +132,14 @@ class SutDirectClient:
         lessons: List[LessonItem] = []
 
         try:
-            resp = self.session.post(SCHEDULE_URL, timeout=15)
-            html = self._decode_response(resp)
+            html = self._fetch_schedule_html()
 
             # Если сессия на сервере истекла, таблица расписания не вернется
             if len(html.strip()) < 50 or "autentification" in html.lower() or "<table" not in html.lower():
                 ok, msg = self.authenticate()
                 if not ok:
                     return [], [], msg
-                resp = self.session.post(SCHEDULE_URL, timeout=15)
-                html = self._decode_response(resp)
+                html = self._fetch_schedule_html()
 
             soup = BeautifulSoup(html, "html.parser")
             open_zan_pattern = re.compile(
@@ -132,7 +152,7 @@ class SutDirectClient:
                     continue
 
                 time_match = re.search(
-                    r"([01]?\d|2[0-3]):([0-5]\d)\s*[-–—]\s*(?:[01]?\d|2[0-3]):[0-5]\d",
+                    r"([01]?\d|2[0-3])[:.]([0-5]\d)\s*[-–—]\s*(?:[01]?\d|2[0-3])[:.][0-5]\d",
                     row_text,
                 )
                 start_time = (
@@ -154,7 +174,6 @@ class SutDirectClient:
                 if already and rasp_id:
                     marked_ids.add(rasp_id)
 
-                # Если есть активная кнопка open_zan — жмем её и проверяем результат
                 if rasp_id and week_id and not already:
                     if self.send_open_zan(rasp_id, week_id):
                         marked_ids.add(rasp_id)
@@ -183,12 +202,16 @@ class SutDirectClient:
     def send_open_zan(self, rasp_id: str, week_id: str) -> bool:
         try:
             payload = {"open": 1, "rasp": rasp_id, "week": week_id}
-            r = self.session.post(SCHEDULE_URL, data=payload, params=payload, timeout=15)
+            r = self.session.post(
+                SCHEDULE_URL,
+                data=payload,
+                params=payload,
+                headers={"X-Requested-With": "XMLHttpRequest"},
+                timeout=12,
+            )
             if r.status_code != 200:
                 return False
-            # Перепроверяем страницу после нажатия, пропала ли кнопка / появилась ли отметка
-            verify_resp = self.session.post(SCHEDULE_URL, timeout=15)
-            verify_html = self._decode_response(verify_resp).lower()
+            verify_html = self._fetch_schedule_html().lower()
             return "присутств" in verify_html or f"open_zan({rasp_id}" not in verify_html
         except Exception:
             return False
@@ -274,7 +297,15 @@ def main(page: ft.Page):
         "stop_event": threading.Event(),
         "marked_today": set(),
         "parsed_times": set(),
+        "client": None,
     }
+
+    def get_client(login: str, password: str) -> SutDirectClient:
+        cli = state.get("client")
+        if cli is None or cli.login != login.strip() or cli.password != password.strip():
+            cli = SutDirectClient(login, password)
+            state["client"] = cli
+        return cli
 
     def add_log(msg: str):
         stamp = dt.datetime.now().strftime("%H:%M:%S")
@@ -329,17 +360,18 @@ def main(page: ft.Page):
         return None
 
     def worker_loop(login: str, password: str, interval_min: float, mode: str):
-        client = SutDirectClient(login, password)
-        ok, msg = client.authenticate()
-        add_log(msg)
-        if not ok:
-            state["active"] = False
-            status_text.value = f"Ошибка: {msg}"
-            status_text.color = "#f87171"
-            toggle_btn.text = "ВКЛЮЧИТЬ АВТООТМЕТКУ"
-            toggle_btn.bgcolor = "#2563eb"
-            page.update()
-            return
+        client = get_client(login, password)
+        if not client.is_authenticated:
+            ok, msg = client.authenticate()
+            add_log(msg)
+            if not ok:
+                state["active"] = False
+                status_text.value = f"Ошибка: {msg}"
+                status_text.color = "#f87171"
+                toggle_btn.text = "ВКЛЮЧИТЬ АВТООТМЕТКУ"
+                toggle_btn.bgcolor = "#2563eb"
+                page.update()
+                return
 
         current_day = dt.date.today()
 
@@ -424,11 +456,12 @@ def main(page: ft.Page):
 
         def single_check():
             add_log("Разовая проверка расписания и отметки...")
-            client = SutDirectClient(login, password)
-            ok, msg = client.authenticate()
-            add_log(msg)
-            if not ok:
-                return
+            client = get_client(login, password)
+            if not client.is_authenticated:
+                ok, msg = client.authenticate()
+                add_log(msg)
+                if not ok:
+                    return
             lessons, checked, poll_msg = client.fetch_schedule_and_checkin(state["marked_today"])
             update_lessons_ui(lessons)
             if checked:

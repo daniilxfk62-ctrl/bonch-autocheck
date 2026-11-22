@@ -33,6 +33,19 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
         }
 
+        webView = new WebView(this);
+        WebSettings ws = webView.getSettings();
+        ws.setJavaScriptEnabled(true);
+        ws.setDomStorageEnabled(true);
+        ws.setAllowFileAccess(true);
+        ws.setCacheMode(WebSettings.LOAD_DEFAULT);
+        webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
+        setContentView(webView);
+
+        webView.loadUrl("file:///android_asset/index.html");
+    }
+
+    private void requestBatteryOptimizationIfNeeded() {
         if (Build.VERSION.SDK_INT >= 23) {
             try {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -43,18 +56,6 @@ public class MainActivity extends Activity {
                 }
             } catch (Exception ignored) {}
         }
-
-        webView = new WebView(this);
-        webView.clearCache(true);
-        WebSettings ws = webView.getSettings();
-        ws.setJavaScriptEnabled(true);
-        ws.setDomStorageEnabled(true);
-        ws.setAllowFileAccess(true);
-        ws.setCacheMode(WebSettings.LOAD_NO_CACHE);
-        webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
-        setContentView(webView);
-
-        webView.loadUrl("file:///android_asset/index.html");
     }
 
     private void sendDaemonCommand(String action) {
@@ -63,11 +64,20 @@ public class MainActivity extends Activity {
 
     private void sendDaemonIntent(Intent svc) {
         String action = svc.getStringExtra("action");
-        if (("start".equals(action) || "check_single".equals(action)) && Build.VERSION.SDK_INT >= 26) {
-            startForegroundService(svc);
-        } else {
-            startService(svc);
-        }
+        boolean requiresForeground = "start".equals(action) || "check_single".equals(action);
+        try {
+            if (requiresForeground && Build.VERSION.SDK_INT >= 26) {
+                startForegroundService(svc);
+            } else {
+                startService(svc);
+            }
+        } catch (IllegalStateException e) {
+            if (Build.VERSION.SDK_INT >= 26) {
+                try {
+                    startForegroundService(svc);
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
     }
 
     private String buildCookieHeaderFromStorage() {
@@ -180,6 +190,9 @@ public class MainActivity extends Activity {
                 if (!state.has("status")) {
                     state.put("status", enabled ? "Запуск фоновой службы..." : "Отключено");
                 }
+                JSONObject authSt = storage.readJson(BonchBackgroundDaemon.FILE_AUTH_STATUS, "{}");
+                state.put("authState", authSt.optString("authState", ""));
+                state.put("authError", authSt.optString("authError", ""));
                 state.put("daysMtime", storage.getFileMtime(AppStorage.FILE_SEMESTER_DAYS));
                 state.put("catMtime", storage.getFileMtime(AppStorage.FILE_SMART_CATALOG));
                 state.put("diaryMtime", storage.getFileMtime(AppStorage.FILE_DIARY_SUMMARY) + storage.getFileMtime(AppStorage.FILE_DIARY_ALL));
@@ -217,7 +230,15 @@ public class MainActivity extends Activity {
                 cfg.optString("interval", "1"),
                 cfg.optString("mode", "full_lesson")
             );
-            storage.saveProfile(true, "", "", login);
+            // НЕ ставим loggedIn = true до реального подтверждения от lk.sut.ru
+            storage.saveProfile(false, "", "", login);
+            try {
+                JSONObject authObj = new JSONObject();
+                authObj.put("authState", "checking");
+                authObj.put("authError", "");
+                authObj.put("updatedAt", System.currentTimeMillis());
+                storage.writeText(BonchBackgroundDaemon.FILE_AUTH_STATUS, authObj.toString());
+            } catch (Exception ignored) {}
             sendDaemonCommand("login_and_sync");
         }
 
@@ -229,6 +250,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setAutoCheckEnabled(boolean enabled) {
             if (enabled) {
+                requestBatteryOptimizationIfNeeded();
                 sendDaemonCommand("start");
             } else {
                 sendDaemonCommand("stop");
@@ -243,6 +265,7 @@ public class MainActivity extends Activity {
             if (storage.isDaemonEnabled()) {
                 sendDaemonCommand("stop");
             } else {
+                requestBatteryOptimizationIfNeeded();
                 sendDaemonCommand("start");
             }
         }
@@ -328,6 +351,7 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void checkSingleNow(String login, String password, String intervalStr, String mode) {
             storage.saveUserConfig(login, password, intervalStr, mode);
+            requestBatteryOptimizationIfNeeded();
             sendDaemonCommand("check_single");
         }
 

@@ -16,6 +16,11 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.json.JSONArray;
@@ -40,6 +45,9 @@ public class ScheduleManager {
         PAIR_NUM_TO_TIME.put("6", "18:15-19:50");
         PAIR_NUM_TO_TIME.put("7", "20:00-21:35");
     }
+
+    // Точный паттерн корпуса/подкорпуса lk.sut.ru (например "404; Б22/1" -> Б22/1)
+    private static final Pattern ROOM_CORPUS_PAT = Pattern.compile(";\\s*([^\\s;]+/(\\d+))");
 
     public final Set<String> completedWindowsToday = new HashSet<>();
     public final Set<String> waitingTeacherToday = new HashSet<>();
@@ -86,9 +94,6 @@ public class ScheduleManager {
         }
     }
 
-    /**
-     * Проверяет, наступило ли время автоотметки с учётом выбранной задержки (instant / 2m / random).
-     */
     private boolean isDelayElapsed(AppStorage storage, String startTime, String raspId) {
         String delayMode = storage.getAutoDelayMode();
         if ("instant".equals(delayMode)) return true;
@@ -99,9 +104,8 @@ public class ScheduleManager {
         if (target == null) {
             long delayMs;
             if ("2m".equals(delayMode)) {
-                delayMs = 120000L; // ровно 2 минуты
+                delayMs = 120000L;
             } else {
-                // random: от 1 до 4 минут (60..240 сек)
                 delayMs = (60 + random.nextInt(181)) * 1000L;
             }
 
@@ -114,8 +118,6 @@ public class ScheduleManager {
                 startCal.set(Calendar.SECOND, 0);
                 startCal.set(Calendar.MILLISECOND, 0);
                 long lessonStartMillis = startCal.getTimeInMillis();
-                // Если кнопка открылась до начала пары или в самом начале — считаем от начала пары;
-                // если преподаватель открыл позже — не ждём лишнего, если уже прошло > 5 мин
                 if (now <= lessonStartMillis + 300000L) {
                     baseMillis = Math.max(lessonStartMillis, now - 15000L);
                 } else {
@@ -344,14 +346,76 @@ public class ScheduleManager {
         }
     }
 
+    /**
+     * Форматирует аудиторию из lk.sut.ru (например "404; Б22/1" -> "404 · Б22/1"),
+     * сохраняя номер кабинета и корпус/подкорпус.
+     */
     public static String formatRoomClean(String rawRoom) {
         if (rawRoom == null) return "";
-        String s = rawRoom.trim();
-        s = s.replaceAll("(?i)\\s*[;,\\s]*\\b(?:пр\\.?\\s*Большевиков[^,/]*|[БбBb]22)\\s*/\\s*(\\d+)", "/$1");
-        s = s.replaceAll("(?i)\\s*[;,\\s]*\\b(?:пр\\.?\\s*Большевиков[^,;]*|[БбBb]22)\\b", "");
-        s = s.replaceAll("^[;,\\s]+|[;,\\s]+$", "");
-        s = s.replaceAll("\\s+", " ").trim();
-        return s;
+        String s = rawRoom
+            .replace("&nbsp;", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
+        if (s.isEmpty() || "-".equals(s) || "—".equals(s)) return "";
+
+        // Сокращаем "пр. Большевиков, 22/1" -> "Б22/1"
+        s = s.replaceAll("(?i)пр\\.?\\s*Большевиков[,\\s]*22\\s*/\\s*(\\d+)", "Б22/$1");
+        s = s.replaceAll("(?i)пр\\.?\\s*Большевиков[,\\s]*22\\b", "Б22");
+
+        // Точный формат "404; Б22/1" -> "404 · Б22/1"
+        Matcher cm = ROOM_CORPUS_PAT.matcher(s);
+        if (cm.find()) {
+            String corpus = cm.group(1).trim(); // например "Б22/1"
+            String roomPart = s.substring(0, cm.start()).replaceAll("^[;,\\s]+|[;,\\s]+$", "").trim();
+            if (!roomPart.isEmpty()) {
+                return roomPart + " · " + corpus;
+            }
+            return corpus;
+        }
+
+        s = s.replaceAll("\\s*;\\s*", " · ");
+        s = s.replaceAll("^[;,·\\s]+|[;,·\\s]+$", "");
+        return s.trim();
+    }
+
+    private static String normalizeDateStr(String raw) {
+        if (raw == null || raw.isEmpty()) return null;
+        String[] p = raw.trim().split("\\.");
+        if (p.length != 3) return null;
+        try {
+            int dd = Integer.parseInt(p[0]);
+            int mm = Integer.parseInt(p[1]);
+            int yy = Integer.parseInt(p[2]);
+            if (yy < 100) yy += 2000;
+            return String.format(Locale.US, "%02d.%02d.%04d", dd, mm, yy);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static int dayNameToDowIdx(String dayName) {
+        if (dayName == null) return -1;
+        String low = dayName.toLowerCase(Locale.ROOT);
+        if (low.contains("понедельник")) return 0;
+        if (low.contains("вторник")) return 1;
+        if (low.contains("среда")) return 2;
+        if (low.contains("четверг")) return 3;
+        if (low.contains("пятница")) return 4;
+        if (low.contains("суббота")) return 5;
+        if (low.contains("воскресенье")) return 6;
+        return -1;
+    }
+
+    private static String inferDateForCurrentWeekDow(int dowIdx) {
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        int dow = cal.get(Calendar.DAY_OF_WEEK);
+        int diffToMon = (dow == Calendar.SUNDAY) ? -6 : (Calendar.MONDAY - dow);
+        cal.add(Calendar.DAY_OF_MONTH, diffToMon + Math.max(0, dowIdx));
+        return new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(cal.getTime());
     }
 
     public static class ParsedRowDetails {
@@ -360,6 +424,16 @@ public class ScheduleManager {
         public String teacher = "";
         public String room = "";
         public String ruleKey = "";
+    }
+
+    private static String cleanCellPlain(String cellHtml) {
+        return cellHtml
+            .replaceAll("(?i)<br\\s*/?>", " | ")
+            .replaceAll("<[^>]+>", " ")
+            .replace("&nbsp;", " ")
+            .replaceAll("(?i)(занятие\\s+началось.*|ждем\\s+начала.*|ждём\\s+начала.*|кнопка\\s+появится.*|начать\\s+занятие.*|обновить.*|вы\\s+присутствуете.*|отметиться.*)", "")
+            .replaceAll("\\s+", " ")
+            .trim();
     }
 
     public List<ParsedRowDetails> extractStructuredLessonsFromRow(String trInner, String timeRange) {
@@ -374,7 +448,7 @@ public class ScheduleManager {
         Pattern boldPat = Pattern.compile("<(b|strong)[^>]*>(.*?)</\\1>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
         Pattern fioShortPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.)");
         Pattern fioFullPat = Pattern.compile("([А-ЯЁ][а-яё\\-]{2,}\\s+[А-ЯЁ][а-яё]{2,}\\s+[А-ЯЁ][а-яё]{2,}(?:вич|вна|ична))");
-        Pattern roomHintPat = Pattern.compile("(?i)(?:[БбBb]22|\\b\\d{3}[а-яa-z]?\\b\\s*(?:;|/|\\b)|ауд\\.|каб\\.|дистанционно|спорт|зал)");
+        Pattern roomHintPat = Pattern.compile("(?i)(?:;\\s*[^\\s;]+/\\d+|[БбBb]22|\\b\\d{2,4}[а-яa-z]?\\b\\s*(?:;|/)|ауд\\.|каб\\.|дистанционно|спорт|зал)");
 
         List<String> boldSubjects = new ArrayList<>();
         int subjectCellIdx = -1;
@@ -382,7 +456,7 @@ public class ScheduleManager {
             String cellHtml = tds.get(i);
             Matcher bm = boldPat.matcher(cellHtml);
             while (bm.find()) {
-                String bText = bm.group(2).replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                String bText = bm.group(2).replaceAll("<[^>]+>", " ").replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
                 if (bText.length() > 2 && !bText.matches("^[0-9:–\\-\\s()]+$")) {
                     boldSubjects.add(bText);
                     if (subjectCellIdx == -1) {
@@ -393,7 +467,7 @@ public class ScheduleManager {
             }
         }
 
-        String fullRowPlain = trInner.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+        String fullRowPlain = trInner.replaceAll("<[^>]+>", " ").replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
         String lowerRow = fullRowPlain.toLowerCase(Locale.ROOT);
         if (lowerRow.contains("лабораторн")) {
             base.normType = "Лаба";
@@ -405,7 +479,7 @@ public class ScheduleManager {
 
         if ("Предмет".equals(base.subject)) {
             for (int i = 0; i < tds.size(); i++) {
-                String cp = tds.get(i).replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                String cp = tds.get(i).replaceAll("<[^>]+>", " ").replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
                 if (cp.contains(timeRange) || cp.matches("^\\d+$")) continue;
                 if (cp.length() > 4) {
                     String cleaned = cp
@@ -426,16 +500,29 @@ public class ScheduleManager {
         List<String> foundTeachers = new ArrayList<>();
         List<String> foundRooms = new ArrayList<>();
 
+        // 1. Приоритетно извлекаем аудиторию из 4-го <td> (индекс 3), как в raspisanie.php ("404; Б22/1")
+        int roomCellIdx = -1;
+        if (tds.size() >= 4 && subjectCellIdx != 3) {
+            String fourthPlain = cleanCellPlain(tds.get(3));
+            if (!fourthPlain.isEmpty()
+                && !fourthPlain.equals(timeRange)
+                && !fourthPlain.matches("^\\d+\\s+[0-9]{1,2}[:.][0-9]{2}.*")
+                && !fioShortPat.matcher(fourthPlain).find()
+                && !fioFullPat.matcher(fourthPlain).find()) {
+                for (String rp : fourthPlain.split("\\|")) {
+                    String cr = formatRoomClean(rp);
+                    if (!cr.isEmpty() && !foundRooms.contains(cr)) {
+                        foundRooms.add(cr);
+                        roomCellIdx = 3;
+                    }
+                }
+            }
+        }
+
+        // 2. Разбираем остальные ячейки (преподаватели + резервный поиск аудитории)
         for (int i = 0; i < tds.size(); i++) {
-            if (i == subjectCellIdx) continue;
-            String cellHtml = tds.get(i);
-            String cellPlain = cellHtml
-                .replaceAll("(?i)<br\\s*/?>", " | ")
-                .replaceAll("<[^>]+>", " ")
-                .replaceAll("&nbsp;", " ")
-                .replaceAll("(?i)(занятие\\s+началось.*|ждем\\s+начала.*|ждём\\s+начала.*|кнопка\\s+появится.*|начать\\s+занятие.*|обновить.*|вы\\s+присутствуете.*|отметиться.*)", "")
-                .replaceAll("\\s+", " ")
-                .trim();
+            if (i == subjectCellIdx || i == roomCellIdx) continue;
+            String cellPlain = cleanCellPlain(tds.get(i));
 
             if (cellPlain.isEmpty() || cellPlain.equals(timeRange) || cellPlain.matches("^\\d+\\s*\\(?\\s*\\)?$")) {
                 continue;
@@ -461,9 +548,8 @@ public class ScheduleManager {
             }
             if (matchedAnyFio) continue;
 
-            if (roomHintPat.matcher(cellPlain).find() || (subjectCellIdx != -1 && i == subjectCellIdx + 1)) {
-                String[] roomParts = cellPlain.split("\\|");
-                for (String rp : roomParts) {
+            if (foundRooms.isEmpty() && (roomHintPat.matcher(cellPlain).find() || ROOM_CORPUS_PAT.matcher(cellPlain).find())) {
+                for (String rp : cellPlain.split("\\|")) {
                     String cr = formatRoomClean(rp);
                     if (!cr.isEmpty() && !foundRooms.contains(cr)) {
                         foundRooms.add(cr);
@@ -473,7 +559,7 @@ public class ScheduleManager {
             }
 
             if (foundTeachers.isEmpty() && subjectCellIdx != -1 && i > subjectCellIdx && cellPlain.matches(".*[А-Яа-яЁё]{3,}.*")) {
-                if (!cellPlain.toLowerCase(Locale.ROOT).contains("б22")) {
+                if (!cellPlain.toLowerCase(Locale.ROOT).contains("б22") && !ROOM_CORPUS_PAT.matcher(cellPlain).find()) {
                     foundTeachers.add(cellPlain);
                 }
             }
@@ -495,7 +581,7 @@ public class ScheduleManager {
         }
 
         if (foundRooms.isEmpty()) {
-            Pattern inlineRoomPat = Pattern.compile("(\\d{2,4}[а-яa-z]?\\s*;?\\s*[БбBb]22(?:\\s*/\\s*\\d+)?)");
+            Pattern inlineRoomPat = Pattern.compile("(\\d{2,4}[а-яa-z]?\\s*;\\s*[^\\s;]+/\\d+)");
             Matcher rm = inlineRoomPat.matcher(fullRowPlain);
             while (rm.find()) {
                 String cr = formatRoomClean(rm.group(1));
@@ -554,9 +640,35 @@ public class ScheduleManager {
         }
     }
 
-    /**
-     * Ручная отметка на конкретной паре по нажатию кнопки «Отметиться» в Pulse UI.
-     */
+    private String fetchScheduleHtmlWithFallback(SutApiClient api, AppStorage storage, String login, String password, String weekParam) throws Exception {
+        String url = (weekParam == null || weekParam.isEmpty())
+            ? SutApiClient.SCHEDULE_URL
+            : (SutApiClient.SCHEDULE_URL + "?" + weekParam);
+        String body = (weekParam == null) ? "" : weekParam;
+
+        String html = api.httpRequest("POST", url, body);
+        if (!isValidScheduleHtml(html)) {
+            String getHtml = api.httpRequest("GET", url, null);
+            if (isValidScheduleHtml(getHtml)) {
+                return getHtml;
+            }
+            if (api.authenticate(login, password, storage)) {
+                html = api.httpRequest("POST", url, body);
+                if (!isValidScheduleHtml(html)) {
+                    html = api.httpRequest("GET", url, null);
+                }
+            }
+        }
+        return html != null ? html : "";
+    }
+
+    private boolean isValidScheduleHtml(String html) {
+        if (html == null || html.trim().length() < 50) return false;
+        String low = html.toLowerCase(Locale.ROOT);
+        if (low.contains("autentification") || low.contains("name=\"parole\"")) return false;
+        return low.contains("<table") || low.contains("<tr");
+    }
+
     public synchronized boolean manualCheckIn(
         Context ctx,
         SutApiClient api,
@@ -590,8 +702,7 @@ public class ScheduleManager {
                 }
             }
 
-            // Если raspId не был закэширован — делаем свежий запрос текущей недели и ищем открытую кнопку
-            String html = api.httpRequest("POST", SutApiClient.SCHEDULE_URL, "");
+            String html = fetchScheduleHtmlWithFallback(api, storage, login, password, null);
             Pattern trPat = Pattern.compile("<tr[^>]*>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern zanPat = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
             Matcher trMat = trPat.matcher(html);
@@ -669,15 +780,15 @@ public class ScheduleManager {
             return;
         }
         try {
-            String html = api.httpRequest("POST", SutApiClient.SCHEDULE_URL, "");
-            if (html.trim().length() < 50 || html.toLowerCase(Locale.ROOT).contains("autentification") || !html.toLowerCase(Locale.ROOT).contains("<table")) {
-                if (!api.authenticate(login, password, storage)) return;
-                html = api.httpRequest("POST", SutApiClient.SCHEDULE_URL, "");
+            String html = fetchScheduleHtmlWithFallback(api, storage, login, password, null);
+            if (!isValidScheduleHtml(html)) {
+                storage.addLog("Расписание не получено (пустой ответ от ЛК).");
+                return;
             }
 
             Pattern trPattern = Pattern.compile("<tr([^>]*)>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern dayNamePattern = Pattern.compile("(Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье)", Pattern.CASE_INSENSITIVE);
-            Pattern dateValPattern = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");
+            Pattern dateValPattern = Pattern.compile("(\\d{1,2}\\.\\d{2}\\.\\d{2,4})");
             Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)");
             Pattern pairNumPattern = Pattern.compile("^\\s*([1-7])\\s*(?:пара|\\(\\s*\\))", Pattern.CASE_INSENSITIVE);
             Pattern zanPattern = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
@@ -697,6 +808,7 @@ public class ScheduleManager {
             String lastTimeRange = "";
             String lastStartTime = "";
             List<String> newlyChecked = new ArrayList<>();
+            int totalParsedLessons = 0;
 
             boolean daemonEnabled = storage.isDaemonEnabled();
 
@@ -705,26 +817,25 @@ public class ScheduleManager {
                 String trInner = trMatcher.group(2);
                 String fullTrHtml = "<tr" + trAttrs + ">" + trInner + "</tr>";
 
-                String rowText = trInner.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                String rowText = trInner.replaceAll("<[^>]+>", " ").replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
                 if (rowText.isEmpty()) continue;
 
                 Matcher tm = timePattern.matcher(rowText);
                 Matcher dm = dayNamePattern.matcher(rowText);
                 Matcher dateM = dateValPattern.matcher(rowText);
 
-                String timeRange = null;
-                String startTime = null;
+                boolean hasTime = tm.find();
+                boolean hasDayName = dm.find();
+                boolean hasDate = dateM.find();
 
-                if (tm.find()) {
-                    timeRange = tm.group(0);
-                    int startH = Integer.parseInt(tm.group(1));
-                    int startM = Integer.parseInt(tm.group(2));
-                    startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
-                    lastTimeRange = timeRange;
-                    lastStartTime = startTime;
-                } else {
-                    if (dm.find() && dateM.find() && rowText.length() < 80) {
-                        curDateStr = dateM.group(1);
+                if (hasDayName && !hasTime && rowText.length() < 160) {
+                    String normDate = hasDate ? normalizeDateStr(dateM.group(1)) : null;
+                    int dIdx = dayNameToDowIdx(dm.group(1));
+                    if (normDate == null && dIdx >= 0) {
+                        normDate = inferDateForCurrentWeekDow(dIdx);
+                    }
+                    if (normDate != null) {
+                        curDateStr = normDate;
                         lastTimeRange = "";
                         lastStartTime = "";
                         if (!weekLessonsByDate.containsKey(curDateStr)) {
@@ -735,8 +846,36 @@ public class ScheduleManager {
                             curDowIdx = calcDowIdxFromDate(parsedD);
                             if (anyDateInWeek == null) anyDateInWeek = parsedD;
                         } catch (Exception ignored) {}
-                        continue;
                     }
+                    continue;
+                }
+
+                if (hasDayName && hasDate && hasTime) {
+                    String normDate = normalizeDateStr(dateM.group(1));
+                    if (normDate != null) {
+                        curDateStr = normDate;
+                        if (!weekLessonsByDate.containsKey(curDateStr)) {
+                            weekLessonsByDate.put(curDateStr, new ArrayList<JSONObject>());
+                        }
+                        try {
+                            Date parsedD = df.parse(curDateStr);
+                            curDowIdx = calcDowIdxFromDate(parsedD);
+                            if (anyDateInWeek == null) anyDateInWeek = parsedD;
+                        } catch (Exception ignored) {}
+                    }
+                }
+
+                String timeRange = null;
+                String startTime = null;
+
+                if (hasTime) {
+                    timeRange = tm.group(0);
+                    int startH = Integer.parseInt(tm.group(1));
+                    int startM = Integer.parseInt(tm.group(2));
+                    startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
+                    lastTimeRange = timeRange;
+                    lastStartTime = startTime;
+                } else {
                     Matcher pm = pairNumPattern.matcher(rowText);
                     if (pm.find() && PAIR_NUM_TO_TIME.containsKey(pm.group(1))) {
                         timeRange = PAIR_NUM_TO_TIME.get(pm.group(1));
@@ -749,6 +888,15 @@ public class ScheduleManager {
                     } else {
                         continue;
                     }
+                }
+
+                if (curDateStr == null) {
+                    curDateStr = todayStr;
+                    curDowIdx = calcDowIdxFromDate(new Date());
+                    if (!weekLessonsByDate.containsKey(curDateStr)) {
+                        weekLessonsByDate.put(curDateStr, new ArrayList<JSONObject>());
+                    }
+                    if (anyDateInWeek == null) anyDateInWeek = new Date();
                 }
 
                 String endTime = extractEndTime(timeRange, startTime);
@@ -833,25 +981,24 @@ public class ScheduleManager {
                         }
                     }
 
-                    if (curDateStr != null) {
-                        JSONObject item = new JSONObject();
-                        item.put("time", timeRange);
-                        item.put("startTime", startTime);
-                        item.put("endTime", endTime);
-                        item.put("subjectTitle", structured.subject);
-                        item.put("lessonType", structured.normType);
-                        item.put("teacher", structured.teacher);
-                        item.put("room", structured.room);
-                        item.put("ruleKey", structured.ruleKey);
-                        item.put("raspId", raspId != null ? raspId : "");
-                        item.put("weekId", weekId != null ? weekId : "");
-                        item.put("checked", isLessonDone);
-                        item.put("checkedBy", checkInByMap.containsKey(startTime) ? checkInByMap.get(startTime) : (isLessonDone ? "auto" : ""));
-                        item.put("waitingTeacher", waitingForTeacher && !isLessonDone);
-                        item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
-                        item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
-                        weekLessonsByDate.get(curDateStr).add(item);
-                    }
+                    JSONObject item = new JSONObject();
+                    item.put("time", timeRange);
+                    item.put("startTime", startTime);
+                    item.put("endTime", endTime);
+                    item.put("subjectTitle", structured.subject);
+                    item.put("lessonType", structured.normType);
+                    item.put("teacher", structured.teacher);
+                    item.put("room", structured.room);
+                    item.put("ruleKey", structured.ruleKey);
+                    item.put("raspId", raspId != null ? raspId : "");
+                    item.put("weekId", weekId != null ? weekId : "");
+                    item.put("checked", isLessonDone);
+                    item.put("checkedBy", checkInByMap.containsKey(startTime) ? checkInByMap.get(startTime) : (isLessonDone ? "auto" : ""));
+                    item.put("waitingTeacher", waitingForTeacher && !isLessonDone);
+                    item.put("checkTime", displayCheckTime != null ? displayCheckTime : "");
+                    item.put("waitBtnTime", btnAppearTime != null ? btnAppearTime : "");
+                    weekLessonsByDate.get(curDateStr).add(item);
+                    totalParsedLessons++;
                 }
             }
 
@@ -906,6 +1053,9 @@ public class ScheduleManager {
                 }
                 recalculateTodayIndex(storage);
                 storage.writeText(AppStorage.FILE_SEMESTER_DAYS, semesterDaysArray.toString());
+                storage.addLog("Расписание недели обновлено (пар: " + totalParsedLessons + ")");
+            } else {
+                storage.addLog("На текущей неделе занятий не найдено.");
             }
 
             if (!newlyChecked.isEmpty()) {
@@ -931,21 +1081,47 @@ public class ScheduleManager {
     }
 
     public void scanFullSemester(
-        SutApiClient api,
-        AppStorage storage,
-        BonchBackgroundDaemon daemon,
-        String login,
-        String password
+        final SutApiClient api,
+        final AppStorage storage,
+        final BonchBackgroundDaemon daemon,
+        final String login,
+        final String password
     ) {
         if (!api.isAuthenticated() && !api.authenticate(login, password, storage)) {
             daemon.onScanProgress(false, "Ошибка авторизации");
             return;
         }
 
+        ExecutorService pool = Executors.newFixedThreadPool(3);
         try {
+            final AtomicInteger loadedCount = new AtomicInteger(0);
+            List<Future<String>> futures = new ArrayList<>();
+
+            for (int w = 1; w <= TOTAL_SEMESTER_WEEKS; w++) {
+                final int weekNum = w;
+                futures.add(pool.submit(new Callable<String>() {
+                    @Override
+                    public String call() {
+                        try {
+                            String payload = "week=" + weekNum;
+                            String html = api.httpRequestFast("POST", SutApiClient.SCHEDULE_URL + "?" + payload, payload);
+                            if (!isValidScheduleHtml(html)) {
+                                html = api.httpRequestFast("GET", SutApiClient.SCHEDULE_URL + "?" + payload, null);
+                            }
+                            int done = loadedCount.incrementAndGet();
+                            daemon.onScanProgress(true, "Загрузка семестра: " + done + " из " + TOTAL_SEMESTER_WEEKS + "...");
+                            return html != null ? html : "";
+                        } catch (Exception e) {
+                            loadedCount.incrementAndGet();
+                            return "";
+                        }
+                    }
+                }));
+            }
+
             Pattern trPattern = Pattern.compile("<tr([^>]*)>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern dayNamePattern = Pattern.compile("(Понедельник|Вторник|Среда|Четверг|Пятница|Суббота|Воскресенье)", Pattern.CASE_INSENSITIVE);
-            Pattern dateValPattern = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{4})");
+            Pattern dateValPattern = Pattern.compile("(\\d{1,2}\\.\\d{2}\\.\\d{2,4})");
             Pattern timePattern = Pattern.compile("([01]?\\d|2[0-3])[:.]([0-5]\\d)\\s*[-–—]\\s*([01]?\\d|2[0-3])[:.]([0-5]\\d)");
             Pattern pairNumPattern = Pattern.compile("^\\s*([1-7])\\s*(?:пара|\\(\\s*\\))", Pattern.CASE_INSENSITIVE);
             Pattern zanPattern = Pattern.compile("open_zan\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*,\\s*['\"]?(\\d+)['\"]?\\s*\\)");
@@ -960,12 +1136,10 @@ public class ScheduleManager {
             Map<String, SubjectAgg> subjectMap = new LinkedHashMap<>();
             TreeMap<Long, JSONObject> allDaysMap = new TreeMap<>();
 
-            for (int week = 1; week <= TOTAL_SEMESTER_WEEKS; week++) {
-                daemon.onScanProgress(true, "Загрузка семестра: неделя " + week + " из " + TOTAL_SEMESTER_WEEKS + "...");
-
-                String payload = "week=" + week;
-                String html = api.httpRequest("POST", SutApiClient.SCHEDULE_URL + "?" + payload, payload);
-                if (html.isEmpty() || !html.toLowerCase(Locale.ROOT).contains("<table")) continue;
+            for (int idx = 0; idx < futures.size(); idx++) {
+                int week = idx + 1;
+                String html = futures.get(idx).get();
+                if (!isValidScheduleHtml(html)) continue;
 
                 Matcher trMatcher = trPattern.matcher(html);
                 Map<String, List<JSONObject>> weekLessonsByDate = new LinkedHashMap<>();
@@ -976,26 +1150,21 @@ public class ScheduleManager {
 
                 while (trMatcher.find()) {
                     String trInner = trMatcher.group(2);
-                    String rowText = trInner.replaceAll("<[^>]+>", " ").replaceAll("&nbsp;", " ").replaceAll("\\s+", " ").trim();
+                    String rowText = trInner.replaceAll("<[^>]+>", " ").replace("&nbsp;", " ").replaceAll("\\s+", " ").trim();
                     if (rowText.isEmpty()) continue;
 
                     Matcher tm = timePattern.matcher(rowText);
                     Matcher dm = dayNamePattern.matcher(rowText);
                     Matcher dateM = dateValPattern.matcher(rowText);
 
-                    String timeRange = null;
-                    String startTime = null;
+                    boolean hasTime = tm.find();
+                    boolean hasDayName = dm.find();
+                    boolean hasDate = dateM.find();
 
-                    if (tm.find()) {
-                        timeRange = tm.group(0);
-                        int startH = Integer.parseInt(tm.group(1));
-                        int startM = Integer.parseInt(tm.group(2));
-                        startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
-                        lastTimeRange = timeRange;
-                        lastStartTime = startTime;
-                    } else {
-                        if (dm.find() && dateM.find() && rowText.length() < 80) {
-                            curDateStr = dateM.group(1);
+                    if (hasDayName && hasDate && !hasTime && rowText.length() < 160) {
+                        String normDate = normalizeDateStr(dateM.group(1));
+                        if (normDate != null) {
+                            curDateStr = normDate;
                             lastTimeRange = "";
                             lastStartTime = "";
                             if (!weekLessonsByDate.containsKey(curDateStr)) {
@@ -1006,8 +1175,36 @@ public class ScheduleManager {
                                     anyDateInWeek = df.parse(curDateStr);
                                 } catch (Exception ignored) {}
                             }
-                            continue;
                         }
+                        continue;
+                    }
+
+                    if (hasDayName && hasDate && hasTime) {
+                        String normDate = normalizeDateStr(dateM.group(1));
+                        if (normDate != null) {
+                            curDateStr = normDate;
+                            if (!weekLessonsByDate.containsKey(curDateStr)) {
+                                weekLessonsByDate.put(curDateStr, new ArrayList<JSONObject>());
+                            }
+                            if (anyDateInWeek == null) {
+                                try {
+                                    anyDateInWeek = df.parse(curDateStr);
+                                } catch (Exception ignored) {}
+                            }
+                        }
+                    }
+
+                    String timeRange = null;
+                    String startTime = null;
+
+                    if (hasTime) {
+                        timeRange = tm.group(0);
+                        int startH = Integer.parseInt(tm.group(1));
+                        int startM = Integer.parseInt(tm.group(2));
+                        startTime = String.format(Locale.US, "%02d:%02d", startH, startM);
+                        lastTimeRange = timeRange;
+                        lastStartTime = startTime;
+                    } else {
                         Matcher pm = pairNumPattern.matcher(rowText);
                         if (pm.find() && PAIR_NUM_TO_TIME.containsKey(pm.group(1))) {
                             timeRange = PAIR_NUM_TO_TIME.get(pm.group(1));
@@ -1145,6 +1342,8 @@ public class ScheduleManager {
         } catch (Exception e) {
             storage.addLog("Ошибка анализа семестра: " + e.getMessage());
             daemon.onScanProgress(false, "Ошибка анализа");
+        } finally {
+            pool.shutdownNow();
         }
     }
 }
