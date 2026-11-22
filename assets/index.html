@@ -44,7 +44,7 @@
       --dock-bg: rgba(255, 255, 255, 0.82);
       --dock-pill: rgba(0, 0, 0, 0.06);
       --sheet-bg: #ffffff;
-      --backdrop: rgba(0, 0, 0, 0.32);
+      --backdrop: rgba(0, 0, 0, 0.34);
       --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.03);
       --shadow-dock: 0 10px 34px rgba(0, 0, 0, 0.09);
       --shadow-frame: 0 26px 76px rgba(0, 0, 0, 0.12);
@@ -56,6 +56,8 @@
 
       --danger: #dc2626;
       --danger-soft: rgba(220, 38, 38, 0.10);
+      --warn: #d97706;
+      --warn-soft: rgba(217, 119, 6, 0.12);
     }
 
     [data-theme="dark"] {
@@ -94,12 +96,14 @@
       --dock-bg: rgba(16, 16, 20, 0.84);
       --dock-pill: rgba(255, 255, 255, 0.09);
       --sheet-bg: #121216;
-      --backdrop: rgba(0, 0, 0, 0.66);
+      --backdrop: rgba(0, 0, 0, 0.68);
       --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
       --shadow-dock: 0 12px 36px rgba(0, 0, 0, 0.6);
       --shadow-frame: 0 28px 84px rgba(0, 0, 0, 0.72);
       --danger: #f87171;
       --danger-soft: rgba(248, 113, 113, 0.15);
+      --warn: #fbbf24;
+      --warn-soft: rgba(251, 191, 36, 0.14);
     }
 
     * {
@@ -118,11 +122,11 @@
       color: var(--text);
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      transition: background-color 0.3s var(--spring), color 0.3s var(--spring);
+      transition: background-color 0.32s var(--spring), color 0.32s var(--spring);
       user-select: none;
     }
 
-    input, textarea {
+    input, textarea, pre, code {
       user-select: text;
     }
 
@@ -142,7 +146,7 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      transition: background-color 0.3s var(--spring), border-color 0.3s var(--spring);
+      transition: background-color 0.32s var(--spring), border-color 0.32s var(--spring);
     }
 
     @media (min-width: 520px) {
@@ -164,8 +168,8 @@
       position: absolute;
       top: max(14px, env(safe-area-inset-top));
       left: 50%;
-      transform: translate(-50%, -150%) scale(0.88);
-      z-index: 90;
+      transform: translate(-50%, -160%) scale(0.84);
+      z-index: 120;
       display: flex;
       align-items: center;
       gap: 8px;
@@ -180,10 +184,10 @@
       max-width: calc(100% - 32px);
       overflow: hidden;
       text-overflow: ellipsis;
-      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.26);
       opacity: 0;
       pointer-events: none;
-      transition: transform 0.44s var(--spring-bounce), opacity 0.25s ease;
+      transition: transform 0.46s var(--spring-bounce), opacity 0.24s ease;
     }
 
     .toast.show {
@@ -197,7 +201,11 @@
       border-radius: 50%;
       background: var(--accent);
       flex-shrink: 0;
+      transition: background-color 0.2s ease;
     }
+
+    .toast.is-error .toast-dot { background: var(--danger); }
+    .toast.is-success .toast-dot { background: var(--type-practice-bar); }
 
     /* Main Content Stage with Apple Directional Tab Transitions */
     .tab-stage {
@@ -215,17 +223,17 @@
       flex-direction: column;
       opacity: 0;
       pointer-events: none;
-      transform: translate3d(24px, 0, 0) scale(0.99);
-      transition: opacity 0.28s var(--spring), transform 0.36s var(--spring);
+      transform: translate3d(26px, 0, 0) scale(0.985);
+      transition: opacity 0.28s var(--spring), transform 0.4s var(--spring);
       will-change: transform, opacity;
     }
 
     .tab-view.from-left {
-      transform: translate3d(-24px, 0, 0) scale(0.99);
+      transform: translate3d(-26px, 0, 0) scale(0.985);
     }
 
     .tab-view.from-right {
-      transform: translate3d(24px, 0, 0) scale(0.99);
+      transform: translate3d(26px, 0, 0) scale(0.985);
     }
 
     .tab-view.active {
@@ -238,7 +246,7 @@
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding: 12px 18px 106px;
+      padding: 12px 18px 108px;
       scrollbar-width: none;
     }
 
@@ -246,20 +254,44 @@
       display: none;
     }
 
-    /* Stagger Entrance */
+    /* Stagger Entrance & Micro-Animations */
     @keyframes fadeSlideUp {
       from {
         opacity: 0;
-        transform: translate3d(0, 10px, 0);
+        transform: translate3d(0, 12px, 0) scale(0.985);
       }
       to {
         opacity: 1;
-        transform: translate3d(0, 0, 0);
+        transform: translate3d(0, 0, 0) scale(1);
       }
     }
 
     .anim-in {
-      animation: fadeSlideUp 0.36s var(--spring) both;
+      animation: fadeSlideUp 0.42s var(--spring) both;
+      animation-delay: var(--d, 0ms);
+    }
+
+    @keyframes shakeX {
+      0%, 100% { transform: translateX(0); }
+      18% { transform: translateX(-7px); }
+      36% { transform: translateX(7px); }
+      54% { transform: translateX(-5px); }
+      72% { transform: translateX(5px); }
+      88% { transform: translateX(-2px); }
+    }
+
+    .shake {
+      animation: shakeX 0.42s var(--spring);
+    }
+
+    @keyframes unlockGlow {
+      0% { box-shadow: 0 0 0 0 var(--accent-ring); transform: scale(0.97); }
+      50% { box-shadow: 0 0 0 10px rgba(124, 58, 237, 0); transform: scale(1.01); }
+      100% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0); transform: scale(1); }
+    }
+
+    .unlock-glow {
+      animation: unlockGlow 0.7s var(--spring);
     }
 
     /* Top Header */
@@ -299,7 +331,7 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      transition: transform 0.22s var(--spring-bounce), background-color 0.2s ease, border-color 0.2s ease;
+      transition: transform 0.24s var(--spring-bounce), background-color 0.2s ease, border-color 0.2s ease;
     }
 
     .icon-btn:hover {
@@ -311,31 +343,20 @@
     }
 
     .icon-btn svg {
-      transition: transform 0.36s var(--spring-bounce);
+      transition: transform 0.42s var(--spring-bounce);
     }
 
     .icon-btn.spin svg {
-      transform: rotate(180deg);
+      transform: rotate(360deg);
     }
 
     .tap {
       cursor: pointer;
-      transition: transform 0.22s var(--spring), background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
+      transition: transform 0.24s var(--spring), background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease;
     }
 
     .tap:active {
       transform: scale(0.972);
-    }
-
-    /* Apple Button Press Ripple */
-    .btn-spring {
-      position: relative;
-      overflow: hidden;
-      transition: transform 0.22s var(--spring-bounce), background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
-    }
-
-    .btn-spring:active {
-      transform: scale(0.93);
     }
 
     /* Auto-check Master Card */
@@ -349,11 +370,12 @@
       background: var(--surface);
       border: 1px solid var(--border);
       margin-bottom: 18px;
-      transition: border-color 0.3s var(--spring), background-color 0.3s var(--spring), transform 0.22s var(--spring);
+      transition: border-color 0.32s var(--spring), background-color 0.32s var(--spring), box-shadow 0.32s var(--spring), transform 0.22s var(--spring);
     }
 
     .auto-card.is-on {
       border-color: var(--accent-ring);
+      box-shadow: 0 6px 24px -10px var(--accent-ring);
     }
 
     .auto-toggle-btn {
@@ -424,7 +446,7 @@
 
     @keyframes pulseRing {
       0% { transform: scale(0.7); opacity: 0.72; }
-      100% { transform: scale(1.8); opacity: 0; }
+      100% { transform: scale(1.9); opacity: 0; }
     }
 
     .auto-title {
@@ -437,6 +459,35 @@
       font-size: 12.5px;
       color: var(--text-secondary);
       margin-top: 1px;
+    }
+
+    /* Connection Banner (when backend bridge is absent) */
+    .state-banner {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 15px 16px;
+      border-radius: 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+
+    .state-banner-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .state-banner-icon.warn {
+      background: var(--warn-soft);
+      color: var(--warn);
     }
 
     /* Apple iOS Elastic Switch */
@@ -556,21 +607,22 @@
     .class-card.is-live {
       background: var(--surface-elevated);
       border-color: var(--border-strong);
+      box-shadow: 0 6px 20px -10px rgba(0, 0, 0, 0.14);
     }
 
     .class-card.is-past {
-      opacity: 0.54;
+      opacity: 0.56;
       filter: saturate(0.65);
     }
 
     .class-card.is-past:hover,
     .class-card.is-past:active {
-      opacity: 0.86;
+      opacity: 0.88;
       filter: saturate(1);
     }
 
     .class-card.is-done:not(.is-past) {
-      opacity: 0.76;
+      opacity: 0.78;
     }
 
     .class-top {
@@ -607,6 +659,16 @@
     .badge.ink {
       background: var(--ink);
       color: var(--ink-text);
+    }
+
+    .badge.success {
+      background: var(--type-practice-soft);
+      color: var(--type-practice);
+    }
+
+    .badge.warn {
+      background: var(--warn-soft);
+      color: var(--warn);
     }
 
     .badge-dot {
@@ -698,7 +760,7 @@
       to { transform: rotate(360deg); }
     }
 
-    /* ===== TAB 2: CONTINUOUS MULTI-WEEK TIKTOK SCHEDULE ===== */
+    /* ===== TAB 2: CONTINUOUS MULTI-WEEK SCHEDULE ===== */
     .sched-header {
       display: flex;
       align-items: center;
@@ -747,12 +809,25 @@
       font-weight: 600;
       padding: 0 8px;
       letter-spacing: -0.01em;
+      cursor: pointer;
+      border-radius: 999px;
+      line-height: 28px;
+      transition: background-color 0.18s ease, transform 0.18s var(--spring-bounce);
+    }
+
+    .week-label:hover {
+      background: var(--surface-hover);
+    }
+
+    .week-label:active {
+      transform: scale(0.93);
     }
 
     .pill-btn {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 6px;
       height: 32px;
       padding: 0 12px;
       border-radius: 999px;
@@ -766,11 +841,25 @@
       transition: transform 0.2s var(--spring-bounce), background-color 0.2s ease, border-color 0.2s ease;
     }
 
+    .pill-btn:hover {
+      background: var(--surface-hover);
+    }
+
     .pill-btn:active {
       transform: scale(0.92);
     }
 
-    /* Vertical Spatial Day Rail (matches vertical scroll direction) */
+    .pill-btn.primary {
+      background: var(--ink);
+      color: var(--ink-text);
+      border-color: transparent;
+      height: 38px;
+      padding: 0 18px;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* Vertical Spatial Day Rail */
     .day-rail {
       position: absolute;
       right: 8px;
@@ -787,6 +876,10 @@
       z-index: 15;
     }
 
+    .day-rail:empty {
+      display: none;
+    }
+
     .rail-pill {
       position: absolute;
       top: 5px;
@@ -797,8 +890,12 @@
       background: var(--ink);
       pointer-events: none;
       z-index: 1;
-      transition: transform 0.34s var(--spring);
+      transition: transform 0.12s var(--spring-snappy);
       will-change: transform;
+    }
+
+    .rail-pill.tracking {
+      transition: none;
     }
 
     .rail-day {
@@ -842,70 +939,6 @@
       background: var(--accent);
     }
 
-    .rail-day.is-today.active::after {
-      background: var(--accent);
-    }
-
-    .filter-strip {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 0 18px 8px;
-      overflow-x: auto;
-      scrollbar-width: none;
-      flex-shrink: 0;
-    }
-
-    .filter-strip::-webkit-scrollbar {
-      display: none;
-    }
-
-    .filter-chip {
-      height: 27px;
-      padding: 0 11px;
-      border-radius: 999px;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--text-secondary);
-      font-family: inherit;
-      font-size: 11.5px;
-      font-weight: 500;
-      white-space: nowrap;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      transition: transform 0.2s var(--spring-bounce), background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-    }
-
-    .filter-chip:active {
-      transform: scale(0.92);
-    }
-
-    .filter-chip.active {
-      background: var(--ink);
-      color: var(--ink-text);
-      border-color: var(--ink);
-    }
-
-    .filter-chip.active.f-lecture {
-      background: var(--type-lecture-soft);
-      color: var(--type-lecture);
-      border-color: var(--type-lecture-ring);
-    }
-
-    .filter-chip.active.f-practice {
-      background: var(--type-practice-soft);
-      color: var(--type-practice);
-      border-color: var(--type-practice-ring);
-    }
-
-    .filter-chip.active.f-lab {
-      background: var(--type-lab-soft);
-      color: var(--type-lab);
-      border-color: var(--type-lab-ring);
-    }
-
     .color-dot {
       width: 6px;
       height: 6px;
@@ -945,6 +978,10 @@
       flex-direction: column;
       overflow-y: auto;
       scrollbar-width: none;
+    }
+
+    .day-slide.full-width {
+      padding: 8px 18px 104px;
     }
 
     .day-slide::-webkit-scrollbar {
@@ -1006,6 +1043,138 @@
       border-radius: 18px;
       background: var(--surface);
       border: 1px solid var(--border);
+      transition: opacity 0.22s ease, filter 0.22s ease, transform 0.22s var(--spring);
+    }
+
+    .mini-lesson.is-past {
+      opacity: 0.52;
+      filter: saturate(0.62);
+    }
+
+    .mini-lesson.is-past:hover,
+    .mini-lesson.is-past:active {
+      opacity: 0.88;
+      filter: saturate(1);
+    }
+
+    /* Schedule Calendar Sheet */
+    .cal-header-row {
+      display: grid;
+      grid-template-columns: 38px repeat(6, 1fr);
+      gap: 4px;
+      padding: 0 4px 8px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 8px;
+    }
+
+    .cal-weeks {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 330px;
+      overflow-y: auto;
+      padding-bottom: 8px;
+      scrollbar-width: none;
+    }
+
+    .cal-weeks::-webkit-scrollbar {
+      display: none;
+    }
+
+    .cal-week-row {
+      display: grid;
+      grid-template-columns: 38px repeat(6, 1fr);
+      gap: 4px;
+      align-items: center;
+      padding: 4px;
+      border-radius: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+
+    .cal-week-row.is-current-week {
+      border-color: var(--accent-ring);
+    }
+
+    .cal-week-tag {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .cal-cell {
+      position: relative;
+      height: 40px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      cursor: pointer;
+      transition: transform 0.16s var(--spring-bounce), background-color 0.16s ease, border-color 0.16s ease;
+    }
+
+    .cal-cell:hover {
+      background: var(--surface-hover);
+    }
+
+    .cal-cell:active {
+      transform: scale(0.88);
+    }
+
+    .cal-cell.is-past {
+      color: var(--text-muted);
+    }
+
+    .cal-cell.is-today {
+      border-color: var(--accent-ring);
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .cal-cell.is-active {
+      background: var(--ink);
+      color: var(--ink-text);
+      border-color: var(--ink);
+      font-weight: 600;
+    }
+
+    .cal-dots {
+      display: inline-flex;
+      align-items: center;
+      gap: 2.5px;
+      height: 4px;
+    }
+
+    .cal-dot {
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+    }
+
+    .avatar.is-profile {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
+
+    .avatar.is-guest {
+      background: var(--surface-hover);
+      border-color: var(--border);
+      color: var(--text-muted);
     }
 
     .mini-time {
@@ -1122,8 +1291,6 @@
       transform: scale(0.93);
     }
 
-
-
     .empty-day {
       flex: 1;
       display: flex;
@@ -1131,22 +1298,38 @@
       align-items: center;
       justify-content: center;
       text-align: center;
-      gap: 6px;
+      gap: 8px;
       color: var(--text-secondary);
-      padding: 24px 0;
+      padding: 36px 16px;
+    }
+
+    .empty-icon {
+      width: 52px;
+      height: 52px;
+      border-radius: 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 4px;
     }
 
     .empty-day strong {
       color: var(--text);
       font-size: 16px;
       font-weight: 600;
+      letter-spacing: -0.02em;
     }
 
     .empty-day span {
       font-size: 13px;
+      line-height: 1.45;
+      max-width: 260px;
     }
 
-    /* ===== SEGMENTED CONTROL ===== */
+    /* ===== LIQUID SLIDING SEGMENTED CONTROL ===== */
     .segment-wrap {
       padding: 0 18px 12px;
       flex-shrink: 0;
@@ -1166,6 +1349,25 @@
       grid-template-columns: 1fr 1fr 1fr;
     }
 
+    .seg-indicator {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      bottom: 3px;
+      width: calc((100% - 6px) / 2);
+      border-radius: 11px;
+      background: var(--surface-elevated);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      pointer-events: none;
+      z-index: 1;
+      transition: transform 0.36s var(--spring);
+      will-change: transform;
+    }
+
+    .segment.three .seg-indicator {
+      width: calc((100% - 6px) / 3);
+    }
+
     .seg-btn {
       position: relative;
       z-index: 2;
@@ -1182,7 +1384,7 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      transition: color 0.22s ease, background-color 0.22s ease, transform 0.18s var(--spring-bounce), box-shadow 0.22s ease;
+      transition: color 0.22s ease, transform 0.18s var(--spring-bounce);
     }
 
     .seg-btn:active {
@@ -1190,9 +1392,8 @@
     }
 
     .seg-btn.active {
-      background: var(--surface-elevated);
       color: var(--text);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      font-weight: 600;
     }
 
     .unread-count {
@@ -1204,7 +1405,7 @@
       color: #ffffff;
       font-size: 10.5px;
       font-weight: 600;
-      display: inline-flex;
+      display: none;
       align-items: center;
       justify-content: center;
     }
@@ -1220,11 +1421,12 @@
       border-radius: 13px;
       background: var(--surface);
       border: 1px solid var(--border);
-      transition: border-color 0.2s ease;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
     .search-box:focus-within {
       border-color: var(--accent-ring);
+      box-shadow: 0 0 0 3px var(--accent-soft);
     }
 
     .search-box input {
@@ -1363,7 +1565,7 @@
       stroke: var(--accent);
       stroke-width: 7;
       stroke-linecap: round;
-      transition: stroke-dashoffset 0.7s var(--spring);
+      transition: stroke-dashoffset 0.8s var(--spring);
     }
 
     .ring-center {
@@ -1440,7 +1642,7 @@
       height: 100%;
       border-radius: 999px;
       background: var(--ink);
-      transition: width 0.55s var(--spring);
+      transition: width 0.6s var(--spring);
     }
 
     .bar-fill.high {
@@ -1499,7 +1701,7 @@
       color: var(--accent);
     }
 
-    /* ===== TAB 5: SETTINGS & SUBJECT RULES ===== */
+    /* ===== TAB 5: SETTINGS & DEVELOPER CREDITS ===== */
     .settings-group {
       border-radius: 20px;
       background: var(--surface);
@@ -1604,6 +1806,97 @@
       min-width: 0;
     }
 
+    /* Developer Credits Cards */
+    .dev-credit-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 15px;
+      border-bottom: 1px solid var(--border);
+      text-decoration: none;
+      color: inherit;
+      transition: background-color 0.18s ease, transform 0.2s var(--spring);
+    }
+
+    .dev-credit-row:last-child {
+      border-bottom: none;
+    }
+
+    .dev-credit-row:hover {
+      background: var(--surface-hover);
+    }
+
+    .dev-credit-row:active {
+      transform: scale(0.985);
+    }
+
+    .dev-credit-left {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+    }
+
+    .dev-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-ring);
+      color: var(--accent);
+      font-size: 12.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .gh-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 11.5px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    /* Secret Dev Section Accent */
+    .dev-group {
+      border-color: var(--accent-ring);
+      background: linear-gradient(180deg, var(--accent-soft) 0%, var(--surface) 100%);
+    }
+
+    .log-console {
+      max-height: 240px;
+      overflow-y: auto;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      margin-bottom: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
+
+    .log-line {
+      padding: 4px 0;
+      border-bottom: 1px solid var(--border);
+      word-break: break-word;
+    }
+
+    .log-line:last-child {
+      border-bottom: none;
+    }
+
     /* Subject Rule Matrix Card inside Sheet */
     .rule-card {
       padding: 13px 14px;
@@ -1637,6 +1930,7 @@
       display: flex;
       gap: 8px;
       margin-bottom: 14px;
+      flex-wrap: wrap;
     }
 
     /* ===== FLOATING APPLE BOTTOM DOCK WITH LIQUID SLIDING INDICATOR ===== */
@@ -1697,9 +1991,12 @@
       color: var(--text);
     }
 
+    .dock-item svg {
+      transition: transform 0.34s var(--spring-bounce);
+    }
+
     .dock-item.active svg {
-      transform: scale(1.06);
-      transition: transform 0.3s var(--spring-bounce);
+      transform: scale(1.08) translateY(-1px);
     }
 
     .dock-item span {
@@ -1716,6 +2013,7 @@
       height: 6px;
       border-radius: 50%;
       background: var(--accent);
+      display: none;
     }
 
     /* ===== APPLE BOTTOM SHEET WITH SWIPE-TO-DISMISS ===== */
@@ -1724,11 +2022,11 @@
       inset: 0;
       z-index: 60;
       background: var(--backdrop);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
       opacity: 0;
       pointer-events: none;
-      transition: opacity 0.28s var(--spring);
+      transition: opacity 0.3s var(--spring);
     }
 
     .sheet-backdrop.open {
@@ -1742,7 +2040,7 @@
       right: 0;
       bottom: 0;
       z-index: 70;
-      max-height: 84%;
+      max-height: 86%;
       display: flex;
       flex-direction: column;
       background: var(--sheet-bg);
@@ -1750,7 +2048,7 @@
       border-radius: 28px 28px 0 0;
       padding: 10px 20px max(24px, env(safe-area-inset-bottom));
       transform: translate3d(0, 105%, 0);
-      transition: transform 0.4s var(--spring);
+      transition: transform 0.44s var(--spring);
       will-change: transform;
     }
 
@@ -1811,6 +2109,12 @@
       margin-bottom: 6px;
     }
 
+    .field-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
     .field input {
       width: 100%;
       height: 44px;
@@ -1822,11 +2126,43 @@
       font-family: inherit;
       font-size: 14px;
       outline: none;
-      transition: border-color 0.2s ease;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .field input.with-eye {
+      padding-right: 44px;
     }
 
     .field input:focus {
       border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .field input.is-error {
+      border-color: var(--danger);
+      box-shadow: 0 0 0 3px var(--danger-soft);
+    }
+
+    .field-eye {
+      position: absolute;
+      right: 6px;
+      width: 34px;
+      height: 34px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      cursor: pointer;
+    }
+
+    .field-error {
+      font-size: 12px;
+      color: var(--danger);
+      margin-top: 6px;
+      min-height: 16px;
     }
 
     .full-btn {
@@ -1845,7 +2181,7 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      transition: transform 0.2s var(--spring-bounce), opacity 0.2s ease;
+      transition: transform 0.22s var(--spring-bounce), opacity 0.2s ease, background-color 0.2s ease;
     }
 
     .full-btn:active {
@@ -1856,6 +2192,11 @@
       background: var(--surface);
       color: var(--text);
       border: 1px solid var(--border);
+    }
+
+    .full-btn.accent {
+      background: var(--accent);
+      color: #ffffff;
     }
 
     .full-btn.danger {
@@ -1952,7 +2293,7 @@
       opacity: 0;
       pointer-events: none;
       transform: scale(1.03);
-      transition: opacity 0.42s var(--spring), transform 0.48s var(--spring);
+      transition: opacity 0.44s var(--spring), transform 0.5s var(--spring);
     }
 
     .onboard-overlay.open {
@@ -1976,7 +2317,7 @@
       padding: max(18px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
       overflow-y: auto;
       scrollbar-width: none;
-      transition: transform 0.44s var(--spring), opacity 0.34s var(--spring);
+      transition: transform 0.48s var(--spring), opacity 0.36s var(--spring);
       will-change: transform, opacity;
     }
 
@@ -1990,7 +2331,7 @@
     }
 
     .onboard-overlay.show-details .onboard-page.page-welcome {
-      transform: translate3d(-28%, 0, 0);
+      transform: translate3d(-26%, 0, 0);
       opacity: 0;
       pointer-events: none;
     }
@@ -2011,7 +2352,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       flex-shrink: 0;
     }
 
@@ -2038,8 +2379,51 @@
     }
 
     @keyframes orbBreath {
-      0%, 100% { transform: scale(0.92); opacity: 0.85; }
-      50% { transform: scale(1.16); opacity: 1; }
+      0%, 100% { transform: scale(0.9); opacity: 0.85; }
+      50% { transform: scale(1.18); opacity: 1; }
+    }
+
+    /* Animated Pulse Emblem on Welcome Screen */
+    .hero-emblem-wrap {
+      position: relative;
+      width: 68px;
+      height: 68px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .hero-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      border: 1.5px solid var(--accent-ring);
+      animation: emblemRipple 3.4s var(--spring) infinite;
+    }
+
+    .hero-ring.r2 {
+      animation-delay: 1.7s;
+    }
+
+    @keyframes emblemRipple {
+      0% { transform: scale(0.88); opacity: 0.75; }
+      100% { transform: scale(1.48); opacity: 0; }
+    }
+
+    .hero-emblem {
+      position: relative;
+      z-index: 2;
+      width: 58px;
+      height: 58px;
+      border-radius: 20px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-ring);
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 10px 26px -8px var(--accent-ring);
     }
 
     /* Apple Blur-Reveal Text Animation */
@@ -2068,12 +2452,11 @@
     .reveal-d6 { animation-delay: 470ms !important; }
 
     .welcome-hero {
-      margin-top: 8px;
-      margin-bottom: 26px;
+      margin-bottom: 22px;
     }
 
     .welcome-h1 {
-      font-size: 32px;
+      font-size: 31px;
       font-weight: 700;
       letter-spacing: -0.04em;
       line-height: 1.08;
@@ -2095,7 +2478,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      margin-bottom: 24px;
+      margin-bottom: 22px;
     }
 
     .pillar-card {
@@ -2106,12 +2489,17 @@
       border-radius: 20px;
       background: var(--surface);
       border: 1px solid var(--border);
+      transition: transform 0.22s var(--spring), border-color 0.22s ease;
+    }
+
+    .pillar-card:hover {
+      border-color: var(--border-strong);
     }
 
     .pillar-icon {
-      width: 36px;
-      height: 36px;
-      border-radius: 12px;
+      width: 38px;
+      height: 38px;
+      border-radius: 13px;
       background: var(--surface-hover);
       border: 1px solid var(--border);
       color: var(--text);
@@ -2125,6 +2513,18 @@
       background: var(--accent-soft);
       border-color: var(--accent-ring);
       color: var(--accent);
+    }
+
+    .pillar-icon.privacy {
+      background: var(--type-practice-soft);
+      border-color: var(--type-practice-ring);
+      color: var(--type-practice);
+    }
+
+    .pillar-icon.campus {
+      background: var(--type-lecture-soft);
+      border-color: var(--type-lecture-ring);
+      color: var(--type-lecture);
     }
 
     .pillar-title {
@@ -2145,7 +2545,7 @@
       display: flex;
       flex-direction: column;
       gap: 10px;
-      padding-top: 8px;
+      padding-top: 6px;
     }
 
     .link-btn {
@@ -2236,7 +2636,7 @@
     .faq-chev {
       color: var(--text-muted);
       flex-shrink: 0;
-      transition: transform 0.32s var(--spring);
+      transition: transform 0.34s var(--spring);
     }
 
     .faq-item.open .faq-chev {
@@ -2247,7 +2647,7 @@
     .faq-body {
       display: grid;
       grid-template-rows: 0fr;
-      transition: grid-template-rows 0.34s var(--spring);
+      transition: grid-template-rows 0.36s var(--spring);
     }
 
     .faq-item.open .faq-body {
@@ -2265,26 +2665,12 @@
       color: var(--text-secondary);
     }
 
-    .author-card {
-      padding: 15px 16px;
-      border-radius: 20px;
-      background: var(--surface);
-      border: 1px solid var(--border);
-      margin-bottom: 16px;
-    }
-
-    .author-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 8px;
-    }
-
-    .author-tags {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin-top: 10px;
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
@@ -2304,7 +2690,7 @@
           <header class="top-bar">
             <div>
               <h1 class="top-title">Сегодня</h1>
-              <div class="top-sub tabular" id="todaySubtitle">Чт, 19 ноября · 12 нед.</div>
+              <div class="top-sub tabular" id="todaySubtitle"></div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;">
               <button class="icon-btn" id="quickSyncBtn" aria-label="Синхронизировать" title="Синхронизировать с ЛК">
@@ -2317,28 +2703,29 @@
           <div class="scroll-area" id="todayContent"></div>
         </section>
 
-        <!-- TAB 2: РАСПИСАНИЕ (Continuous Multi-Week TikTok Vertical Snap) -->
+        <!-- TAB 2: РАСПИСАНИЕ (Continuous Multi-Week Vertical Snap) -->
         <section class="tab-view" id="view-schedule" aria-label="Расписание">
           <header class="sched-header">
             <div class="week-nav">
               <button class="week-btn" id="prevWeekBtn" aria-label="Предыдущая неделя">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
               </button>
-              <span class="week-label tabular" id="weekLabel">12 нед.</span>
+              <span class="week-label tabular" id="weekLabel">—</span>
               <button class="week-btn" id="nextWeekBtn" aria-label="Следующая неделя">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
             </div>
             <div class="sched-actions">
-              <button class="pill-btn" id="jumpTodayBtn">Сегодня</button>
+              <button class="pill-btn" id="jumpTodayBtn" style="display:none;">Сегодня</button>
+              <button class="icon-btn sm" id="scheduleCalendarBtn" aria-label="Календарь" title="Открыть календарь">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg>
+              </button>
               <button class="icon-btn sm" id="scheduleFilterBtn" aria-label="Фильтр занятий" title="Фильтр занятий">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
                 <span class="filter-dot" id="scheduleFilterDot" style="display:none;"></span>
               </button>
             </div>
           </header>
-
-
 
           <div class="snap-wrap">
             <div class="day-feed" id="dayFeed"></div>
@@ -2359,9 +2746,10 @@
           </header>
 
           <div class="segment-wrap">
-            <div class="segment">
+            <div class="segment" id="msgSegment">
+              <div class="seg-indicator" id="msgSegIndicator"></div>
               <button class="seg-btn active" id="segPersonalBtn" data-msg-tab="personal">
-                Личные <span class="unread-count" id="unreadBadge">2</span>
+                Личные <span class="unread-count" id="unreadBadge"></span>
               </button>
               <button class="seg-btn" id="segFilesBtn" data-msg-tab="files">Файлы группы</button>
             </div>
@@ -2375,8 +2763,11 @@
           <header class="top-bar">
             <div>
               <h1 class="top-title">Дневник</h1>
-              <div class="top-sub">Осенний семестр</div>
+              <div class="top-sub" id="diarySubtitle">Посещаемость и оценки</div>
             </div>
+            <button class="icon-btn" id="syncDiaryBtn" aria-label="Обновить дневник" title="Обновить дневник">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+            </button>
           </header>
 
           <div class="scroll-area" id="diaryContent"></div>
@@ -2416,7 +2807,7 @@
         </button>
 
         <button class="dock-item" data-tab="diary" aria-label="Дневник">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="m9 9.5 2 2 4-4"/></svg>
           <span>Дневник</span>
         </button>
 
@@ -2429,7 +2820,7 @@
       <!-- First-Run Welcome & Details Overlay -->
       <div class="onboard-overlay" id="onboardOverlay" aria-hidden="true">
         <div class="onboard-pages">
-          <!-- Page 1: Ultra-concise Welcome -->
+          <!-- Page 1: Consumer Welcome -->
           <div class="onboard-page page-welcome">
             <div class="onboard-top reveal reveal-d1">
               <div class="brand-pill">
@@ -2440,38 +2831,48 @@
             </div>
 
             <div class="welcome-hero">
+              <div class="hero-emblem-wrap reveal reveal-d1" aria-hidden="true">
+                <span class="hero-ring"></span>
+                <span class="hero-ring r2"></span>
+                <div class="hero-emblem">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/><path d="M12 6v6l3.5 2"/><path d="m16 19 2 2 4-4"/></svg>
+                </div>
+              </div>
               <h2 class="welcome-h1 reveal reveal-d2">Пары на <span class="accent-word">автопилоте</span>.</h2>
-              <p class="welcome-lead reveal reveal-d3">Минималистичный клиент для автоотметки, расписания и дневника вуза.</p>
+              <p class="welcome-lead reveal reveal-d3">Удобный клиент ЛК СПбГУТ: автоотметка по звонкам, расписание, сообщения и дневник в одном месте.</p>
             </div>
 
             <div class="pillar-list">
+              <!-- Icon: Calendar with Checkmark = Automatic attendance by schedule -->
               <div class="pillar-card reveal reveal-d3">
                 <div class="pillar-icon accent">
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="m9 16 2 2 4-4"/></svg>
                 </div>
                 <div>
-                  <div class="pillar-title">Что делает</div>
-                  <div class="pillar-desc">Сам отмечает тебя на нужных парах, собирает расписание, сообщения и посещаемость.</div>
+                  <div class="pillar-title">Автоотметка по правилам</div>
+                  <div class="pillar-desc">Отмечает тебя на выбранных лекциях, практиках и лабах с естественной задержкой после звонка.</div>
                 </div>
               </div>
 
+              <!-- Icon: Shield with Check = Local privacy & Anti-kick session protection -->
               <div class="pillar-card reveal reveal-d4">
-                <div class="pillar-icon">
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <div class="pillar-icon privacy">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                 </div>
                 <div>
-                  <div class="pillar-title">Безопасно</div>
-                  <div class="pillar-desc">Логин и пароль остаются только на твоём устройстве, а вход на ПК не сбрасывается.</div>
+                  <div class="pillar-title">Локальная приватность</div>
+                  <div class="pillar-desc">Пароль и данные сессии хранятся только на твоём телефоне и передаются напрямую в личный кабинет вуза.</div>
                 </div>
               </div>
 
+              <!-- Icon: Graduation Cap / Open Study Hub = All university tools in one app -->
               <div class="pillar-card reveal reveal-d5">
-                <div class="pillar-icon">
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                <div class="pillar-icon campus">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10v6M2 10l10-5 10 5-10 5z"/><path d="M6 12v5c0 1.7 2.7 3 6 3s6-1.3 6-3v-5"/></svg>
                 </div>
                 <div>
-                  <div class="pillar-title">От студентов — студентам</div>
-                  <div class="pillar-desc">Создано командой Student Dev Team без рекламы и лишнего шума.</div>
+                  <div class="pillar-title">Весь кабинет под рукой</div>
+                  <div class="pillar-desc">18 недель расписания, личные сообщения, файлы группы и статистика посещаемости без лишнего шума.</div>
                 </div>
               </div>
             </div>
@@ -2479,13 +2880,13 @@
             <div class="welcome-actions reveal reveal-d6">
               <button class="full-btn" id="startAppBtn">Начать</button>
               <button class="link-btn" id="openDetailsBtn">
-                Как это работает и подробности
+                Как это работает и разработчики
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
               </button>
             </div>
           </div>
 
-          <!-- Page 2: Deep-Dive Details & Credits -->
+          <!-- Page 2: Deep-Dive Details & Developer Credits -->
           <div class="onboard-page page-details">
             <div class="onboard-top">
               <button class="back-pill" id="backToWelcomeBtn">
@@ -2497,7 +2898,7 @@
 
             <div style="margin-bottom:18px;">
               <h2 class="top-title" style="margin-bottom:4px;">Как устроен Pulse</h2>
-              <div class="top-sub">Все детали про работу, приватность и авторов</div>
+              <div class="top-sub">Принцип работы, безопасность и команда проекта</div>
             </div>
 
             <div class="faq-list" id="faqList">
@@ -2507,7 +2908,7 @@
                   <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
                 <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">Приложение сверяется с расписанием звонков и твоими правилами по каждому предмету. Когда начинается нужная лекция, практика или лаба, отметка отправляется автоматически с выбранной задержкой (например, 1–4 минуты).</div>
+                  <div class="faq-text">Фоновая служба сверяется с расписанием звонков и твоими правилами по каждому предмету. Когда начинается нужная лекция, практика или лаба, отметка отправляется автоматически с выбранной задержкой.</div>
                 </div></div>
               </div>
 
@@ -2517,17 +2918,7 @@
                   <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
                 <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">Да. Учётные данные хранятся локально только в памяти твоего браузера/устройства и никогда не записываются в сторонние базы данных. В любой момент ты можешь выйти из аккаунта и очистить сессию одной кнопкой.</div>
-                </div></div>
-              </div>
-
-              <div class="faq-item">
-                <button class="faq-trigger" data-faq>
-                  <span>Не выкинет ли из кабинета на ПК?</span>
-                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-                <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">В настройках включена «Защита сессии (Анти-кик)»: клиент сначала использует активную cookie-сессию и не делает лишних повторных входов, поэтому открытый кабинет на компьютере остаётся активным.</div>
+                  <div class="faq-text">Да. Учётные данные хранятся локально на твоём устройстве и отправляются напрямую в личный кабинет вуза. В любой момент ты можешь выйти из аккаунта и очистить сессию одной кнопкой.</div>
                 </div></div>
               </div>
 
@@ -2537,23 +2928,15 @@
                   <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
                 <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">Да — в разделе «Настройки → Правила по предметам» или прямо по нажатию на любую пару можно отдельно включить или выключить автоотметку для лекций, практик и лабораторных каждого предмета.</div>
+                  <div class="faq-text">Да — в разделе «Настройки → Правила по предметам» или по нажатию на любую пару можно отдельно включить или выключить автоотметку для лекций, практик и лабораторных каждого предмета.</div>
                 </div></div>
               </div>
             </div>
 
-            <div class="author-card">
-              <div class="author-top">
-                <div class="row-title" style="font-weight:600;">Создатели</div>
-                <span class="badge accent">Student Dev Team</span>
-              </div>
-              <div class="row-sub" style="line-height:1.45;">Сделано студентами для удобного контроля учёбы. Минимализм, открытая архитектура и ноль трекинга.</div>
-              <div class="author-tags">
-                <button class="pill-btn" id="copyAuthorContactBtn">Связаться с авторами</button>
-              </div>
-            </div>
+            <div class="section-label"><span>Команда разработки</span></div>
+            <div class="settings-group" id="onboardCreditsGroup"></div>
 
-            <div style="margin-top:auto;padding-top:6px;">
+            <div style="margin-top:auto;padding-top:8px;">
               <button class="full-btn" id="finishDetailsBtn">Всё понятно — перейти в приложение</button>
             </div>
           </div>
@@ -2573,8 +2956,34 @@
 
   <script>
     (function () {
+      /* =====================================================================
+       * КОНФИГУРАЦИЯ ПРИЛОЖЕНИЯ И КРЕДИТЫ РАЗРАБОТЧИКОВ
+       * Вставьте сюда реальные имена, роли и ссылки на GitHub разработчиков.
+       * ===================================================================== */
+      const APP_VERSION = 'v2.6';
+      const APP_BUILD = '02.06.00';
+      const DEV_SECRET_PASSWORD = 'данИИл';
+      const DEV_TAP_THRESHOLD = 5;
+
+      const DEVELOPERS = [
+        {
+          name: 'Разработчик 1',
+          initials: 'Р1',
+          role: 'Android Backend & Автоотметка',
+          githubHandle: '@developer1',
+          githubUrl: 'https://github.com/developer1'
+        },
+        {
+          name: 'Разработчик 2',
+          initials: 'Р2',
+          role: 'Frontend & Дизайн интерфейса',
+          githubHandle: '@developer2',
+          githubUrl: 'https://github.com/developer2'
+        }
+      ];
+
       const HAS_BRIDGE = typeof window.AndroidBridge !== 'undefined';
-      const STORAGE_KEY = 'pulse_autocheck_state_v5';
+      const STORAGE_KEY = 'pulse_autocheck_state_v6';
       const TAB_ORDER = ['today', 'schedule', 'messages', 'diary', 'settings'];
       const DAY_SHORTS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
       const MONTHS_GEN = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
@@ -2582,21 +2991,17 @@
       const WEEKDAYS_SHORT = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
       const WEEKDAYS_FULL = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'];
 
-      let SUBJECT_CATALOG = [
-        { name: 'Математический анализ', types: ['Лекция', 'Практика'] },
-        { name: 'Алгоритмы и структуры данных', types: ['Лекция', 'Практика', 'Лаба'] },
-        { name: 'Операционные системы', types: ['Лекция', 'Лаба'] },
-        { name: 'Сети и телекоммуникации', types: ['Лекция', 'Практика', 'Лаба'] },
-        { name: 'Физика', types: ['Лекция', 'Практика', 'Лаба'] },
-        { name: 'Иностранный язык', types: ['Практика'] }
-      ];
+      // Каталог предметов загружается исключительно из AndroidBridge
+      let SUBJECT_CATALOG = [];
 
-      const DEMO_STATE = {
+      // Начальное состояние без каких-либо заглушек и демо-данных
+      const INITIAL_STATE = {
         onboardingSeen: false,
+        devModeUnlocked: false,
         activeTab: 'today',
         themeMode: 'light',
         autoCheckEnabled: false,
-        daemonStatus: 'Отключено',
+        daemonStatus: '',
         scanningSemester: false,
         scanStatus: '',
         logs: [],
@@ -2615,32 +3020,11 @@
           group: '',
           email: ''
         },
-        todayClasses: HAS_BRIDGE ? [] : [
-          { id: 't1', start: '09:00', end: '10:35', subject: 'Математический анализ', type: 'Лекция', room: 'ауд. 312/1', teacher: 'проф. Соловьёв А.В.', status: 'checked', isPast: true, checkedAt: '09:02', checkedBy: 'auto', raspId: '', weekId: '' },
-          { id: 't2', start: '10:45', end: '12:20', subject: 'Алгоритмы и структуры данных', type: 'Практика', room: 'ауд. 408/2', teacher: 'доц. Морозова Е.И.', status: 'live', isPast: false, checkedAt: null, checkedBy: null, raspId: '', weekId: '' }
-        ],
-        semesterWeeks: HAS_BRIDGE ? {} : {
-          12: [
-            { num: '16', weekday: 'Понедельник', month: 'Ноябрь', lessons: [{ id: 'w12-1', start: '09:00', end: '10:35', subject: 'Сети и телекоммуникации', type: 'Практика', room: '404/1', teacher: 'доц. Никитин П.О.' }] },
-            { num: '17', weekday: 'Вторник', month: 'Ноябрь', lessons: [] },
-            { num: '18', weekday: 'Среда', month: 'Ноябрь', lessons: [] },
-            { num: '19', weekday: 'Четверг', month: 'Ноябрь', isToday: true, lessons: [{ id: 't1', start: '09:00', end: '10:35', subject: 'Математический анализ', type: 'Лекция', room: '312/1', teacher: 'проф. Соловьёв А.В.' }] },
-            { num: '20', weekday: 'Пятница', month: 'Ноябрь', lessons: [] },
-            { num: '21', weekday: 'Суббота', month: 'Ноябрь', lessons: [] }
-          ]
-        },
-        messages: HAS_BRIDGE ? [] : [
-          {
-            id: 'm1', sender: 'Морозова Е.И.', initials: 'МЕ', role: 'Алгоритмы и структуры данных', time: '10:12', unread: true, muted: false,
-            thread: [{ from: 'them', text: 'Добрый день! Перенесла защиту 3-й лабораторной на следующую среду.', time: '10:11' }]
-          }
-        ],
-        groupFiles: HAS_BRIDGE ? [] : [
-          { id: 'f1', name: 'Лаб_3_Графы_варианты.pdf', ext: 'PDF', subject: 'Алгоритмы', size: '1.4 МБ', date: 'Сегодня', author: 'Морозова Е.И.', url: '' }
-        ],
-        diary: HAS_BRIDGE ? [] : [
-          { id: 'd1', subject: 'Математический анализ', attended: 11, total: 12, history: [1,1,1,0,1,1,1,1], grades: ['5', '4', '5'], credit: 'Экзамен' }
-        ]
+        todayClasses: [],
+        semesterWeeks: {},
+        messages: [],
+        groupFiles: [],
+        diary: []
       };
 
       function safeParse(raw, fallback) {
@@ -2659,27 +3043,36 @@
       function loadState() {
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
-          if (!raw) return cloneObj(DEMO_STATE);
+          if (!raw) return cloneObj(INITIAL_STATE);
           const parsed = JSON.parse(raw);
-          const merged = Object.assign(cloneObj(DEMO_STATE), parsed);
+          const merged = Object.assign(cloneObj(INITIAL_STATE), parsed);
           if (!merged.subjectRules) merged.subjectRules = {};
+          // Runtime backend data is never restored from localStorage
+          merged.todayClasses = [];
+          merged.semesterWeeks = {};
+          merged.messages = [];
+          merged.groupFiles = [];
+          merged.diary = [];
+          merged.logs = [];
+          merged.account = { loggedIn: false, name: '', group: '', email: '' };
           return merged;
         } catch (e) {
-          return cloneObj(DEMO_STATE);
+          return cloneObj(INITIAL_STATE);
         }
       }
 
       function saveState() {
         try {
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            onboardingSeen: state.onboardingSeen,
+            onboardingSeen: !!state.onboardingSeen,
+            devModeUnlocked: !!state.devModeUnlocked,
             activeTab: state.activeTab,
             themeMode: state.themeMode,
             scheduleFilter: state.scheduleFilter,
             msgSubTab: state.msgSubTab,
             diarySubTab: state.diarySubTab,
             autoDelay: state.autoDelay,
-            antiKick: state.antiKick,
+            antiKick: !!state.antiKick,
             subjectRules: state.subjectRules
           }));
         } catch (e) {}
@@ -2688,11 +3081,16 @@
       let state = loadState();
       let toastTimer = null;
       let checkingIds = new Set();
-      let prevTabIdx = TAB_ORDER.indexOf(state.activeTab);
       let lastMtimes = { days: -1, cat: -1, diary: -1, messages: -1, files: -1, profile: -1 };
       let currentWeekNum = 0;
+      let lastTodayStamp = '';
+      let versionTapCount = 0;
+      let versionTapTimer = null;
+      let loginAttempt = { pending: false, startedAt: 0, prevLogCount: 0, timeoutId: null };
 
       const $ = (id) => document.getElementById(id);
+
+      const GITHUB_ICON_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.02 10.02 0 0 0 22 12.017C22 6.484 17.522 2 12 2z"/></svg>';
 
       function getTypeKey(type) {
         if (type === 'Лекция') return 'lecture';
@@ -2715,6 +3113,61 @@
         return parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
       }
 
+      function parseDateStrToMidnight(dateStr) {
+        if (!dateStr) return null;
+        const parts = String(dateStr).split('.');
+        if (parts.length < 3) return null;
+        const dd = parseInt(parts[0], 10);
+        const mm = parseInt(parts[1], 10);
+        const yyyy = parseInt(parts[2], 10);
+        if (Number.isNaN(dd) || Number.isNaN(mm) || Number.isNaN(yyyy)) return null;
+        return new Date(yyyy, mm - 1, dd, 0, 0, 0, 0);
+      }
+
+      function isDatePast(dateStr) {
+        const d = parseDateStrToMidnight(dateStr);
+        if (!d) return false;
+        const now = new Date();
+        const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        return d.getTime() < todayMid.getTime();
+      }
+
+      function isLessonPast(dateStr, start, end) {
+        const d = parseDateStrToMidnight(dateStr);
+        if (!d) return false;
+        const now = new Date();
+        const todayMid = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+        if (d.getTime() < todayMid.getTime()) return true;
+        if (d.getTime() > todayMid.getTime()) return false;
+        const nowMins = now.getHours() * 60 + now.getMinutes();
+        const sM = parseHmToMins(start);
+        const eM = parseHmToMins(end) > 0 ? parseHmToMins(end) : (sM >= 0 ? sM + 95 : -1);
+        return eM > 0 && nowMins > eM;
+      }
+
+      function getRealInitials(name) {
+        const raw = String(name || '').trim();
+        if (!raw) return '';
+        const lower = raw.toLowerCase();
+        if (lower.includes('студент') || lower.includes('спбгут') || lower === 'пользователь' || lower === 'лк') {
+          return '';
+        }
+        const words = raw.split(/\s+/).filter(Boolean);
+        if (!words.length) return '';
+        return words.slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+      }
+
+      function getProfileAvatarHtml(acc) {
+        if (!acc || !acc.loggedIn) {
+          return `<div class="avatar is-guest" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
+        }
+        const realInit = getRealInitials(acc.name);
+        if (realInit) {
+          return `<div class="avatar is-profile">${escapeHtml(realInit)}</div>`;
+        }
+        return `<div class="avatar is-profile" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
+      }
+
       function formatTodayHeader() {
         const now = new Date();
         const wd = WEEKDAYS_SHORT[now.getDay()];
@@ -2725,7 +3178,51 @@
         if (el) el.textContent = `${wd}, ${d} ${mon}${wk}`;
       }
 
-      /* ===== ANDROID BRIDGE ADAPTERS ===== */
+      function renderCreditsRowsHtml() {
+        return DEVELOPERS.map((dev) => `
+          <a class="dev-credit-row" href="${escapeHtml(dev.githubUrl)}" target="_blank" rel="noopener noreferrer">
+            <div class="dev-credit-left">
+              <div class="dev-avatar">${escapeHtml(dev.initials)}</div>
+              <div style="min-width:0;">
+                <div class="row-title" style="font-weight:600;">${escapeHtml(dev.name)}</div>
+                <div class="row-sub">${escapeHtml(dev.role)}</div>
+              </div>
+            </div>
+            <span class="gh-pill">
+              ${GITHUB_ICON_SVG}
+              <span>${escapeHtml(dev.githubHandle)}</span>
+            </span>
+          </a>
+        `).join('');
+      }
+
+      function copyTextSafe(text) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(() => {
+            showToast('Скопировано в буфер', 'success');
+          }).catch(() => fallbackCopy(text));
+        } else {
+          fallbackCopy(text);
+        }
+      }
+
+      function fallbackCopy(text) {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = text;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          showToast('Скопировано в буфер', 'success');
+        } catch (e) {
+          showToast('Не удалось скопировать', 'error');
+        }
+      }
+
+      /* ===== ANDROID BRIDGE ADAPTERS (100% BACKEND-DRIVEN) ===== */
       function applySmartRulesFromBridge(rawRules) {
         const obj = safeParse(rawRules, {});
         const map = {};
@@ -2755,7 +3252,10 @@
 
       function applyCatalogFromBridge(rawCatalog) {
         const arr = safeParse(rawCatalog, []);
-        if (!Array.isArray(arr) || !arr.length) return;
+        if (!Array.isArray(arr)) {
+          SUBJECT_CATALOG = [];
+          return;
+        }
         SUBJECT_CATALOG = arr.map((item) => {
           const types = [];
           if (item.lecCount > 0) types.push('Лекция');
@@ -2771,6 +3271,8 @@
         if (!Array.isArray(arr) || !arr.length) {
           state.semesterWeeks = {};
           state.todayClasses = [];
+          currentWeekNum = 0;
+          formatTodayHeader();
           return;
         }
 
@@ -2779,6 +3281,7 @@
         const todayStr = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
         const weeks = {};
         let todayLessons = [];
+        let foundTodayWeek = 0;
 
         arr.forEach((d, dayIdx) => {
           const wNum = d.weekNum && d.weekNum > 0 ? d.weekNum : 1;
@@ -2790,8 +3293,8 @@
           const monthIdx = dParts.length >= 2 ? parseInt(dParts[1], 10) - 1 : now.getMonth();
           const monthName = MONTHS_NOM[monthIdx] || '';
           const dowIdx = typeof d.dowIdx === 'number' && d.dowIdx >= 0 && d.dowIdx < 6 ? d.dowIdx : (dayIdx % 6);
-          const isToday = !!d.isOrange || dateStr === todayStr;
-          if (isToday) currentWeekNum = wNum;
+          const isToday = dateStr === todayStr;
+          if (isToday) foundTodayWeek = wNum;
 
           const lessons = (Array.isArray(d.lessons) ? d.lessons : []).map((l, lIdx) => {
             const start = l.startTime || '09:00';
@@ -2850,9 +3353,11 @@
           }
         });
 
+        currentWeekNum = foundTodayWeek;
         state.semesterWeeks = weeks;
         state.todayClasses = todayLessons;
-        if (state.activeGlobalDayIdx === 0) {
+        if (lastTodayStamp !== todayStr) {
+          lastTodayStamp = todayStr;
           state.activeGlobalDayIdx = getTodayGlobalIdx();
         }
         formatTodayHeader();
@@ -2879,7 +3384,7 @@
           let needSchedule = force;
           let needMessages = force;
           let needDiary = force;
-          let needSettings = force || prevActive !== state.autoCheckEnabled;
+          let needSettings = force || prevActive !== state.autoCheckEnabled || prevScan !== state.scanningSemester;
 
           if (force) {
             const cfg = safeParse(bridge.getSavedConfig(), {});
@@ -2892,13 +3397,23 @@
           if (force || st.profileMtime !== lastMtimes.profile) {
             lastMtimes.profile = st.profileMtime || 0;
             const prof = safeParse(bridge.getProfile(), {});
+            const resolvedName = prof.fio || prof.fullName || prof.name || '';
             state.account = {
               loggedIn: !!prof.loggedIn,
-              name: prof.name || (prof.loggedIn ? 'Студент СПбГУТ' : ''),
+              name: resolvedName || (prof.loggedIn ? 'Аккаунт ЛК СПбГУТ' : ''),
               group: prof.group || '',
               email: prof.email || ''
             };
+            needToday = true;
             needSettings = true;
+          }
+
+          if (loginAttempt.pending) {
+            if (st.authState === 'ok' || state.account.loggedIn) {
+              handleLoginResult(true);
+            } else if (st.authState === 'error') {
+              handleLoginResult(false, st.authError || 'Неверный логин или пароль от lk.sut.ru');
+            }
           }
 
           if (force || st.catMtime !== lastMtimes.cat) {
@@ -2990,12 +3505,28 @@
         return { enabled, total };
       }
 
-      function showToast(text) {
+      function showToast(text, kind) {
         const el = $('toast');
+        el.classList.remove('is-error', 'is-success');
+        if (kind === 'error') el.classList.add('is-error');
+        else if (kind === 'success') el.classList.add('is-success');
         $('toastText').textContent = text;
         el.classList.add('show');
         clearTimeout(toastTimer);
-        toastTimer = setTimeout(() => el.classList.remove('show'), 2300);
+        toastTimer = setTimeout(() => el.classList.remove('show'), 2400);
+      }
+
+      function requireBackendConnected() {
+        if (!HAS_BRIDGE) {
+          showToast('Нет подключения к Android-службе', 'error');
+          return false;
+        }
+        if (!state.account.loggedIn) {
+          showToast('Сначала войдите в аккаунт вуза');
+          openAccountSheet();
+          return false;
+        }
+        return true;
       }
 
       function applyTheme() {
@@ -3050,38 +3581,60 @@
       }
 
       function toggleMasterAutoCheck() {
-        if (HAS_BRIDGE && !state.account.loggedIn) {
-          showToast('Сначала войдите в аккаунт вуза');
-          openAccountSheet();
-          return;
-        }
+        if (!requireBackendConnected()) return;
         state.autoCheckEnabled = !state.autoCheckEnabled;
-        saveState();
-        if (HAS_BRIDGE) {
-          try { window.AndroidBridge.setAutoCheckEnabled(state.autoCheckEnabled); } catch (e) {}
-        }
+        try { window.AndroidBridge.setAutoCheckEnabled(state.autoCheckEnabled); } catch (e) {}
         renderToday();
         renderSchedule();
         renderSettings();
-        showToast(state.autoCheckEnabled ? 'Автоотметка включена' : 'Автоотметка выключена');
+        showToast(state.autoCheckEnabled ? 'Автоотметка включена' : 'Автоотметка выключена', state.autoCheckEnabled ? 'success' : '');
       }
 
       /* ===== RENDER TAB 1: TODAY ===== */
       function renderToday() {
         formatTodayHeader();
         const container = $('todayContent');
+
+        if (!HAS_BRIDGE) {
+          container.innerHTML = `
+            <div class="empty-day anim-in" style="margin-top:26px;">
+              <div class="empty-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M12 18h.01"/></svg>
+              </div>
+              <strong>Ожидание подключения</strong>
+              <span>Откройте Pulse внутри Android-приложения — все пары, сообщения и дневник загружаются напрямую из бэкенда.</span>
+            </div>
+          `;
+          return;
+        }
+
+        if (!state.account.loggedIn) {
+          container.innerHTML = `
+            <div class="empty-day anim-in" style="margin-top:26px;">
+              <div class="empty-icon" style="background:var(--accent-soft);border-color:var(--accent-ring);color:var(--accent);">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+              </div>
+              <strong>Войдите в ЛК СПбГУТ</strong>
+              <span style="margin-bottom:10px;">Подключите аккаунт, чтобы включить автоотметку и загрузить расписание, дневник и сообщения.</span>
+              <button class="pill-btn primary" id="todayLoginBtn">Войти в аккаунт</button>
+            </div>
+          `;
+          $('todayLoginBtn').addEventListener('click', openAccountSheet);
+          return;
+        }
+
         const autoCount = state.todayClasses.filter((c) => c.status !== 'checked' && isClassAutoActive(c)).length;
         const checkedCount = state.todayClasses.filter((c) => c.status === 'checked').length;
 
         let autoDesc = state.autoCheckEnabled
-          ? (HAS_BRIDGE && state.daemonStatus ? state.daemonStatus : (autoCount > 0 ? `Активна · ещё ${autoCount}` : 'Все активные пары отмечены'))
+          ? (state.daemonStatus || (autoCount > 0 ? `Активна · ещё ${autoCount}` : 'Все активные пары отмечены'))
           : 'Приостановлена';
         if (state.scanningSemester && state.scanStatus) {
           autoDesc = state.scanStatus;
         }
 
         let html = `
-          <div class="auto-card tap ${state.autoCheckEnabled ? 'is-on' : ''}" id="masterAutoCard">
+          <div class="auto-card tap anim-in ${state.autoCheckEnabled ? 'is-on' : ''}" id="masterAutoCard">
             <div class="auto-left">
               <div class="pulse-wrap"><div class="pulse-dot"></div></div>
               <div style="min-width:0;">
@@ -3093,24 +3646,6 @@
               ${state.autoCheckEnabled ? 'Включена' : 'Включить'}
             </button>
           </div>
-        `;
-
-        if (HAS_BRIDGE && !state.account.loggedIn) {
-          html += `
-            <div class="empty-day" style="margin-top:24px;">
-              <strong>Войдите в ЛК СПбГУТ</strong>
-              <span style="margin-bottom:14px;">Чтобы загрузить расписание, дневник и сообщения</span>
-              <button class="pill-btn" id="todayLoginBtn" style="background:var(--ink);color:var(--ink-text);border:none;height:38px;padding:0 18px;">Войти в аккаунт</button>
-            </div>
-          `;
-          container.innerHTML = html;
-          $('masterAutoSwitch').addEventListener('click', (e) => { e.stopPropagation(); toggleMasterAutoCheck(); });
-          $('masterAutoCard').addEventListener('click', toggleMasterAutoCheck);
-          $('todayLoginBtn').addEventListener('click', openAccountSheet);
-          return;
-        }
-
-        html += `
           <div class="section-label">
             <span>Пары сегодня</span>
             <span class="tabular">${checkedCount} из ${state.todayClasses.length}</span>
@@ -3119,9 +3654,12 @@
 
         if (!state.todayClasses.length) {
           html += `
-            <div class="empty-day" style="margin-top:20px;">
+            <div class="empty-day anim-in" style="--d:60ms;margin-top:16px;">
+              <div class="empty-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+              </div>
               <strong>На сегодня пар нет</strong>
-              <span>Можно отдохнуть или обновить расписание</span>
+              <span>Можно отдохнуть или нажать синхронизацию, чтобы проверить изменения.</span>
             </div>
           `;
         } else {
@@ -3150,17 +3688,17 @@
             if (isChecking) {
               btnHtml = `<button class="check-btn primary" disabled><span class="spinner"></span>Отметка</button>`;
             } else if (isChecked) {
-              btnHtml = `<button class="check-btn checked" data-action="toggle-check" data-id="${cls.id}">
+              btnHtml = `<button class="check-btn checked" data-action="toggle-check" data-id="${escapeHtml(cls.id)}">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                 Отмечен
               </button>`;
             } else {
-              btnHtml = `<button class="check-btn primary" data-action="check-in" data-id="${cls.id}">Отметиться</button>`;
+              btnHtml = `<button class="check-btn primary" data-action="check-in" data-id="${escapeHtml(cls.id)}">Отметиться</button>`;
             }
 
             const pastCls = cls.isPast ? 'is-past' : (isChecked ? 'is-done' : '');
             html += `
-              <article class="class-card tap bar-${tKey} ${isLive ? 'is-live' : ''} ${pastCls}" data-open-class="${cls.id}">
+              <article class="class-card tap anim-in bar-${tKey} ${isLive ? 'is-live' : ''} ${pastCls}" style="--d:${Math.min(idx * 45, 240)}ms" data-open-class="${escapeHtml(cls.id)}">
                 <div class="class-top">
                   <span class="class-time tabular">${escapeHtml(cls.start)}${cls.end ? ' – ' + escapeHtml(cls.end) : ''}</span>
                   ${statusBadge}
@@ -3205,31 +3743,25 @@
       }
 
       function performCheckIn(id) {
+        if (!requireBackendConnected()) return;
         const cls = state.todayClasses.find((c) => c.id === id);
         if (!cls || cls.status === 'checked' || checkingIds.has(id)) return;
         checkingIds.add(id);
         renderToday();
 
-        if (HAS_BRIDGE) {
-          try {
-            window.AndroidBridge.manualCheckIn(cls.raspId || '', cls.weekId || '', cls.start || '', cls.subject || '');
-            showToast(`Отправка отметки: ${cls.subject}`);
-          } catch (e) {}
-          setTimeout(() => {
-            checkingIds.delete(id);
-            syncFromAndroid(true);
-          }, 2600);
+        try {
+          window.AndroidBridge.manualCheckIn(cls.raspId || '', cls.weekId || '', cls.start || '', cls.subject || '');
+          showToast(`Отправка отметки: ${cls.subject}`);
+        } catch (e) {
+          checkingIds.delete(id);
+          renderToday();
+          showToast('Ошибка отправки отметки', 'error');
           return;
         }
-
         setTimeout(() => {
           checkingIds.delete(id);
-          const now = new Date();
-          cls.status = 'checked';
-          cls.checkedAt = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-          renderToday();
-          showToast(`Отмечено: ${cls.subject}`);
-        }, 480);
+          syncFromAndroid(true);
+        }, 2600);
       }
 
       function openClassSheet(id) {
@@ -3295,6 +3827,8 @@
         if (!activeDay) {
           $('weekLabel').textContent = '—';
           $('dayRail').innerHTML = '';
+          const jumpBtn = $('jumpTodayBtn');
+          if (jumpBtn) jumpBtn.style.display = 'none';
           return;
         }
 
@@ -3343,22 +3877,23 @@
         if (!flatDays.length) {
           renderScheduleHeaderControls([]);
           feed.innerHTML = `
-            <div class="day-slide">
-              <div class="empty-day">
+            <div class="day-slide full-width">
+              <div class="empty-day anim-in">
+                <div class="empty-icon">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="4"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+                </div>
                 <strong>Расписание не загружено</strong>
-                <span style="margin-bottom:14px;">${state.scanningSemester ? escapeHtml(state.scanStatus) : 'Загрузите расписание семестра из ЛК СПбГУТ'}</span>
-                <button class="pill-btn" id="scanSemesterEmptyBtn" style="background:var(--ink);color:var(--ink-text);border:none;height:38px;padding:0 18px;">Загрузить семестр</button>
+                <span style="margin-bottom:10px;">${state.scanningSemester ? escapeHtml(state.scanStatus) : (HAS_BRIDGE ? 'Загрузите расписание семестра из ЛК СПбГУТ' : 'Подключите Android-приложение для загрузки расписания')}</span>
+                ${HAS_BRIDGE ? '<button class="pill-btn primary" id="scanSemesterEmptyBtn">Загрузить семестр</button>' : ''}
               </div>
             </div>
           `;
           const btn = $('scanSemesterEmptyBtn');
           if (btn) {
             btn.addEventListener('click', () => {
-              if (HAS_BRIDGE) {
-                if (!state.account.loggedIn) { openAccountSheet(); return; }
-                window.AndroidBridge.scanSemesterNow('', '', '', '');
-                showToast('Сканирование 18 недель семестра...');
-              }
+              if (!requireBackendConnected()) return;
+              window.AndroidBridge.scanSemesterNow('', '', '', '');
+              showToast('Сканирование 18 недель семестра...');
             });
           }
           return;
@@ -3379,8 +3914,9 @@
             ? filtered.map((l) => {
                 const autoActive = isClassAutoActive(l);
                 const tKey = getTypeKey(l.type);
+                const lessonPast = isLessonPast(day.dateStr, l.start, l.end);
                 return `
-                  <div class="mini-lesson tap" data-sched-lesson="${encodeURIComponent(JSON.stringify(l))}">
+                  <div class="mini-lesson tap ${lessonPast ? 'is-past' : ''}" data-sched-lesson="${encodeURIComponent(JSON.stringify(l))}">
                     <div class="mini-time tabular">
                       <strong>${escapeHtml(l.start)}</strong>
                       <span>${escapeHtml(l.end)}</span>
@@ -3507,22 +4043,126 @@
         renderScheduleHeaderControls(flatDays);
       }
 
-      let feedScrollTimer = null;
+      let feedRafId = 0;
+      let feedTrackEndTimer = null;
       $('dayFeed').addEventListener('scroll', () => {
-        clearTimeout(feedScrollTimer);
-        feedScrollTimer = setTimeout(() => {
+        if (feedRafId) return;
+        feedRafId = requestAnimationFrame(() => {
+          feedRafId = 0;
           const feed = $('dayFeed');
           const flatDays = getAllDaysFlat();
           if (!flatDays.length) return;
           const h = feed.clientHeight || 1;
-          const idx = Math.round(feed.scrollTop / h);
-          const clamped = Math.max(0, Math.min(idx, flatDays.length - 1));
-          if (clamped !== state.activeGlobalDayIdx) {
-            state.activeGlobalDayIdx = clamped;
+          const exactIdx = feed.scrollTop / h;
+          const idx = Math.max(0, Math.min(Math.round(exactIdx), flatDays.length - 1));
+          if (idx !== state.activeGlobalDayIdx) {
+            state.activeGlobalDayIdx = idx;
             renderScheduleHeaderControls(flatDays);
           }
-        }, 55);
-      });
+          const activeDay = flatDays[state.activeGlobalDayIdx];
+          const pill = $('railPill');
+          if (activeDay && pill) {
+            const weekStartIdx = flatDays.findIndex((d) => d.week === activeDay.week && d.dayInWeek === 0);
+            const weekDaysCount = (state.semesterWeeks[activeDay.week] || []).length;
+            const relPos = Math.max(0, Math.min(exactIdx - weekStartIdx, Math.max(0, weekDaysCount - 1)));
+            pill.classList.add('tracking');
+            pill.style.transform = `translate3d(0, ${relPos * 32}px, 0)`;
+            clearTimeout(feedTrackEndTimer);
+            feedTrackEndTimer = setTimeout(() => {
+              const pEl = $('railPill');
+              if (pEl) {
+                pEl.classList.remove('tracking');
+                const cur = flatDays[state.activeGlobalDayIdx];
+                if (cur) pEl.style.transform = `translate3d(0, ${cur.dayInWeek * 32}px, 0)`;
+              }
+            }, 90);
+          }
+        });
+      }, { passive: true });
+
+      function openScheduleCalendarSheet() {
+        const flatDays = getAllDaysFlat();
+        if (!flatDays.length) {
+          showToast('Расписание ещё не загружено');
+          return;
+        }
+        const weekNums = Object.keys(state.semesterWeeks).map(Number).sort((a, b) => a - b);
+        const activeDay = flatDays[state.activeGlobalDayIdx] || flatDays[0];
+        const todayIdx = getTodayGlobalIdx();
+        const hasToday = flatDays[todayIdx] && flatDays[todayIdx].isToday;
+
+        const rowsHtml = weekNums.map((w) => {
+          const days = state.semesterWeeks[w] || [];
+          const weekStartIdx = flatDays.findIndex((d) => d.week === w && d.dayInWeek === 0);
+          const isCurWeek = activeDay && activeDay.week === w;
+          const cells = [];
+          for (let i = 0; i < 6; i++) {
+            const d = days[i];
+            if (!d) {
+              cells.push('<div></div>');
+              continue;
+            }
+            const gIdx = weekStartIdx + i;
+            const isAct = gIdx === state.activeGlobalDayIdx;
+            const isPast = !d.isToday && isDatePast(d.dateStr);
+            const typeSet = new Set((d.lessons || []).map((l) => getTypeKey(l.type)));
+            const dots = ['lecture', 'practice', 'lab']
+              .filter((t) => typeSet.has(t))
+              .map((t) => `<span class="cal-dot dot-${t}"></span>`)
+              .join('');
+
+            cells.push(`
+              <button class="cal-cell tabular ${isAct ? 'is-active' : ''} ${d.isToday ? 'is-today' : ''} ${isPast ? 'is-past' : ''}" data-cal-idx="${gIdx}" aria-label="${escapeHtml(d.weekday)}, ${escapeHtml(d.num)} ${escapeHtml(d.month)}">
+                <span>${escapeHtml(d.num)}</span>
+                <span class="cal-dots">${dots}</span>
+              </button>
+            `);
+          }
+          return `
+            <div class="cal-week-row ${isCurWeek ? 'is-current-week' : ''}" data-cal-week="${w}">
+              <span class="cal-week-tag tabular">${w}н</span>
+              ${cells.join('')}
+            </div>
+          `;
+        }).join('');
+
+        openSheet(`
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+            <div class="sheet-title" style="margin-bottom:0;">Календарь</div>
+            <span class="badge accent tabular">${activeDay ? activeDay.week + ' нед. · ' + escapeHtml(activeDay.month) : ''}</span>
+          </div>
+          <div class="sheet-sub">Выберите день для быстрого перехода</div>
+          <div class="cal-header-row">
+            <span>Нед</span><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span>
+          </div>
+          <div class="cal-weeks" id="calWeeksScroll">${rowsHtml}</div>
+          ${hasToday ? '<button class="full-btn secondary" id="calJumpTodayBtn" style="margin-top:8px;">Перейти к сегодня</button>' : ''}
+        `);
+
+        const activeRow = $('calWeeksScroll').querySelector('.is-current-week');
+        if (activeRow) {
+          requestAnimationFrame(() => activeRow.scrollIntoView({ block: 'center' }));
+        }
+
+        $('sheetContent').querySelectorAll('[data-cal-idx]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const target = Number(btn.dataset.calIdx);
+            closeSheet();
+            scrollToGlobalDay(target, true);
+          });
+        });
+
+        const jumpToday = $('calJumpTodayBtn');
+        if (jumpToday) {
+          jumpToday.addEventListener('click', () => {
+            closeSheet();
+            scrollToGlobalDay(todayIdx, true);
+          });
+        }
+      }
+
+      $('scheduleCalendarBtn').addEventListener('click', openScheduleCalendarSheet);
+      $('weekLabel').addEventListener('click', openScheduleCalendarSheet);
 
       $('prevWeekBtn').addEventListener('click', () => {
         const flatDays = getAllDaysFlat();
@@ -3588,7 +4228,7 @@
         if (rescanBtn) {
           rescanBtn.addEventListener('click', () => {
             closeSheet();
-            if (!state.account.loggedIn) { openAccountSheet(); return; }
+            if (!requireBackendConnected()) return;
             window.AndroidBridge.scanSemesterNow('', '', '', '');
             showToast('Загрузка 18 недель семестра...');
           });
@@ -3598,10 +4238,17 @@
       $('scheduleFilterBtn').addEventListener('click', openScheduleFilterSheet);
 
       /* ===== RENDER TAB 3: MESSAGES & GROUP FILES ===== */
+      function updateSegmentPill(indicatorId, index) {
+        const el = $(indicatorId);
+        if (el) el.style.transform = `translate3d(${index * 100}%, 0, 0)`;
+      }
+
       function renderMessages() {
         updateBadges();
-        $('segPersonalBtn').classList.toggle('active', state.msgSubTab === 'personal');
-        $('segFilesBtn').classList.toggle('active', state.msgSubTab === 'files');
+        const isPersonal = state.msgSubTab === 'personal';
+        $('segPersonalBtn').classList.toggle('active', isPersonal);
+        $('segFilesBtn').classList.toggle('active', !isPersonal);
+        updateSegmentPill('msgSegIndicator', isPersonal ? 0 : 1);
 
         const container = $('messagesContent');
         let searchEl = $('msgSearchInput');
@@ -3620,7 +4267,7 @@
           });
         }
 
-        searchEl.placeholder = state.msgSubTab === 'personal' ? 'Поиск сообщений...' : 'Поиск файлов группы...';
+        searchEl.placeholder = isPersonal ? 'Поиск сообщений...' : 'Поиск файлов группы...';
         if (searchEl.value !== state.msgQuery) searchEl.value = state.msgQuery;
         renderMessagesList();
       }
@@ -3637,13 +4284,19 @@
           );
 
           if (!list.length) {
-            html = `<div class="empty-day"><strong>Сообщений пока нет</strong><span>Нажмите обновить в правом верхнем углу</span></div>`;
+            html = `<div class="empty-day anim-in">
+              <div class="empty-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </div>
+              <strong>Сообщений пока нет</strong>
+              <span>${q ? 'По запросу ничего не найдено' : (HAS_BRIDGE ? 'Нажмите обновить в правом верхнем углу' : 'Сообщения загрузятся из бэкенда ЛК')}</span>
+            </div>`;
           } else {
-            list.forEach((m) => {
+            list.forEach((m, idx) => {
               const thread = Array.isArray(m.thread) ? m.thread : [];
               const last = thread[thread.length - 1];
               html += `
-                <div class="msg-item tap" data-open-msg="${escapeHtml(m.id)}">
+                <div class="msg-item tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-msg="${escapeHtml(m.id)}">
                   <div class="avatar">${escapeHtml(m.initials || 'ЛК')}</div>
                   <div class="msg-body">
                     <div class="msg-row">
@@ -3663,17 +4316,23 @@
           );
 
           if (!files.length) {
-            html = `<div class="empty-day"><strong>Файлов группы пока нет</strong><span>Нажмите обновить для синхронизации с ЛК</span></div>`;
+            html = `<div class="empty-day anim-in">
+              <div class="empty-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <strong>Файлов группы пока нет</strong>
+              <span>${q ? 'По запросу ничего не найдено' : (HAS_BRIDGE ? 'Нажмите обновить для синхронизации с ЛК' : 'Файлы группы загрузятся из бэкенда ЛК')}</span>
+            </div>`;
           } else {
-            files.forEach((f) => {
+            files.forEach((f, idx) => {
               html += `
-                <div class="file-item tap" data-open-file="${escapeHtml(f.id)}">
+                <div class="file-item tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-file="${escapeHtml(f.id)}">
                   <div class="file-ext">${escapeHtml(f.ext || 'FILE')}</div>
                   <div class="msg-body">
                     <div class="msg-row">
                       <span class="msg-name">${escapeHtml(f.name)}</span>
                     </div>
-                    <div class="msg-preview">${escapeHtml(f.subject || '')} · ${escapeHtml(f.size || '')} · ${escapeHtml(f.date || '')}</div>
+                    <div class="msg-preview">${escapeHtml(f.subject || '')}${f.comment ? ' · ' + escapeHtml(f.comment) : ''} · ${escapeHtml(f.date || '')}</div>
                   </div>
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-secondary);flex-shrink:0"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 </div>
@@ -3704,9 +4363,17 @@
           renderMessages();
         }
 
-        const bubbles = (msg.thread || []).map((b) =>
-          `<div class="bubble ${b.from === 'me' ? 'me' : ''}">${escapeHtml(b.text)}<span class="bubble-time tabular">${escapeHtml(b.time || '')}</span></div>`
-        ).join('');
+        const bubbles = (msg.thread || []).map((b) => {
+          const atts = Array.isArray(b.attachments) ? b.attachments : [];
+          const attHtml = atts.length
+            ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${atts.map((a) =>
+                `<button type="button" class="pill-btn" data-dl-url="${escapeHtml(a.url || '')}" data-dl-name="${escapeHtml(a.name || 'file')}" style="height:28px;font-size:11.5px;padding:0 10px;">📎 ${escapeHtml(a.name || 'Файл')}</button>`
+              ).join('')}</div>`
+            : '';
+          return `<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${escapeHtml(b.text)}${attHtml}<span class="bubble-time tabular">${escapeHtml(b.time || '')}</span></div>`;
+        }).join('');
+
+        let pendingFile = null;
 
         openSheet(`
           <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
@@ -3717,7 +4384,15 @@
             <button class="pill-btn" id="muteSenderBtn">${msg.muted ? 'Уведомления выкл' : 'Уведомления вкл'}</button>
           </div>
           <div class="chat-list" id="chatList">${bubbles}</div>
+          <div id="pendingFileRow" style="display:none;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;margin-bottom:8px;border-radius:12px;background:var(--surface);border:1px solid var(--border);font-size:12px;">
+            <span id="pendingFileName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+            <button type="button" id="clearPendingFileBtn" style="border:none;background:transparent;color:var(--danger);font-size:14px;cursor:pointer;">✕</button>
+          </div>
           <form class="chat-compose" id="chatForm">
+            <input type="file" id="chatFileInput" style="display:none;" />
+            <button type="button" class="icon-btn" id="attachFileBtn" aria-label="Прикрепить файл" title="Прикрепить файл (до 5 МБ)" style="width:42px;height:42px;flex-shrink:0;">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            </button>
             <input type="text" id="chatInput" placeholder="Ответить..." autocomplete="off" />
             <button type="submit" class="send-btn" aria-label="Отправить">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
@@ -3728,31 +4403,81 @@
         const listEl = $('chatList');
         listEl.scrollTop = listEl.scrollHeight;
 
-        $('muteSenderBtn').addEventListener('click', () => {
-          if (HAS_BRIDGE) {
-            try { msg.muted = !!window.AndroidBridge.toggleSenderMute(msg.id); } catch (e) {}
-          } else {
-            msg.muted = !msg.muted;
+        listEl.querySelectorAll('[data-dl-url]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            if (!HAS_BRIDGE) {
+              showToast('Скачивание доступно только в приложении', 'error');
+              return;
+            }
+            const ok = window.AndroidBridge.downloadGroupFile(btn.dataset.dlUrl, btn.dataset.dlName);
+            showToast(ok ? `Загрузка: ${btn.dataset.dlName}` : 'Не удалось скачать файл', ok ? 'success' : 'error');
+          });
+        });
+
+        $('attachFileBtn').addEventListener('click', () => {
+          $('chatFileInput').click();
+        });
+
+        $('chatFileInput').addEventListener('change', (e) => {
+          const file = e.target.files && e.target.files[0];
+          if (!file) return;
+          if (file.size > 5 * 1024 * 1024) {
+            showToast('Файл больше 5 МБ', 'error');
+            e.target.value = '';
+            return;
           }
+          const reader = new FileReader();
+          reader.onload = () => {
+            const res = String(reader.result || '');
+            const commaIdx = res.indexOf(',');
+            const b64 = commaIdx >= 0 ? res.slice(commaIdx + 1) : res;
+            pendingFile = { name: file.name, base64: b64 };
+            $('pendingFileName').textContent = `📎 ${file.name} (${(file.size / 1024).toFixed(0)} КБ)`;
+            $('pendingFileRow').style.display = 'flex';
+          };
+          reader.readAsDataURL(file);
+        });
+
+        $('clearPendingFileBtn').addEventListener('click', () => {
+          pendingFile = null;
+          $('chatFileInput').value = '';
+          $('pendingFileRow').style.display = 'none';
+        });
+
+        $('muteSenderBtn').addEventListener('click', () => {
+          if (!HAS_BRIDGE) {
+            showToast('Нет подключения к Android-службе', 'error');
+            return;
+          }
+          try { msg.muted = !!window.AndroidBridge.toggleSenderMute(msg.id); } catch (e) {}
           openMessageSheet(id);
           showToast(msg.muted ? 'Уведомления отключены' : 'Уведомления включены');
         });
 
         $('chatForm').addEventListener('submit', (e) => {
           e.preventDefault();
+          if (!requireBackendConnected()) return;
           const val = $('chatInput').value.trim();
-          if (!val) return;
+          if (!val && !pendingFile) return;
           const now = new Date();
           const t = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
           if (!Array.isArray(msg.thread)) msg.thread = [];
-          msg.thread.push({ from: 'me', text: val, time: t });
+          const displayText = pendingFile
+            ? (val ? `${val}
+📎 ${pendingFile.name}` : `📎 ${pendingFile.name}`)
+            : val;
+          msg.thread.push({ from: 'me', text: displayText, time: t });
           msg.time = t;
-          if (HAS_BRIDGE) {
-            try { window.AndroidBridge.sendMessage(msg.id, val); } catch (err) {}
-          }
+          try {
+            if (pendingFile && window.AndroidBridge.sendMessageWithFile) {
+              window.AndroidBridge.sendMessageWithFile(msg.id, val, pendingFile.name, pendingFile.base64);
+            } else {
+              window.AndroidBridge.sendMessage(msg.id, val);
+            }
+          } catch (err) {}
           renderMessages();
           openMessageSheet(id);
-          showToast('Сообщение отправлено');
+          showToast('Сообщение отправлено', 'success');
         });
       }
 
@@ -3770,29 +4495,31 @@
             <div class="settings-row">
               <div><div class="row-title">Дата</div><div class="row-sub">${escapeHtml(f.date || '—')}</div></div>
             </div>
+            ${f.comment ? `<div class="settings-row"><div><div class="row-title">Комментарий преподавателя</div><div class="row-sub" style="white-space:pre-wrap;">${escapeHtml(f.comment)}</div></div></div>` : ''}
           </div>
           <button class="full-btn" id="downloadFileBtn">Скачать файл</button>
         `);
 
         $('downloadFileBtn').addEventListener('click', () => {
-          if (HAS_BRIDGE && f.url) {
-            const ok = window.AndroidBridge.downloadGroupFile(f.url, f.name);
-            closeSheet();
-            showToast(ok ? `Загрузка начата: ${f.name}` : 'Не удалось скачать файл');
-          } else {
-            closeSheet();
-            showToast(`Загружено: ${f.name}`);
+          if (!HAS_BRIDGE || !f.url) {
+            showToast('Ссылка на файл недоступна', 'error');
+            return;
           }
+          const ok = window.AndroidBridge.downloadGroupFile(f.url, f.name);
+          closeSheet();
+          showToast(ok ? `Загрузка начата: ${f.name}` : 'Не удалось скачать файл', ok ? 'success' : 'error');
         });
       }
 
       $('segPersonalBtn').addEventListener('click', () => {
         state.msgSubTab = 'personal';
+        saveState();
         renderMessages();
       });
 
       $('segFilesBtn').addEventListener('click', () => {
         state.msgSubTab = 'files';
+        saveState();
         renderMessages();
       });
 
@@ -3803,20 +4530,21 @@
 
         if (!list.length) {
           container.innerHTML = `
-            <div class="empty-day" style="margin-top:32px;">
+            <div class="empty-day anim-in" style="margin-top:28px;">
+              <div class="empty-icon">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="m9 9.5 2 2 4-4"/></svg>
+              </div>
               <strong>Дневник пока пуст</strong>
-              <span style="margin-bottom:14px;">Синхронизируйте данные с ЛК СПбГУТ</span>
-              <button class="pill-btn" id="diarySyncBtn" style="background:var(--ink);color:var(--ink-text);border:none;height:38px;padding:0 18px;">Обновить дневник</button>
+              <span style="margin-bottom:10px;">${HAS_BRIDGE ? 'Синхронизируйте данные с ЛК СПбГУТ' : 'Посещаемость и оценки загрузятся из бэкенда ЛК'}</span>
+              ${HAS_BRIDGE ? '<button class="pill-btn primary" id="diarySyncBtn">Обновить дневник</button>' : ''}
             </div>
           `;
           const btn = $('diarySyncBtn');
           if (btn) {
             btn.addEventListener('click', () => {
-              if (HAS_BRIDGE) {
-                if (!state.account.loggedIn) { openAccountSheet(); return; }
-                window.AndroidBridge.checkDiaryNow('', '', '', '');
-                showToast('Обновление дневника...');
-              }
+              if (!requireBackendConnected()) return;
+              window.AndroidBridge.checkDiaryNow('', '', '', '');
+              showToast('Обновление дневника...');
             });
           }
           return;
@@ -3834,9 +4562,10 @@
         const r = 36;
         const circ = 2 * Math.PI * r;
         const offset = circ - (pct / 100) * circ;
+        const isAtt = state.diarySubTab === 'attendance';
 
         let html = `
-          <div class="kpi-card">
+          <div class="kpi-card anim-in">
             <div class="ring-wrap">
               <svg class="ring-svg" viewBox="0 0 86 86">
                 <circle class="ring-track" cx="43" cy="43" r="${r}" />
@@ -3859,17 +4588,18 @@
           </div>
 
           <div class="segment" style="margin-bottom:14px;">
-            <button class="seg-btn ${state.diarySubTab === 'attendance' ? 'active' : ''}" data-diary-tab="attendance">Посещаемость</button>
-            <button class="seg-btn ${state.diarySubTab === 'grades' ? 'active' : ''}" data-diary-tab="grades">Оценки</button>
+            <div class="seg-indicator" id="diarySegIndicator" style="transform:translate3d(${isAtt ? 0 : 100}%, 0, 0)"></div>
+            <button class="seg-btn ${isAtt ? 'active' : ''}" data-diary-tab="attendance">Посещаемость</button>
+            <button class="seg-btn ${!isAtt ? 'active' : ''}" data-diary-tab="grades">Оценки</button>
           </div>
         `;
 
-        if (state.diarySubTab === 'attendance') {
-          list.forEach((d) => {
+        if (isAtt) {
+          list.forEach((d, idx) => {
             const p = d.total ? Math.round((d.attended / d.total) * 100) : 0;
             const dots = (d.history || []).slice(-8).map((v) => `<span class="att-dot ${v ? '' : 'miss'}"></span>`).join('');
             html += `
-              <div class="diary-card">
+              <div class="diary-card anim-in" style="--d:${Math.min(idx * 35, 210)}ms">
                 <div class="diary-top">
                   <span class="diary-name">${escapeHtml(d.subject)}</span>
                   <span class="diary-pct tabular">${p}%</span>
@@ -3885,13 +4615,13 @@
             `;
           });
         } else {
-          list.forEach((d) => {
+          list.forEach((d, idx) => {
             const grades = Array.isArray(d.grades) ? d.grades : [];
             const pills = grades.length
               ? grades.map((g) => `<span class="grade-pill ${g === '5' || g === 'Зачёт' ? 'top' : ''}">${escapeHtml(g)}</span>`).join('')
               : '<span class="row-sub">Оценок пока нет</span>';
             html += `
-              <div class="diary-card">
+              <div class="diary-card anim-in" style="--d:${Math.min(idx * 35, 210)}ms">
                 <div class="diary-top" style="margin-bottom:8px;">
                   <span class="diary-name">${escapeHtml(d.subject)}</span>
                   <span class="badge">${escapeHtml(d.credit || 'Контроль')}</span>
@@ -3926,9 +4656,7 @@
       function renderSettings() {
         const container = $('settingsContent');
         const acc = state.account;
-        const initials = acc.loggedIn && acc.name
-          ? acc.name.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase()
-          : (acc.loggedIn ? 'ЛК' : '—');
+        const avatarHtml = getProfileAvatarHtml(acc);
 
         const delays = [
           { key: 'instant', label: 'Сразу' },
@@ -3937,13 +4665,27 @@
         ];
 
         const summary = getRulesSummary();
+        const themeIdx = state.themeMode === 'dark' ? 1 : (state.themeMode === 'auto' ? 2 : 0);
+
+        const devSectionHtml = state.devModeUnlocked ? `
+          <div class="section-label"><span>Для разработчиков</span><span class="badge accent">Открыто</span></div>
+          <div class="settings-group dev-group" id="devMenuGroup">
+            <div class="settings-row tap" id="openDevMenuRow">
+              <div>
+                <div class="row-title">Меню разработчика</div>
+                <div class="row-sub">Логи службы, диагностика и тест уведомлений</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+          </div>
+        ` : '';
 
         container.innerHTML = `
           <div class="account-card tap" id="accountCard">
             <div class="account-left">
-              <div class="avatar">${escapeHtml(initials)}</div>
+              ${avatarHtml}
               <div style="min-width:0;">
-                <div class="row-title">${acc.loggedIn ? escapeHtml(acc.name || 'Студент СПбГУТ') : 'Войти в аккаунт вуза'}</div>
+                <div class="row-title">${acc.loggedIn ? escapeHtml(acc.name || 'Аккаунт ЛК СПбГУТ') : 'Войти в аккаунт вуза'}</div>
                 <div class="row-sub">${acc.loggedIn ? escapeHtml((acc.group ? acc.group + ' · ' : '') + (acc.email || 'lk.sut.ru')) : 'Личный кабинет lk.sut.ru'}</div>
               </div>
             </div>
@@ -3963,7 +4705,7 @@
             <div class="settings-row tap" id="openRulesRow">
               <div>
                 <div class="row-title">Правила по предметам</div>
-                <div class="row-sub tabular">Активно ${summary.enabled} из ${summary.total} типов пар</div>
+                <div class="row-sub tabular">${summary.total > 0 ? `Активно ${summary.enabled} из ${summary.total} типов пар` : 'Загрузите расписание семестра'}</div>
               </div>
               <div style="display:flex;align-items:center;gap:6px;">
                 <span class="badge accent">Настроить</span>
@@ -3983,13 +4725,6 @@
               </div>
             </div>
 
-            <div class="settings-row">
-              <div>
-                <div class="row-title">Защита сессии</div>
-                <div class="row-sub">Не сбрасывать вход на компьютере</div>
-              </div>
-              <button class="switch" id="setAntiKick" role="switch" aria-checked="${state.antiKick}"></button>
-            </div>
           </div>
 
           <div class="section-label"><span>Синхронизация</span></div>
@@ -4008,23 +4743,19 @@
               </div>
               <span class="badge">18 нед.</span>
             </div>
-            <div class="settings-row tap" id="openLogsRow">
-              <div>
-                <div class="row-title">Журнал событий</div>
-                <div class="row-sub">Диагностика фоновой службы</div>
-              </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
-            </div>
           </div>
 
           <div class="section-label"><span>Внешний вид</span></div>
           <div class="settings-group" style="padding:12px;">
             <div class="segment three">
+              <div class="seg-indicator" id="themeSegIndicator" style="transform:translate3d(${themeIdx * 100}%, 0, 0)"></div>
               <button class="seg-btn ${state.themeMode === 'light' ? 'active' : ''}" data-theme-opt="light">Светлая</button>
               <button class="seg-btn ${state.themeMode === 'dark' ? 'active' : ''}" data-theme-opt="dark">Тёмная</button>
               <button class="seg-btn ${state.themeMode === 'auto' ? 'active' : ''}" data-theme-opt="auto">Авто</button>
             </div>
           </div>
+
+          ${devSectionHtml}
 
           <div class="section-label"><span>О проекте</span></div>
           <div class="settings-group">
@@ -4038,7 +4769,7 @@
             <div class="settings-row tap" id="openCreditsRow">
               <div>
                 <div class="row-title">О приложении</div>
-                <div class="row-sub">Pulse v2.0 · СПбГУТ</div>
+                <div class="row-sub">Pulse ${APP_VERSION} · СПбГУТ</div>
               </div>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
             </div>
@@ -4048,13 +4779,6 @@
         $('accountCard').addEventListener('click', openAccountSheet);
         $('openRulesRow').addEventListener('click', openSubjectRulesSheet);
         $('setAutoSwitch').addEventListener('click', toggleMasterAutoCheck);
-
-        $('setAntiKick').addEventListener('click', () => {
-          state.antiKick = !state.antiKick;
-          persistPulseSettingsToBridge();
-          renderSettings();
-          showToast(state.antiKick ? 'Защита сессии включена' : 'Защита сессии выключена');
-        });
 
         container.querySelectorAll('[data-delay-chip]').forEach((btn) => {
           btn.addEventListener('click', () => {
@@ -4075,47 +4799,212 @@
         });
 
         $('syncAllRow').addEventListener('click', () => {
-          if (HAS_BRIDGE) {
-            if (!state.account.loggedIn) { openAccountSheet(); return; }
-            window.AndroidBridge.syncAll();
-          }
+          if (!requireBackendConnected()) return;
+          window.AndroidBridge.syncAll();
           showToast('Синхронизация с ЛК...');
         });
 
         $('scanSemesterRow').addEventListener('click', () => {
-          if (HAS_BRIDGE) {
-            if (!state.account.loggedIn) { openAccountSheet(); return; }
-            window.AndroidBridge.scanSemesterNow('', '', '', '');
-          }
+          if (!requireBackendConnected()) return;
+          window.AndroidBridge.scanSemesterNow('', '', '', '');
           showToast('Сканирование 18 недель...');
         });
 
-        $('openLogsRow').addEventListener('click', openLogsSheet);
+        const devRow = $('openDevMenuRow');
+        if (devRow) devRow.addEventListener('click', openDeveloperMenuSheet);
+
         $('openWelcomeRow').addEventListener('click', () => openOnboarding(false));
         $('openCreditsRow').addEventListener('click', openCreditsSheet);
       }
 
-      function openLogsSheet() {
-        const logsHtml = (state.logs && state.logs.length)
-          ? state.logs.slice(-35).reverse().map((l) => `<div style="font-size:11.5px;font-family:monospace;padding:5px 0;border-bottom:1px solid var(--border);color:var(--text-secondary);">${escapeHtml(l)}</div>`).join('')
-          : '<div class="row-sub">Журнал пока пуст</div>';
-
+      /* ===== SECRET DEVELOPER MENU & PASSWORD PROMPT ===== */
+      function openDevPasswordSheet() {
         openSheet(`
-          <div class="sheet-title">Журнал событий</div>
-          <div class="sheet-sub">${escapeHtml(state.daemonStatus || 'Служба готова')}</div>
-          <div style="max-height:300px;overflow-y:auto;margin-bottom:14px;">${logsHtml}</div>
-          <button class="full-btn secondary" id="testNotifBtn">Проверить уведомление</button>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+            <div class="pillar-icon accent" style="width:34px;height:34px;border-radius:11px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </div>
+            <div>
+              <div class="sheet-title" style="margin-bottom:0;">Доступ разработчика</div>
+              <div class="row-sub" style="margin-top:1px;">Введите секретный пароль для разблокировки</div>
+            </div>
+          </div>
+
+          <form id="devPassForm" style="margin-top:14px;">
+            <div class="field">
+              <label for="devPassInput">Секретный пароль</label>
+              <div class="field-input-wrap" id="devPassWrap">
+                <input id="devPassInput" class="with-eye" type="password" autocomplete="off" placeholder="Введите пароль..." />
+                <button type="button" class="field-eye" id="toggleDevPassEye" aria-label="Показать пароль">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
+              <div class="field-error" id="devPassError"></div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:6px;">
+              <button type="button" class="full-btn secondary" id="cancelDevPassBtn" style="flex:1;">Отмена</button>
+              <button type="submit" class="full-btn accent" style="flex:1.4;">Разблокировать</button>
+            </div>
+          </form>
         `);
 
-        $('testNotifBtn').addEventListener('click', () => {
-          if (HAS_BRIDGE) {
-            try { window.AndroidBridge.testNotifNow(); } catch (e) {}
+        const input = $('devPassInput');
+        const errEl = $('devPassError');
+        const wrap = $('devPassWrap');
+        setTimeout(() => input.focus(), 120);
+
+        $('toggleDevPassEye').addEventListener('click', () => {
+          input.type = input.type === 'password' ? 'text' : 'password';
+        });
+
+        $('cancelDevPassBtn').addEventListener('click', openCreditsSheet);
+
+        $('devPassForm').addEventListener('submit', (e) => {
+          e.preventDefault();
+          const val = input.value;
+          if (val === DEV_SECRET_PASSWORD) {
+            state.devModeUnlocked = true;
+            saveState();
+            renderSettings();
+            showToast('Меню разработчика разблокировано', 'success');
+            openDeveloperMenuSheet();
+            const grp = $('devMenuGroup');
+            if (grp) grp.classList.add('unlock-glow');
+          } else {
+            input.classList.add('is-error');
+            errEl.textContent = 'Неверный пароль. Проверьте регистр символов.';
+            wrap.classList.remove('shake');
+            void wrap.offsetWidth;
+            wrap.classList.add('shake');
+            input.select();
           }
-          showToast('Тестовое уведомление отправлено');
+        });
+
+        input.addEventListener('input', () => {
+          input.classList.remove('is-error');
+          errEl.textContent = '';
+        });
+      }
+
+      function openDeveloperMenuSheet() {
+        const logsArr = Array.isArray(state.logs) ? state.logs : [];
+        const logsHtml = logsArr.length
+          ? logsArr.slice(-60).reverse().map((l) => `<div class="log-line">${escapeHtml(l)}</div>`).join('')
+          : '<div style="color:var(--text-muted);text-align:center;padding:18px 0;">Журнал событий пуст</div>';
+
+        openSheet(`
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+            <div class="sheet-title" style="margin-bottom:0;">Меню разработчика</div>
+            <span class="badge accent">DEV</span>
+          </div>
+          <div class="sheet-sub">Диагностика службы, логи и системные инструменты</div>
+
+          <div class="settings-group">
+            <div class="settings-row">
+              <div>
+                <div class="row-title">AndroidBridge</div>
+                <div class="row-sub">Нативный мост с фоновой службой</div>
+              </div>
+              <span class="badge ${HAS_BRIDGE ? 'success' : 'warn'}">${HAS_BRIDGE ? 'Подключён' : 'Отсутствует'}</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Статус демона</div>
+                <div class="row-sub">${escapeHtml(state.daemonStatus || 'Нет данных от службы')}</div>
+              </div>
+              <span class="badge ${state.autoCheckEnabled ? 'accent' : ''}">${state.autoCheckEnabled ? 'ON' : 'OFF'}</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Кеш данных</div>
+                <div class="row-sub tabular">Пары: ${state.todayClasses.length} · Недели: ${Object.keys(state.semesterWeeks).length} · Предметы: ${SUBJECT_CATALOG.length}</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-label">
+            <span>Журнал событий (${logsArr.length})</span>
+            <button class="pill-btn" id="copyLogsBtn" style="height:26px;font-size:11px;padding:0 10px;">Копировать</button>
+          </div>
+          <div class="log-console" id="devLogConsole">${logsHtml}</div>
+
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button class="full-btn secondary" id="devTestNotifBtn">Проверить уведомление</button>
+            <button class="full-btn secondary" id="devForceSyncBtn">Принудительная синхронизация</button>
+            <button class="full-btn secondary" id="devResetOnboardBtn">Показать приветствие заново</button>
+            <button class="full-btn danger" id="devLockBtn">Скрыть меню разработчика</button>
+          </div>
+        `);
+
+        $('copyLogsBtn').addEventListener('click', () => {
+          if (!logsArr.length) {
+            showToast('Логи пусты');
+            return;
+          }
+          copyTextSafe(logsArr.join('\n'));
+        });
+
+        $('devTestNotifBtn').addEventListener('click', () => {
+          if (!HAS_BRIDGE) {
+            showToast('AndroidBridge не подключён', 'error');
+            return;
+          }
+          try { window.AndroidBridge.testNotifNow(); } catch (e) {}
+          showToast('Тестовое уведомление отправлено', 'success');
+        });
+
+        $('devForceSyncBtn').addEventListener('click', () => {
+          if (!HAS_BRIDGE) {
+            showToast('AndroidBridge не подключён', 'error');
+            return;
+          }
+          try { window.AndroidBridge.syncAll(); } catch (e) {}
+          syncFromAndroid(true);
+          openDeveloperMenuSheet();
+          showToast('Принудительная синхронизация запущена');
+        });
+
+        $('devResetOnboardBtn').addEventListener('click', () => {
+          state.onboardingSeen = false;
+          saveState();
+          closeSheet();
+          openOnboarding(false);
+        });
+
+        $('devLockBtn').addEventListener('click', () => {
+          state.devModeUnlocked = false;
+          saveState();
+          renderSettings();
+          closeSheet();
+          showToast('Меню разработчика скрыто');
         });
       }
 
       function openSubjectRulesSheet() {
+        if (!SUBJECT_CATALOG.length) {
+          openSheet(`
+            <div class="sheet-title">Правила по предметам</div>
+            <div class="sheet-sub">Список предметов формируется автоматически после загрузки семестра</div>
+            <div class="empty-day" style="padding:20px 8px;">
+              <strong>Каталог предметов пуст</strong>
+              <span>${HAS_BRIDGE ? 'Сначала загрузите расписание семестра из ЛК' : 'Подключите Android-приложение для синхронизации'}</span>
+            </div>
+            ${HAS_BRIDGE ? '<button class="full-btn" id="rulesScanBtn">Загрузить семестр</button>' : '<button class="full-btn secondary" id="rulesCloseBtn">Понятно</button>'}
+          `);
+          const scanBtn = $('rulesScanBtn');
+          if (scanBtn) {
+            scanBtn.addEventListener('click', () => {
+              closeSheet();
+              if (!requireBackendConnected()) return;
+              window.AndroidBridge.scanSemesterNow('', '', '', '');
+              showToast('Сканирование 18 недель...');
+            });
+          }
+          const closeBtn = $('rulesCloseBtn');
+          if (closeBtn) closeBtn.addEventListener('click', closeSheet);
+          return;
+        }
+
         const cardsHtml = SUBJECT_CATALOG.map((subj) => {
           const allOn = subj.types.every((t) => isSubjectTypeAuto(subj.name, t));
           const pillsHtml = subj.types.map((t) => {
@@ -4200,28 +5089,68 @@
         renderSchedule();
       }
 
+      function handleLoginResult(success, errorMsg) {
+        if (loginAttempt.timeoutId) {
+          clearTimeout(loginAttempt.timeoutId);
+          loginAttempt.timeoutId = null;
+        }
+        loginAttempt.pending = false;
+
+        const submitBtn = $('loginSubmitBtn');
+        const errEl = $('loginError');
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = 'Войти и синхронизировать';
+        }
+
+        if (success) {
+          if ($('loginForm')) closeSheet();
+          const welcomeName = getRealInitials(state.account.name) ? `, ${state.account.name.split(' ')[0]}` : '';
+          showToast(`Вход выполнен успешно${welcomeName}`, 'success');
+        } else {
+          const msg = errorMsg || 'Не удалось войти. Проверьте логин и пароль.';
+          showToast(msg, 'error');
+          if (errEl) {
+            errEl.textContent = msg;
+            const formEl = $('loginForm');
+            if (formEl) {
+              formEl.classList.remove('shake');
+              void formEl.offsetWidth;
+              formEl.classList.add('shake');
+            }
+          }
+        }
+      }
+
+      window.onPulseLoginResult = handleLoginResult;
+
       function openAccountSheet() {
         const acc = state.account;
         if (acc.loggedIn) {
           openSheet(`
-            <div class="sheet-title">${escapeHtml(acc.name || 'Студент СПбГУТ')}</div>
+            <div class="sheet-title">${escapeHtml(acc.name || 'Аккаунт ЛК СПбГУТ')}</div>
             <div class="sheet-sub">${escapeHtml((acc.group ? acc.group + ' · ' : '') + (acc.email || ''))}</div>
             <div class="settings-group">
               <div class="settings-row">
-                <div><div class="row-title">Статус сессии</div><div class="row-sub">Cookie хранится локально на устройстве</div></div>
-                <span class="badge accent">OK</span>
+                <div><div class="row-title">Статус</div><div class="row-sub">Данные хранятся локально на устройстве</div></div>
+                <span class="badge accent">Подключён</span>
               </div>
             </div>
             <button class="full-btn danger" id="logoutBtn">Выйти из аккаунта</button>
           `);
           $('logoutBtn').addEventListener('click', () => {
-            state.account.loggedIn = false;
-            state.autoCheckEnabled = false;
             if (HAS_BRIDGE) {
               try { window.AndroidBridge.logoutAccount(); } catch (e) {}
             }
-            renderSettings();
-            renderToday();
+            state.account = { loggedIn: false, name: '', group: '', email: '' };
+            state.autoCheckEnabled = false;
+            state.todayClasses = [];
+            state.semesterWeeks = {};
+            state.messages = [];
+            state.groupFiles = [];
+            state.diary = [];
+            SUBJECT_CATALOG = [];
+            renderAllViews();
             closeSheet();
             showToast('Вы вышли из аккаунта');
           });
@@ -4238,42 +5167,111 @@
                 <label for="loginPass">Пароль</label>
                 <input id="loginPass" type="password" required placeholder="••••••••" />
               </div>
-              <button type="submit" class="full-btn">Войти и синхронизировать</button>
+              <div class="field-error" id="loginError"></div>
+              <button type="submit" class="full-btn" id="loginSubmitBtn" style="margin-top:6px;">Войти и синхронизировать</button>
             </form>
           `);
           $('loginForm').addEventListener('submit', (e) => {
             e.preventDefault();
+            const errEl = $('loginError');
+            if (errEl) errEl.textContent = '';
+            if (!HAS_BRIDGE) {
+              handleLoginResult(false, 'Вход доступен только внутри Android-приложения');
+              return;
+            }
             const email = $('loginEmail').value.trim();
             const pass = $('loginPass').value.trim();
             if (!email || !pass) return;
-            state.account.email = email;
-            state.account.loggedIn = true;
-            if (HAS_BRIDGE) {
-              try { window.AndroidBridge.loginAccount(email, pass); } catch (err) {}
+
+            const btn = $('loginSubmitBtn');
+            if (btn) {
+              btn.disabled = true;
+              btn.innerHTML = '<span class="spinner"></span>Подключение...';
             }
-            renderSettings();
-            renderToday();
-            closeSheet();
-            showToast('Подключение к lk.sut.ru...');
+
+            if (loginAttempt.timeoutId) clearTimeout(loginAttempt.timeoutId);
+            loginAttempt = {
+              pending: true,
+              startedAt: Date.now(),
+              prevLogCount: Array.isArray(state.logs) ? state.logs.length : 0,
+              timeoutId: setTimeout(() => {
+                if (loginAttempt.pending && !state.account.loggedIn) {
+                  handleLoginResult(false, 'Не удалось войти: проверьте логин, пароль и интернет');
+                }
+              }, 12000)
+            };
+
+            try {
+              const res = window.AndroidBridge.loginAccount(email, pass);
+              if (res === false) {
+                handleLoginResult(false, 'Неверный логин или пароль');
+                return;
+              }
+              if (typeof res === 'string' && /(error|fail|ошибк|неверн)/i.test(res)) {
+                handleLoginResult(false, res);
+                return;
+              }
+            } catch (err) {
+              handleLoginResult(false, 'Ошибка при обращении к службе входа');
+              return;
+            }
+
+            showToast('Проверка данных в lk.sut.ru...');
+            setTimeout(() => syncFromAndroid(true), 700);
+            setTimeout(() => { if (loginAttempt.pending) syncFromAndroid(true); }, 1800);
+            setTimeout(() => { if (loginAttempt.pending) syncFromAndroid(true); }, 3500);
           });
         }
       }
 
       function openCreditsSheet() {
+        versionTapCount = 0;
         openSheet(`
           <div class="sheet-title">Pulse · Автоотметка</div>
           <div class="sheet-sub">Минималистичный клиент для ЛК СПбГУТ</div>
           <div class="settings-group">
-            <div class="settings-row">
-              <div><div class="row-title">Версия</div><div class="row-sub">v2.0 · Android Native Service + WebView</div></div>
-              <span class="badge accent">02.00.00</span>
+            <div class="settings-row tap" id="aboutVersionRow">
+              <div>
+                <div class="row-title">Версия</div>
+                <div class="row-sub">${APP_VERSION} · Android Native Service + WebView</div>
+              </div>
+              <span class="badge accent tabular">${APP_BUILD}</span>
             </div>
             <div class="settings-row">
-              <div><div class="row-title">Приватность</div><div class="row-sub">Локальное хранение учётных данных</div></div>
+              <div>
+                <div class="row-title">Приватность</div>
+                <div class="row-sub">Локальное хранение учётных данных</div>
+              </div>
             </div>
           </div>
+
+          <div class="section-label"><span>Разработчики</span></div>
+          <div class="settings-group">
+            ${renderCreditsRowsHtml()}
+          </div>
+
           <button class="full-btn secondary" id="closeCreditsBtn">Готово</button>
         `);
+
+        $('aboutVersionRow').addEventListener('click', () => {
+          if (state.devModeUnlocked) {
+            showToast('Меню разработчика уже открыто');
+            openDeveloperMenuSheet();
+            return;
+          }
+          clearTimeout(versionTapTimer);
+          versionTapCount += 1;
+          versionTapTimer = setTimeout(() => { versionTapCount = 0; }, 2200);
+
+          const left = DEV_TAP_THRESHOLD - versionTapCount;
+          if (left > 0 && versionTapCount >= 3) {
+            showToast(`До режима разработчика: ${left}`);
+          } else if (left <= 0) {
+            versionTapCount = 0;
+            openDevPasswordSheet();
+          }
+        });
+
         $('closeCreditsBtn').addEventListener('click', closeSheet);
       }
 
@@ -4286,7 +5284,6 @@
       function switchTab(tabName) {
         const nextIdx = TAB_ORDER.indexOf(tabName);
         if (nextIdx < 0) return;
-        prevTabIdx = nextIdx;
 
         state.activeTab = tabName;
         saveState();
@@ -4320,7 +5317,7 @@
       let touchStartX = 0, touchStartY = 0, touchValid = false;
       $('tabStage').addEventListener('touchstart', (e) => {
         if ($('sheet').classList.contains('open')) return;
-        if (e.target.closest('.filter-strip, input, textarea')) return;
+        if (e.target.closest('input, textarea')) return;
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
         touchValid = true;
@@ -4363,7 +5360,7 @@
       $('quickThemeBtn').addEventListener('click', () => {
         const btn = $('quickThemeBtn');
         btn.classList.add('spin');
-        setTimeout(() => btn.classList.remove('spin'), 360);
+        setTimeout(() => btn.classList.remove('spin'), 420);
         const current = document.documentElement.getAttribute('data-theme');
         state.themeMode = current === 'dark' ? 'light' : 'dark';
         persistPulseSettingsToBridge();
@@ -4374,23 +5371,28 @@
       $('quickSyncBtn').addEventListener('click', () => {
         const btn = $('quickSyncBtn');
         btn.classList.add('spin');
-        setTimeout(() => btn.classList.remove('spin'), 400);
-        if (HAS_BRIDGE) {
-          if (!state.account.loggedIn) { openAccountSheet(); return; }
-          window.AndroidBridge.syncAll();
-        }
+        setTimeout(() => btn.classList.remove('spin'), 420);
+        if (!requireBackendConnected()) return;
+        window.AndroidBridge.syncAll();
         showToast('Синхронизация с ЛК...');
       });
 
       $('syncMessagesBtn').addEventListener('click', () => {
         const btn = $('syncMessagesBtn');
         btn.classList.add('spin');
-        setTimeout(() => btn.classList.remove('spin'), 400);
-        if (HAS_BRIDGE) {
-          if (!state.account.loggedIn) { openAccountSheet(); return; }
-          window.AndroidBridge.syncMessagesNow();
-        }
+        setTimeout(() => btn.classList.remove('spin'), 420);
+        if (!requireBackendConnected()) return;
+        window.AndroidBridge.syncMessagesNow();
         showToast('Обновление сообщений и файлов...');
+      });
+
+      $('syncDiaryBtn').addEventListener('click', () => {
+        const btn = $('syncDiaryBtn');
+        btn.classList.add('spin');
+        setTimeout(() => btn.classList.remove('spin'), 420);
+        if (!requireBackendConnected()) return;
+        window.AndroidBridge.checkDiaryNow('', '', '', '');
+        showToast('Обновление дневника...');
       });
 
       $('sheetBackdrop').addEventListener('click', closeSheet);
@@ -4403,6 +5405,8 @@
 
       /* ===== ONBOARDING ===== */
       function openOnboarding(toDetails) {
+        const creditsHost = $('onboardCreditsGroup');
+        if (creditsHost) creditsHost.innerHTML = renderCreditsRowsHtml();
         const overlay = $('onboardOverlay');
         overlay.classList.toggle('show-details', !!toDetails);
         overlay.classList.add('open');
@@ -4431,6 +5435,9 @@
       });
 
       $('onboardThemeBtn').addEventListener('click', () => {
+        const btn = $('onboardThemeBtn');
+        btn.classList.add('spin');
+        setTimeout(() => btn.classList.remove('spin'), 420);
         const current = document.documentElement.getAttribute('data-theme');
         state.themeMode = current === 'dark' ? 'light' : 'dark';
         persistPulseSettingsToBridge();
@@ -4447,20 +5454,20 @@
         });
       });
 
-      $('copyAuthorContactBtn').addEventListener('click', () => {
-        showToast('Student Dev Team · СПбГУТ');
-      });
+      function renderAllViews() {
+        renderToday();
+        renderSchedule();
+        renderMessages();
+        renderDiary();
+        renderSettings();
+      }
 
-      function renderAll() {
+      function init() {
         applyTheme();
         if (HAS_BRIDGE) {
           syncFromAndroid(true);
         } else {
-          renderToday();
-          renderSchedule();
-          renderMessages();
-          renderDiary();
-          renderSettings();
+          renderAllViews();
         }
         switchTab(state.activeTab);
         if (!state.onboardingSeen) {
@@ -4468,7 +5475,7 @@
         }
       }
 
-      renderAll();
+      init();
       if (HAS_BRIDGE) {
         setInterval(() => syncFromAndroid(false), 2000);
       }
