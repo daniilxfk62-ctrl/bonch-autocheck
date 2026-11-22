@@ -31,6 +31,11 @@ public class SutApiClient {
     public static final String INI_URL = BASE_URL + "/ini.php";
     public static final String SCHEDULE_URL = BASE_URL + "/project/cabinet/forms/raspisanie.php";
 
+    // Подтверждённые реальные URL разделов ЛК СПбГУТ
+    public static final String MESSAGE_IN_URL = BASE_URL + "/project/cabinet/forms/message.php?type=in";
+    public static final String MESSAGE_READ_URL = BASE_URL + "/project/cabinet/forms/sendto2.php";
+    public static final String GROUP_FILES_URL = BASE_URL + "/project/cabinet/forms/files_group_pr.php";
+
     public static final String[] DIARY_URLS = {
         BASE_URL + "/project/cabinet/forms/dnevnik.php",
         BASE_URL + "/project/cabinet/forms/jurnal.php",
@@ -40,15 +45,13 @@ public class SutApiClient {
     };
 
     public static final String[] MESSAGE_URLS = {
-        BASE_URL + "/project/cabinet/forms/message.php",
-        BASE_URL + "/project/cabinet/forms/messages.php",
-        BASE_URL + "/project/cabinet/forms/soobscheniya.php"
+        MESSAGE_IN_URL,
+        BASE_URL + "/project/cabinet/forms/message.php"
     };
 
     public static final String[] GROUP_FILES_URLS = {
-        BASE_URL + "/project/cabinet/forms/files_group_pr.php",
-        BASE_URL + "/project/cabinet/forms/files_group.php",
-        BASE_URL + "/project/cabinet/forms/fayly_gruppy.php"
+        GROUP_FILES_URL,
+        BASE_URL + "/project/cabinet/forms/files_group.php"
     };
 
     public static final String[] PROFILE_URLS = {
@@ -188,13 +191,28 @@ public class SutApiClient {
     }
 
     public static String resolveUrl(String rawUrl) {
+        return resolveUrl(BASE_URL + "/", rawUrl);
+    }
+
+    /**
+     * Корректно резолвит относительные ссылки (включая ../../../subconto/sendto/...) относительно базового URL страницы.
+     */
+    public static String resolveUrl(String pageBaseUrl, String rawUrl) {
         if (rawUrl == null) return "";
         String u = rawUrl.trim().replace("&amp;", "&");
+        if (u.isEmpty()) return "";
         if (u.startsWith("http://") || u.startsWith("https://")) return u;
         if (u.startsWith("//")) return "https:" + u;
-        if (u.startsWith("/")) return ORIGIN_URL + u;
-        if (u.startsWith("project/") || u.startsWith("lib/")) return BASE_URL + "/" + u;
-        return BASE_URL + "/" + u;
+        try {
+            String base = (pageBaseUrl != null && !pageBaseUrl.isEmpty()) ? pageBaseUrl : (BASE_URL + "/");
+            return new URL(new URL(base), u).toString();
+        } catch (Exception e) {
+            if (u.startsWith("/")) return ORIGIN_URL + u;
+            if (u.startsWith("project/") || u.startsWith("lib/") || u.startsWith("subconto/")) {
+                return BASE_URL + "/" + u;
+            }
+            return BASE_URL + "/" + u;
+        }
     }
 
     public String httpRequest(String method, String urlStr, String postBody) throws Exception {
@@ -330,7 +348,7 @@ public class SutApiClient {
                 if (location == null || location.trim().isEmpty()) {
                     return "";
                 }
-                currentUrl = resolveUrl(location);
+                currentUrl = resolveUrl(currentUrl, location);
                 if (code == HttpURLConnection.HTTP_SEE_OTHER || code == HttpURLConnection.HTTP_MOVED_TEMP || code == HttpURLConnection.HTTP_MOVED_PERM) {
                     currentMethod = "GET";
                     currentBody = null;
@@ -428,7 +446,6 @@ public class SutApiClient {
 
             resetCookies();
 
-            // 1. Проверяем связь с сервером и получаем стартовую cookie сессии
             String initPage = httpRequest("GET", LOGIN_PAGE_URL, null);
             if (initPage == null || initPage.trim().length() < 20) {
                 authenticated = false;
@@ -437,7 +454,6 @@ public class SutApiClient {
                 return false;
             }
 
-            // 2. Отправляем логин и пароль
             String data = "users=" + URLEncoder.encode(login, "UTF-8")
                         + "&parole=" + URLEncoder.encode(password, "UTF-8");
             String resp = httpRequest("POST", AUTH_URL, data);
@@ -461,10 +477,8 @@ public class SutApiClient {
                 return false;
             }
 
-            // 3. Инициализируем PHP-сессию кабинета
             httpRequest("GET", INI_URL, null);
 
-            // 4. Жёсткая проверка: загружаем страницу кабинета и убеждаемся, что мы реально вошли
             String cabHtml = httpRequest("GET", LOGIN_PAGE_URL, null);
             boolean confirmed = !isLoginFormHtml(cabHtml) && cabHtml.length() > 200;
             if (!confirmed) {
@@ -520,10 +534,10 @@ public class SutApiClient {
                 foundForms.add(rel);
                 String low = rel.toLowerCase(Locale.ROOT);
                 String abs = resolveUrl(rel);
-                if (low.contains("message") || low.contains("soobsch")) {
-                    storage.saveDiscoveredEndpoint("messages", abs);
-                } else if (low.contains("file") && low.contains("group")) {
-                    storage.saveDiscoveredEndpoint("groupFiles", abs);
+                if (low.contains("message.php")) {
+                    storage.saveDiscoveredEndpoint("messages", MESSAGE_IN_URL);
+                } else if (low.contains("files_group_pr.php")) {
+                    storage.saveDiscoveredEndpoint("groupFiles", GROUP_FILES_URL);
                 } else if (low.contains("dnevnik") || low.contains("jurnal")) {
                     storage.saveDiscoveredEndpoint("diary", abs);
                 } else if (low.contains("profile") || low.contains("anketa")) {
@@ -538,7 +552,7 @@ public class SutApiClient {
                 .replaceAll("(?s)<script[^>]*>.*?</script>", " ")
                 .replaceAll("(?s)<style[^>]*>.*?</style>", " ")
                 .replaceAll("<[^>]+>", " ")
-                .replaceAll("&nbsp;", " ")
+                .replace("&nbsp;", " ")
                 .replaceAll("\\s+", " ")
                 .trim();
 
