@@ -17,6 +17,8 @@ android:versionName="02.00.00">
 
 <application
 android:label="@string/app_name"
+android:icon="@mipmap/ic_launcher"
+android:roundIcon="@mipmap/ic_launcher_round"
 android:allowBackup="false"
 android:usesCleartextTraffic="false"
 android:theme="@android:style/Theme.DeviceDefault.NoActionBar">

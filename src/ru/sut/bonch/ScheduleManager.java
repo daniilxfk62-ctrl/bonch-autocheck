@@ -256,6 +256,80 @@ public class ScheduleManager {
         return null;
     }
 
+    /**
+     * Возвращает краткое описание следующей пары на сегодня:
+     * "13:00 • Физика (Лекция) • ауд. 404 |1"
+     * Если afterStartTime задан — ищет строго после него; иначе — ближайшую незавершённую пару.
+     */
+    public synchronized String findNextLessonBrief(String afterStartTime, AppStorage storage) {
+        if (semesterDaysArray == null || semesterDaysArray.length() == 0) return null;
+
+        String todayStr = new SimpleDateFormat("dd.MM.yyyy", Locale.US).format(new Date());
+        Calendar now = Calendar.getInstance();
+        int nowMins = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE);
+
+        JSONObject bestLesson = null;
+        String bestStart = null;
+
+        for (int i = 0; i < semesterDaysArray.length(); i++) {
+            JSONObject d = semesterDaysArray.optJSONObject(i);
+            if (d == null || !todayStr.equals(d.optString("dateStr", ""))) continue;
+
+            int dowIdx = d.optInt("dowIdx", -1);
+            JSONArray lessons = d.optJSONArray("lessons");
+            if (lessons == null) break;
+
+            for (int k = 0; k < lessons.length(); k++) {
+                JSONObject les = lessons.optJSONObject(k);
+                if (les == null) continue;
+
+                String st = les.optString("startTime", "").trim();
+                if (st.isEmpty()) continue;
+
+                String subj = les.optString("subjectTitle", "").trim();
+                String teach = les.optString("teacher", "").trim();
+                String room = les.optString("room", "").trim();
+                if (!storage.isSubgroupAllowed(dowIdx, st, subj, teach, room)) continue;
+
+                boolean alreadyDone = les.optBoolean("checked", false) || completedWindowsToday.contains(st);
+                if (alreadyDone) continue;
+
+                if (afterStartTime != null && !afterStartTime.isEmpty()) {
+                    if (st.compareTo(afterStartTime) <= 0) continue;
+                } else {
+                    try {
+                        String[] p = st.replace(".", ":").split(":");
+                        int startMins = Integer.parseInt(p[0]) * 60 + Integer.parseInt(p[1]);
+                        if (startMins + 95 < nowMins) continue;
+                    } catch (Exception ignored) {}
+                }
+
+                if (bestStart == null || st.compareTo(bestStart) < 0) {
+                    bestStart = st;
+                    bestLesson = les;
+                }
+            }
+            break;
+        }
+
+        if (bestLesson == null) return null;
+
+        String st = bestLesson.optString("startTime", "");
+        String subj = bestLesson.optString("subjectTitle", "Пара");
+        String lType = bestLesson.optString("lessonType", "");
+        String room = bestLesson.optString("room", "").trim();
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(st).append(" • ").append(subj);
+        if (!lType.isEmpty()) {
+            sb.append(" (").append(lType).append(")");
+        }
+        if (!room.isEmpty() && !"-".equals(room) && !"—".equals(room)) {
+            sb.append(" • ").append(room);
+        }
+        return sb.toString();
+    }
+
     public String[] getCurrentWindowState(String mode, AppStorage storage) {
         syncTodayRealStartTimes(storage);
         int windowMin = "first_30".equals(mode) ? 30 : 95;

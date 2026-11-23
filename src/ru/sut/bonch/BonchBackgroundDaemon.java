@@ -10,6 +10,7 @@ import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
 import android.os.SystemClock;
+import java.util.Calendar;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.json.JSONObject;
 
@@ -548,31 +549,41 @@ public class BonchBackgroundDaemon extends Service {
 
                     boolean busyCatchingButton = (win != null && !scheduleManager.completedWindowsToday.contains(win[0]));
 
-                    long autoUpdInterval = storage.getAutoUpdateIntervalMillis();
-                    if (!busyCatchingButton && autoUpdInterval > 0L
-                        && (System.currentTimeMillis() - lastAutoSyncMillis) >= autoUpdInterval) {
+                   long autoUpdInterval = storage.getAutoUpdateIntervalMillis();
+                    boolean daytime = isDaytimeSyncWindow();
+                    long effectiveDaySyncMs = autoUpdInterval > 0L ? Math.min(autoUpdInterval, 1800000L) : 0L;
+
+                    if (daytime && !busyCatchingButton && effectiveDaySyncMs > 0L
+                        && (System.currentTimeMillis() - lastAutoSyncMillis) >= effectiveDaySyncMs) {
                         lastAutoSyncMillis = System.currentTimeMillis();
                         scheduleManager.pollCurrentWeekAndCheckIn(
                             BonchBackgroundDaemon.this, apiClient, storage, login, password, null
                         );
                         runParallelSecondarySync(login, password, false);
                         flushState();
-                    } else if (!busyCatchingButton && storage.isNotifyMessagesEnabled() && messageManager.isTimeForPeriodicPoll(storage)) {
+                    } else if (daytime && !busyCatchingButton && storage.isNotifyMessagesEnabled() && messageManager.isTimeForPeriodicPoll(storage)) {
                         messageManager.pollAll(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
                         flushState();
-                    } else if (!busyCatchingButton && storage.isNotifyDiaryEnabled() && diaryMonitor.isTimeForPeriodicPoll(storage)) {
+                    } else if (daytime && !busyCatchingButton && storage.isNotifyDiaryEnabled() && diaryMonitor.isTimeForPeriodicPoll(storage)) {
                         diaryMonitor.pollDiary(BonchBackgroundDaemon.this, apiClient, storage, login, password, false);
                         flushState();
                     }
 
                     if (win == null) {
-                        String nextLesson = scheduleManager.findNextUnmarkedLessonTime(storage);
-                        if (nextLesson != null) {
-                            updateStatus("Подключено • Ждём пару в " + nextLesson);
+                        String nextInfo = scheduleManager.findNextLessonBrief(null, storage);
+                        if (nextInfo != null) {
+                            updateStatusWithNotification(
+                                "След. пара: " + nextInfo,
+                                "Pulse • Ожидание пары",
+                                "След. пара: " + nextInfo
+                            );
                         } else {
-                            updateStatus("Подключено • На сегодня активных пар больше нет");
+                            String idleMsg = daytime
+                                ? "На сегодня активных пар больше нет"
+                                : "Ночной режим • Синхронизация приостановлена до утра";
+                            updateStatusWithNotification(idleMsg, "Pulse • Автоотметка", idleMsg);
                         }
-                        sleepQuietly(25000L);
+                        sleepQuietly(daytime ? 25000L : 60000L);
                         continue;
                     }
 
@@ -585,9 +596,14 @@ public class BonchBackgroundDaemon extends Service {
                             finishSingleCheckMode(tMarked != null ? tMarked : winStart);
                             return;
                         }
-                        String nextLesson = scheduleManager.findNextLessonAfter(winStart, storage);
-                        String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Пары на сегодня завершены";
-                        updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
+                        String markTime = tMarked != null ? tMarked : "ОК";
+                        String nextInfo = scheduleManager.findNextLessonBrief(winStart, storage);
+                        String notifBody = nextInfo != null ? ("След. пара: " + nextInfo) : "Пары на сегодня завершены";
+                        updateStatusWithNotification(
+                            "✅ Отмечен (" + markTime + ") • " + notifBody,
+                            "✅ Отмечен в " + markTime,
+                            notifBody
+                        );
                         sleepQuietly(25000L);
                         continue;
                     }
@@ -609,9 +625,14 @@ public class BonchBackgroundDaemon extends Service {
                             finishSingleCheckMode(tMarked != null ? tMarked : "ОК");
                             return;
                         }
-                        String nextLesson = scheduleManager.findNextLessonAfter(winStart, storage);
-                        String waitText = nextLesson != null ? ("Спим до пары в " + nextLesson) : "Пары на сегодня завершены";
-                        updateStatus("✅ Отмечен (" + (tMarked != null ? tMarked : "ОК") + ") • " + waitText);
+                        String markTime = tMarked != null ? tMarked : "ОК";
+                        String nextInfo = scheduleManager.findNextLessonBrief(winStart, storage);
+                        String notifBody = nextInfo != null ? ("След. пара: " + nextInfo) : "Пары на сегодня завершены";
+                        updateStatusWithNotification(
+                            "✅ Отмечен (" + markTime + ") • " + notifBody,
+                            "✅ Отмечен в " + markTime,
+                            notifBody
+                        );
                         sleepQuietly(25000L);
                     } else {
                         if (scheduleManager.waitingTeacherToday.contains(winStart)) {
@@ -647,11 +668,20 @@ public class BonchBackgroundDaemon extends Service {
         stopSelf();
     }
 
+    private boolean isDaytimeSyncWindow() {
+        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+        return hour >= 7 && hour < 23;
+    }
+
     private void updateStatus(String newStatus) {
+        updateStatusWithNotification(newStatus, "Pulse • Автоотметка", newStatus);
+    }
+
+    private void updateStatusWithNotification(String newStatus, String notifTitle, String notifBody) {
         statusText = newStatus;
         flushState();
         if (active) {
-            NotificationHelper.updateForeground(this, newStatus);
+            NotificationHelper.updateForeground(this, notifTitle, notifBody);
         }
     }
 

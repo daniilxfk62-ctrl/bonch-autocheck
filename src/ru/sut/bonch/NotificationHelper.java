@@ -38,6 +38,10 @@ public class NotificationHelper {
     }
 
     public static Notification buildForegroundNotification(Context ctx, String content) {
+        return buildForegroundNotification(ctx, "Pulse • Автоотметка", content);
+    }
+
+    public static Notification buildForegroundNotification(Context ctx, String title, String content) {
         int flags = Build.VERSION.SDK_INT >= 23
             ? (PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE)
             : PendingIntent.FLAG_UPDATE_CURRENT;
@@ -53,9 +57,13 @@ public class NotificationHelper {
             ? new Notification.Builder(ctx, CHANNEL_BG)
             : new Notification.Builder(ctx);
 
-        builder.setContentTitle("Bonch AutoCheck")
-               .setContentText(content)
-               .setSmallIcon(android.R.drawable.stat_notify_sync_noanim)
+        String safeTitle = (title != null && !title.trim().isEmpty()) ? title : "Pulse • Автоотметка";
+        String safeContent = content != null ? content : "";
+
+        builder.setContentTitle(safeTitle)
+               .setContentText(safeContent)
+               .setStyle(new Notification.BigTextStyle().bigText(safeContent))
+               .setSmallIcon(R.drawable.ic_notif_pulse)
                .setContentIntent(openPending)
                .setOngoing(true)
                .setShowWhen(false);
@@ -74,9 +82,13 @@ public class NotificationHelper {
     }
 
     public static void updateForeground(Context ctx, String content) {
+        updateForeground(ctx, "Pulse • Автоотметка", content);
+    }
+
+    public static void updateForeground(Context ctx, String title, String content) {
         NotificationManager nm = (NotificationManager) ctx.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm != null) {
-            nm.notify(FG_NOTIFICATION_ID, buildForegroundNotification(ctx, content));
+            nm.notify(FG_NOTIFICATION_ID, buildForegroundNotification(ctx, title, content));
         }
     }
 
@@ -90,7 +102,7 @@ public class NotificationHelper {
                 builder.setContentTitle(title)
                        .setContentText(message)
                        .setStyle(new Notification.BigTextStyle().bigText(message))
-                       .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+                       .setSmallIcon(R.drawable.ic_notif_pulse)
                        .setAutoCancel(true);
                 nm.notify((int) (System.currentTimeMillis() % 100000), builder.build());
             }

@@ -143,7 +143,7 @@ public class MessageManager {
                         if (b == null) continue;
                         String sid = b.optString("serverId", "");
                         String txt = b.optString("text", "");
-                        if (!sid.isEmpty() && !txt.isEmpty()) {
+                        if (!sid.isEmpty() && !txt.isEmpty() && b.optBoolean("detailsLoaded", false)) {
                             cachedBubbleByServerId.put(sid, b);
                         }
                     }
@@ -174,9 +174,6 @@ public class MessageManager {
                 || TR_CLICK_PAT.matcher(sanitizedHtml).find();
 
             Matcher trMat = trPat.matcher(sanitizedHtml);
-            int fetchedDetailsCount = 0;
-            int maxDetailsToFetch = manualTrigger ? 12 : 6;
-            int rowCounter = 0;
 
             while (trMat.find()) {
                 String trAttrs = trMat.group(1);
@@ -258,15 +255,19 @@ public class MessageManager {
                 if (isGarbageMessageToken(sender)) continue;
                 if (subject.isEmpty()) subject = "Личное сообщение";
 
-                // Открываем реальный текст, тему и вложения сообщения через POST sendto2.php?id=<ID>&prosmotr
+                // Открываем реальный текст, тему и вложения каждого сообщения через POST sendto2.php?id=<ID>&prosmotr
                 String fullText = "";
                 String detailTitle = "";
                 String idinfo = "0";
                 String itemnumber = serverId;
+                boolean detailsLoaded = false;
                 if (!serverId.isEmpty() && cachedBubbleByServerId.containsKey(serverId)) {
                     JSONObject cachedB = cachedBubbleByServerId.get(serverId);
                     fullText = cachedB.optString("text", "");
                     detailTitle = cachedB.optString("subject", "");
+                    idinfo = cachedB.optString("idinfo", "0");
+                    itemnumber = cachedB.optString("itemnumber", serverId);
+                    detailsLoaded = true;
                     JSONArray cachedAtts = cachedB.optJSONArray("attachments");
                     if (cachedAtts != null) {
                         for (int ai = 0; ai < cachedAtts.length(); ai++) {
@@ -276,13 +277,13 @@ public class MessageManager {
                             }
                         }
                     }
-                } else if (!serverId.isEmpty() && fetchedDetailsCount < maxDetailsToFetch) {
-                    fetchedDetailsCount++;
+                } else if (!serverId.isEmpty()) {
                     ParsedMessageDetail det = fetchMessageDetailViaSendto2(api, serverId);
                     fullText = det.text;
                     detailTitle = det.title;
                     idinfo = det.idinfo;
                     itemnumber = det.itemnumber;
+                    detailsLoaded = !fullText.isEmpty() || !detailTitle.isEmpty() || det.attachments.length() > 0;
                     for (int ai = 0; ai < det.attachments.length(); ai++) {
                         JSONObject aObj = det.attachments.optJSONObject(ai);
                         if (aObj != null) {
@@ -358,26 +359,51 @@ public class MessageManager {
                 bubble.put("time", timeShort);
                 bubble.put("date", foundDate);
                 bubble.put("serverId", serverId);
+                bubble.put("idinfo", idinfo);
+                bubble.put("itemnumber", itemnumber);
+                bubble.put("detailsLoaded", detailsLoaded);
                 if (rowAttachments.length() > 0) {
                     bubble.put("attachments", rowAttachments);
                 }
                 threadObj.getJSONArray("thread").put(bubble);
-
-                rowCounter++;
-                if (rowCounter >= 60) break;
             }
 
+            // Сохраняем ранее загруженные сообщения (включая старые входящие и ответы "me")
             for (Map.Entry<String, JSONObject> entry : threadsBySender.entrySet()) {
                 JSONObject oldThread = existingBySender.get(entry.getKey());
                 if (oldThread == null) continue;
                 JSONArray oldBubbles = oldThread.optJSONArray("thread");
                 if (oldBubbles == null) continue;
                 JSONArray curBubbles = entry.getValue().getJSONArray("thread");
+
+                Set<String> presentKeys = new HashSet<>();
+                for (int i = 0; i < curBubbles.length(); i++) {
+                    JSONObject cb = curBubbles.optJSONObject(i);
+                    if (cb == null) continue;
+                    String sid = cb.optString("serverId", "");
+                    presentKeys.add(!sid.isEmpty()
+                        ? ("sid:" + sid)
+                        : ("txt:" + cb.optString("from", "") + "|" + cb.optString("date", "") + "|" + cb.optString("text", "")));
+                }
+
                 for (int i = 0; i < oldBubbles.length(); i++) {
                     JSONObject b = oldBubbles.optJSONObject(i);
-                    if (b != null && "me".equals(b.optString("from", ""))) {
+                    if (b == null) continue;
+                    String sid = b.optString("serverId", "");
+                    String key = !sid.isEmpty()
+                        ? ("sid:" + sid)
+                        : ("txt:" + b.optString("from", "") + "|" + b.optString("date", "") + "|" + b.optString("text", ""));
+                    if (!presentKeys.contains(key)) {
+                        presentKeys.add(key);
                         curBubbles.put(b);
                     }
+                }
+            }
+
+            // Сохраняем более старые диалоги, которые уже не отображаются на текущей странице ЛК
+            for (Map.Entry<String, JSONObject> oldEntry : existingBySender.entrySet()) {
+                if (!threadsBySender.containsKey(oldEntry.getKey())) {
+                    threadsBySender.put(oldEntry.getKey(), oldEntry.getValue());
                 }
             }
 
@@ -637,6 +663,18 @@ public class MessageManager {
             }
 
             storage.writeText(AppStorage.FILE_MESSAGES_SNAPSHOT, snap.toString());
+
+            // Добавляем ранее сохранённые файлы группы, чтобы старые файлы не пропадали
+            JSONArray existingFiles = storage.readJsonArray(AppStorage.FILE_GROUP_FILES);
+            for (int i = 0; i < existingFiles.length(); i++) {
+                JSONObject oldF = existingFiles.optJSONObject(i);
+                if (oldF == null) continue;
+                String oldUrl = oldF.optString("url", "");
+                if (!oldUrl.isEmpty() && !seenUrls.contains(oldUrl)) {
+                    seenUrls.add(oldUrl);
+                    filesList.add(oldF);
+                }
+            }
 
             JSONArray outArr = new JSONArray();
             for (JSONObject f : filesList) {

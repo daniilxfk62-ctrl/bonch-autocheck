@@ -1380,6 +1380,30 @@
       color: var(--text-secondary);
     }
 
+    .mini-teacher {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      margin-top: 3px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .sync-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 13px;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-ring);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 1.38;
+      margin-bottom: 12px;
+    }
+
     .next-day-hint {
       margin-top: auto;
       padding-top: 12px;
@@ -3063,6 +3087,8 @@
             </div>
           </header>
 
+          <div id="scheduleSyncBanner" style="padding:0 18px;"></div>
+
           <div class="snap-wrap">
             <div class="day-feed" id="dayFeed"></div>
             <div class="day-rail" id="dayRail" aria-label="Индикатор дней недели"></div>
@@ -3190,14 +3216,14 @@
                 </div>
               </div>
 
-              <!-- Icon: Shield with Check = Local privacy & Anti-kick session protection -->
+              <!-- Icon: Shield with Check = Local privacy & Direct connection -->
               <div class="pillar-card reveal reveal-d4">
                 <div class="pillar-icon privacy">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
                 </div>
                 <div>
-                  <div class="pillar-title">Локальная приватность</div>
-                  <div class="pillar-desc">Пароль и данные сессии хранятся только на твоём телефоне и передаются напрямую в личный кабинет вуза.</div>
+                  <div class="pillar-title">Без своего сервера — всё у тебя</div>
+                  <div class="pillar-desc">Логин и пароль не уходят на сторонние серверы и хранятся только на телефоне. Поэтому для автоотметки нужен интернет на устройстве.</div>
                 </div>
               </div>
 
@@ -3240,11 +3266,41 @@
             <div class="faq-list" id="faqList">
               <div class="faq-item open">
                 <button class="faq-trigger" data-faq>
-                  <span>Как работает автоотметка?</span>
+                  <span>Приватность: где хранятся данные и нужен ли интернет?</span>
                   <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
                 <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">Фоновая служба сверяется с расписанием пар и твоими правилами по каждому предмету. Когда начинается нужная лекция, практика или лаба, отметка отправляется автоматически с выбранной задержкой.</div>
+                  <div class="faq-text">У Pulse нет собственного сервера — твои логин, пароль и cookies никуда не сохраняются в облаке и лежат только в памяти телефона. Все запросы идут напрямую с устройства на lk.sut.ru. Именно поэтому для автоотметки на телефоне должен быть интернет: если сети нет, приложение физически не сможет отправить отметку. Выйти и очистить данные можно в любой момент одной кнопкой.</div>
+                </div></div>
+              </div>
+
+              <div class="faq-item">
+                <button class="faq-trigger" data-faq>
+                  <span>Тратит ли заряд при работе в фоне?</span>
+                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="faq-body"><div class="faq-inner">
+                  <div class="faq-text">Минимально. Фоновая служба не держит экран и не дёргает сервер постоянно: между парами она спит и активируется только к началу выбранной пары. Ночью фоновая синхронизация вообще приостанавливается, чтобы не тратить батарею и не делать лишние запросы.</div>
+                </div></div>
+              </div>
+
+              <div class="faq-item">
+                <button class="faq-trigger" data-faq>
+                  <span>Сбрасывается ли сессия в ЛК на компьютере?</span>
+                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="faq-body"><div class="faq-inner">
+                  <div class="faq-text">Личный кабинет СПбГУТ поддерживает только одну активную сессию одновременно. Pulse переиспользует сохранённые cookies и не делает лишних повторных входов, но если ты зайдёшь в ЛК с компьютера или другого браузера, текущая сессия в приложении сбросится — и при следующей проверке Pulse снова войдёт в аккаунт (а на ПК придётся перезайти).</div>
+                </div></div>
+              </div>
+
+              <div class="faq-item">
+                <button class="faq-trigger" data-faq>
+                  <span>Как работает автоотметка и первый вход?</span>
+                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="faq-body"><div class="faq-inner">
+                  <div class="faq-text">Служба сверяется с расписанием и твоими правилами по предметам, после чего отправляет отметку с выбранной задержкой. При первом входе сервер lk.sut.ru иногда бывает перегружен — если не вошло с первой попытки, просто попробуй ещё раз. Сразу после входа загружается весь семестр, поэтому в первые секунды расписание может обновляться.</div>
                 </div></div>
               </div>
 
@@ -3254,17 +3310,7 @@
                   <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
                 <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">Функция сообщений пока находится в тестовом режиме и может работать некорректно (например, не подгружать часть ответов или вложений). Важные переписки желательно проверять самостоятельно на lk.sut.ru.</div>
-                </div></div>
-              </div>
-
-              <div class="faq-item">
-                <button class="faq-trigger" data-faq>
-                  <span>Точно ли это безопасно?</span>
-                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-                <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">Да. Учётные данные хранятся локально на твоём устройстве и отправляются напрямую в личный кабинет вуза. В любой момент ты можешь выйти из аккаунта и очистить сессию одной кнопкой.</div>
+                  <div class="faq-text">Раздел сообщений пока работает в тестовом режиме и может отображать часть переписок некорректно. Важные сообщения от преподавателей и деканата лучше дополнительно проверять на lk.sut.ru.</div>
                 </div></div>
               </div>
 
@@ -4106,8 +4152,18 @@
           </div>
           `;
 
-        const todayDateStr = getTodayDateStr();
-        const todayNotes = getNotesForDate(todayDateStr);
+        const isInitialLoading = state.scanningSemester || /загрузк|проверк/i.test(state.daemonStatus || '');
+        if (isInitialLoading) {
+          const loadLabel = state.scanningSemester && state.scanStatus
+            ? state.scanStatus
+            : 'Идёт загрузка данных с сервера lk.sut.ru…';
+          html += `
+            <div class="sync-banner anim-in">
+              <span class="spinner" style="flex-shrink:0;"></span>
+              <span>${escapeHtml(loadLabel)} Расписание может обновляться несколько секунд.</span>
+            </div>
+          `;
+        }
         if (todayNotes.length) {
           html += `
             <div class="day-notes-box tap anim-in" id="todayNotesBox">
@@ -4361,8 +4417,19 @@
         const flatDays = getAllDaysFlat();
         const feed = $('dayFeed');
 
-        const dot = $('scheduleFilterDot');
-        if (dot) dot.style.display = state.scheduleFilter === 'Все' ? 'none' : 'block';
+        const schedBanner = $('scheduleSyncBanner');
+        if (schedBanner) {
+          if (state.scanningSemester) {
+            schedBanner.innerHTML = `
+              <div class="sync-banner" style="margin-bottom:6px;">
+                <span class="spinner" style="flex-shrink:0;"></span>
+                <span>${escapeHtml(state.scanStatus || 'Идёт загрузка расписания с сервера lk.sut.ru…')} В начале интерфейс может слегка подтормаживать.</span>
+              </div>
+            `;
+          } else {
+            schedBanner.innerHTML = '';
+          }
+        }
 
         if (!flatDays.length) {
           renderScheduleHeaderControls([]);
@@ -4410,6 +4477,10 @@
                   ? `<div style="display:inline-flex;gap:4px;flex-shrink:0;">${lessonGrades.map((g) => `<span class="grade-pill ${getGradePillClass(g)}" style="min-width:26px;height:26px;font-size:12.5px;">${escapeHtml(g.value || g.display)}</span>`).join('')}</div>`
                   : '';
 
+                const teacherHtml = l.teacher && l.teacher !== 'Преподаватель не указан'
+                  ? `<div class="mini-teacher">${escapeHtml(l.teacher)}</div>`
+                  : '';
+
                 return `
                   <div class="mini-lesson tap ${lessonPast ? 'is-past' : ''}" data-sched-lesson="${encodeURIComponent(JSON.stringify(l))}">
                     <div class="mini-time tabular">
@@ -4423,6 +4494,7 @@
                         <span class="type-pill type-${tKey}">${escapeHtml(l.type)}</span>
                         <span class="mini-sub">${escapeHtml(l.room)}</span>
                       </div>
+                      ${teacherHtml}
                     </div>
                     ${gradeBadgeHtml}
                     ${l.checked ? '<span class="badge accent">✓</span>' : ''}
@@ -5282,6 +5354,35 @@
         return '';
       }
 
+      function findLessonTypesForDiarySession(dateIso, shortDate, subject) {
+        const subjNorm = String(subject || '').trim().toLowerCase();
+        if (!subjNorm) return [];
+
+        let targetDateStr = '';
+        if (dateIso && /^\d{4}-\d{2}-\d{2}/.test(dateIso)) {
+          const p = dateIso.slice(0, 10).split('-');
+          targetDateStr = `${p[2]}.${p[1]}.${p[0]}`;
+        }
+
+        const flatDays = getAllDaysFlat();
+        const types = [];
+        flatDays.forEach((day) => {
+          const matchDate = (targetDateStr && day.dateStr === targetDateStr)
+            || (!targetDateStr && shortDate && day.dateStr && day.dateStr.startsWith(shortDate + '.'));
+          if (!matchDate) return;
+
+          (day.lessons || []).forEach((l) => {
+            const ln = String(l.subject || '').trim().toLowerCase();
+            if (!ln) return;
+            if (ln === subjNorm || ln.includes(subjNorm) || subjNorm.includes(ln)) {
+              if (l.type && !types.includes(l.type)) {
+                types.push(l.type);
+              }
+            }
+          });
+        });
+        return types;
+      }
       function openDiaryAttendanceSheet(d) {
         const stats = getEffectiveSubjectAttendance(d);
         const countExcused = !!state.countExcusedAsAttended;
@@ -5304,11 +5405,16 @@
             const isCounted = countExcused && (s.status === 'sick' || s.status === 'excused');
             const dowText = s.dowFull || s.dow || '';
             const dateLabel = dowText ? `${s.date} · ${dowText}` : (s.date || 'Дата не указана');
+            const lessonTypes = findLessonTypesForDiarySession(s.dateIso, s.date, d.subject);
+            const typesHtml = lessonTypes.length
+              ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:5px;">${lessonTypes.map((t) => `<span class="type-pill type-${getTypeKey(t)}">${escapeHtml(t)}</span>`).join('')}</div>`
+              : '';
             return `
               <div class="diary-detail-row">
-                <div>
+                <div style="min-width:0;">
                   <div class="row-title tabular">${escapeHtml(dateLabel)}</div>
                   <div class="row-sub">${escapeHtml(meta.label)}${isCounted ? ' · засчитано как посещение' : ''}</div>
+                  ${typesHtml}
                 </div>
                 <span class="badge ${isCounted ? 'success' : meta.badgeClass}">${escapeHtml(meta.code)}</span>
               </div>
@@ -5547,15 +5653,18 @@
               ? `<div class="controls-row">${filledControls.map(formatControlChipHtml).join('')}</div>`
               : '';
 
-            const creditBadge = d.credit && d.credit !== 'Контроль'
-              ? `<span class="badge">${escapeHtml(d.credit)}</span>`
+            const subjNums = entries
+              .map((e) => Number(e.value))
+              .filter((n) => !Number.isNaN(n) && n >= 2 && n <= 5);
+            const avgBadge = subjNums.length
+              ? `<span class="badge accent tabular">${(subjNums.reduce((a, b) => a + b, 0) / subjNums.length).toFixed(2)}</span>`
               : '';
 
             html += `
               <div class="diary-card tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-diary-grades="${idx}">
                 <div class="diary-top" style="margin-bottom:8px;">
                   <span class="diary-name">${escapeHtml(d.subject)}</span>
-                  ${creditBadge}
+                  ${avgBadge}
                 </div>
                 <div class="grades-row">${pills}</div>
                 ${controlsRowHtml}
@@ -6124,6 +6233,7 @@
               </div>
               <div class="field-error" id="loginError"></div>
               <button type="submit" class="full-btn" id="loginSubmitBtn" style="margin-top:6px;">Войти и синхронизировать</button>
+              <div class="row-sub" style="margin-top:10px;line-height:1.45;text-align:center;">Если сервер lk.sut.ru перегружен и вход не прошёл с первого раза — просто нажмите «Войти» ещё раз. После входа начнётся загрузка расписания.</div>
             </form>
           `);
           $('loginForm').addEventListener('submit', (e) => {
@@ -6151,9 +6261,9 @@
               prevLogCount: Array.isArray(state.logs) ? state.logs.length : 0,
               timeoutId: setTimeout(() => {
                 if (loginAttempt.pending && !state.account.loggedIn) {
-                  handleLoginResult(false, 'Не удалось войти: проверьте логин, пароль и интернет');
+                  handleLoginResult(false, 'Сервер lk.sut.ru не ответил вовремя (возможно, перегружен). Попробуйте войти ещё раз.');
                 }
-              }, 12000)
+              }, 15000)
             };
 
             try {
