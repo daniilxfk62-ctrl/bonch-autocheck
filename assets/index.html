@@ -2616,11 +2616,15 @@
       pointer-events: auto;
     }
 
+    .onboard-page.page-welcome {
+      padding: max(14px, env(safe-area-inset-top)) 18px max(16px, env(safe-area-inset-bottom));
+    }
+
     .onboard-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
       flex-shrink: 0;
     }
 
@@ -2654,9 +2658,9 @@
     /* Animated Pulse Emblem on Welcome Screen */
     .hero-emblem-wrap {
       position: relative;
-      width: 68px;
-      height: 68px;
-      margin-bottom: 18px;
+      width: 52px;
+      height: 52px;
+      margin-bottom: 12px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -2665,7 +2669,7 @@
     .hero-ring {
       position: absolute;
       inset: 0;
-      border-radius: 24px;
+      border-radius: 18px;
       border: 1.5px solid var(--accent-ring);
       animation: emblemRipple 3.4s var(--spring) infinite;
     }
@@ -2676,22 +2680,22 @@
 
     @keyframes emblemRipple {
       0% { transform: scale(0.88); opacity: 0.75; }
-      100% { transform: scale(1.48); opacity: 0; }
+      100% { transform: scale(1.42); opacity: 0; }
     }
 
     .hero-emblem {
       position: relative;
       z-index: 2;
-      width: 58px;
-      height: 58px;
-      border-radius: 20px;
+      width: 46px;
+      height: 46px;
+      border-radius: 16px;
       background: var(--accent-soft);
       border: 1px solid var(--accent-ring);
       color: var(--accent);
       display: flex;
       align-items: center;
       justify-content: center;
-      box-shadow: 0 10px 26px -8px var(--accent-ring);
+      box-shadow: 0 8px 22px -8px var(--accent-ring);
     }
 
     /* Apple Blur-Reveal Text Animation */
@@ -2720,15 +2724,15 @@
     .reveal-d6 { animation-delay: 470ms !important; }
 
     .welcome-hero {
-      margin-bottom: 22px;
+      margin-bottom: 14px;
     }
 
     .welcome-h1 {
-      font-size: 31px;
+      font-size: 26px;
       font-weight: 700;
       letter-spacing: -0.04em;
       line-height: 1.08;
-      margin-bottom: 10px;
+      margin-bottom: 6px;
     }
 
     .welcome-h1 .accent-word {
@@ -2736,8 +2740,8 @@
     }
 
     .welcome-lead {
-      font-size: 14.5px;
-      line-height: 1.48;
+      font-size: 13.5px;
+      line-height: 1.4;
       color: var(--text-secondary);
       letter-spacing: -0.01em;
     }
@@ -2745,16 +2749,16 @@
     .pillar-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      margin-bottom: 22px;
+      gap: 8px;
+      margin-bottom: 14px;
     }
 
     .pillar-card {
       display: flex;
       align-items: flex-start;
-      gap: 13px;
-      padding: 14px 15px;
-      border-radius: 20px;
+      gap: 11px;
+      padding: 11px 13px;
+      border-radius: 16px;
       background: var(--surface);
       border: 1px solid var(--border);
       transition: transform 0.22s var(--spring), border-color 0.22s ease;
@@ -2765,9 +2769,9 @@
     }
 
     .pillar-icon {
-      width: 38px;
-      height: 38px;
-      border-radius: 13px;
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
       background: var(--surface-hover);
       border: 1px solid var(--border);
       color: var(--text);
@@ -2796,15 +2800,15 @@
     }
 
     .pillar-title {
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 600;
       letter-spacing: -0.015em;
       margin-bottom: 2px;
     }
 
     .pillar-desc {
-      font-size: 12.5px;
-      line-height: 1.42;
+      font-size: 12px;
+      line-height: 1.35;
       color: var(--text-secondary);
     }
 
@@ -2812,8 +2816,72 @@
       margin-top: auto;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      padding-top: 6px;
+      gap: 8px;
+      padding-top: 4px;
+    }
+
+    .full-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .beta-notice {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: var(--warn-soft);
+      color: var(--warn);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+
+    /* Easter Egg: Spinning Big Discs */
+    .discs-stage {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      padding: 22px 0 18px;
+    }
+
+    .big-disc {
+      position: relative;
+      width: 106px;
+      height: 106px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at center, var(--sheet-bg) 0 9px, var(--accent) 9px 23px, #1c1c22 24px 26px, #111116 27px 53px),
+        repeating-radial-gradient(circle at center, rgba(255,255,255,0.06) 0 1px, transparent 1px 4px);
+      border: 2px solid var(--border-strong);
+      box-shadow: 0 12px 30px -8px var(--accent-ring);
+      animation: spin 1.6s linear infinite;
+    }
+
+    .big-disc::before {
+      content: '';
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      border: 1.5px solid transparent;
+      border-top-color: rgba(255, 255, 255, 0.36);
+      border-bottom-color: rgba(255, 255, 255, 0.16);
+    }
+
+    .big-disc.disc-reverse {
+      animation-direction: reverse;
+      animation-duration: 1.9s;
+    }
+
+    .discs-caption {
+      text-align: center;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin-bottom: 18px;
     }
 
     .link-btn {
@@ -3107,7 +3175,7 @@
                 </div>
               </div>
               <h2 class="welcome-h1 reveal reveal-d2">Пары на <span class="accent-word">автопилоте</span>.</h2>
-              <p class="welcome-lead reveal reveal-d3">Удобный клиент ЛК СПбГУТ: автоотметка по звонкам, расписание, сообщения и дневник в одном месте.</p>
+              <p class="welcome-lead reveal reveal-d3">Удобный клиент ЛК СПбГУТ: автоотметка по расписанию пар, сообщения и дневник в одном месте.</p>
             </div>
 
             <div class="pillar-list">
@@ -3118,7 +3186,7 @@
                 </div>
                 <div>
                   <div class="pillar-title">Автоотметка по правилам</div>
-                  <div class="pillar-desc">Отмечает тебя на выбранных лекциях, практиках и лабах с естественной задержкой после звонка.</div>
+                  <div class="pillar-desc">Отмечает тебя на выбранных лекциях, практиках и лабах с естественной задержкой после начала пары.</div>
                 </div>
               </div>
 
@@ -3140,7 +3208,7 @@
                 </div>
                 <div>
                   <div class="pillar-title">Весь кабинет под рукой</div>
-                  <div class="pillar-desc">18 недель расписания, личные сообщения, файлы группы и статистика посещаемости без лишнего шума.</div>
+                  <div class="pillar-desc">Расписание на семестр, дневник и файлы группы. Раздел сообщений пока тестовый — важное лучше проверять в ЛК.</div>
                 </div>
               </div>
             </div>
@@ -3176,7 +3244,17 @@
                   <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
                 <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">Фоновая служба сверяется с расписанием звонков и твоими правилами по каждому предмету. Когда начинается нужная лекция, практика или лаба, отметка отправляется автоматически с выбранной задержкой.</div>
+                  <div class="faq-text">Фоновая служба сверяется с расписанием пар и твоими правилами по каждому предмету. Когда начинается нужная лекция, практика или лаба, отметка отправляется автоматически с выбранной задержкой.</div>
+                </div></div>
+              </div>
+
+              <div class="faq-item">
+                <button class="faq-trigger" data-faq>
+                  <span>Сообщения работают стабильно?</span>
+                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
+                <div class="faq-body"><div class="faq-inner">
+                  <div class="faq-text">Функция сообщений пока находится в тестовом режиме и может работать некорректно (например, не подгружать часть ответов или вложений). Важные переписки желательно проверять самостоятельно на lk.sut.ru.</div>
                 </div></div>
               </div>
 
@@ -3231,22 +3309,25 @@
       const APP_VERSION = 'v2.6';
       const APP_BUILD = '02.06.00';
       const DEV_SECRET_PASSWORD = 'данИИл';
+      const EASTER_EGG_PASSWORD = 'Данила';
       const DEV_TAP_THRESHOLD = 5;
 
       const DEVELOPERS = [
         {
-          name: 'Разработчик 1',
-          initials: 'Р1',
-          role: 'Android Backend & Автоотметка',
-          githubHandle: '@developer1',
-          githubUrl: 'https://github.com/developer1'
+          name: 'daniilxfk62-ctrl',
+          initials: 'DX',
+          role: 'Сделал изначальный бэкенд и выпустил первую версию приложения',
+          extra: '',
+          githubHandle: 'GitHub',
+          githubUrl: 'https://github.com/daniilxfk62-ctrl'
         },
         {
-          name: 'Разработчик 2',
-          initials: 'Р2',
-          role: 'Frontend & Дизайн интерфейса',
-          githubHandle: '@developer2',
-          githubUrl: 'https://github.com/developer2'
+          name: 'g1tm4estr0',
+          initials: 'GM',
+          role: 'Доработал интерфейс, добавил дневник и сообщения',
+          extra: 'Крутил большие диски',
+          githubHandle: 'GitHub',
+          githubUrl: 'https://github.com/g1tm4estr0'
         }
       ];
 
@@ -3459,6 +3540,7 @@
               <div style="min-width:0;">
                 <div class="row-title" style="font-weight:600;">${escapeHtml(dev.name)}</div>
                 <div class="row-sub">${escapeHtml(dev.role)}</div>
+                ${dev.extra ? `<div class="row-sub">${escapeHtml(dev.extra)}</div>` : ''}
               </div>
             </div>
             <span class="gh-pill">
@@ -4301,7 +4383,7 @@
             btn.addEventListener('click', () => {
               if (!requireBackendConnected()) return;
               window.AndroidBridge.scanSemesterNow('', '', '', '');
-              showToast('Сканирование 18 недель семестра...');
+              showToast('Загрузка расписания семестра...');
             });
           }
           return;
@@ -4748,7 +4830,7 @@
           <div class="sheet-title">Фильтр расписания</div>
           <div class="sheet-sub">Выберите тип занятий для отображения</div>
           <div class="settings-group">${rows}</div>
-          ${HAS_BRIDGE ? '<button class="full-btn secondary" id="rescanSemSheetBtn">Обновить весь семестр (18 нед.)</button>' : ''}
+          ${HAS_BRIDGE ? '<button class="full-btn secondary" id="rescanSemSheetBtn">Обновить расписание семестра</button>' : ''}
         `);
 
         $('sheetContent').querySelectorAll('[data-pick-filter]').forEach((row) => {
@@ -4767,7 +4849,7 @@
             closeSheet();
             if (!requireBackendConnected()) return;
             window.AndroidBridge.scanSemesterNow('', '', '', '');
-            showToast('Загрузка 18 недель семестра...');
+            showToast('Загрузка расписания семестра...');
           });
         }
       }
@@ -4791,6 +4873,10 @@
         let searchEl = $('msgSearchInput');
         if (!searchEl) {
           container.innerHTML = `
+            <div class="beta-notice">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              <span>Раздел сообщений работает в тестовом режиме и может отображать данные некорректно — важные сообщения лучше проверять в ЛК.</span>
+            </div>
             <div class="search-box">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" id="msgSearchInput" placeholder="" value="" />
@@ -5602,16 +5688,9 @@
             <div class="settings-row tap" id="syncAllRow">
               <div>
                 <div class="row-title">Синхронизировать всё</div>
-                <div class="row-sub">Расписание, дневник, сообщения и файлы</div>
+                <div class="row-sub">${state.scanningSemester && state.scanStatus ? escapeHtml(state.scanStatus) : 'Расписание семестра, дневник, сообщения и файлы'}</div>
               </div>
               <span class="badge">Сейчас</span>
-            </div>
-            <div class="settings-row tap" id="scanSemesterRow">
-              <div>
-                <div class="row-title">Загрузить весь семестр</div>
-                <div class="row-sub">${state.scanningSemester ? escapeHtml(state.scanStatus) : 'Сканирование всех 18 недель'}</div>
-              </div>
-              <span class="badge">18 нед.</span>
             </div>
           </div>
 
@@ -5674,12 +5753,6 @@
           showToast('Синхронизация с ЛК...');
         });
 
-        $('scanSemesterRow').addEventListener('click', () => {
-          if (!requireBackendConnected()) return;
-          window.AndroidBridge.scanSemesterNow('', '', '', '');
-          showToast('Сканирование 18 недель...');
-        });
-
         const devRow = $('openDevMenuRow');
         if (devRow) devRow.addEventListener('click', openDeveloperMenuSheet);
 
@@ -5740,6 +5813,8 @@
             openDeveloperMenuSheet();
             const grp = $('devMenuGroup');
             if (grp) grp.classList.add('unlock-glow');
+          } else if (val === EASTER_EGG_PASSWORD) {
+            openBigDiscsEasterEggSheet();
           } else {
             input.classList.add('is-error');
             errEl.textContent = 'Неверный пароль. Проверьте регистр символов.';
@@ -5755,7 +5830,17 @@
           errEl.textContent = '';
         });
       }
-
+      function openBigDiscsEasterEggSheet() {
+        openSheet(`
+          <div class="discs-stage" aria-hidden="true">
+            <div class="big-disc"></div>
+            <div class="big-disc disc-reverse"></div>
+          </div>
+          <div class="discs-caption">Он крутил большие диски</div>
+          <button class="full-btn secondary" id="closeDiscsEggBtn">Закрыть</button>
+        `);
+        $('closeDiscsEggBtn').addEventListener('click', closeSheet);
+      }
       function openDeveloperMenuSheet() {
         const logsArr = Array.isArray(state.logs) ? state.logs : [];
         const logsHtml = logsArr.length
@@ -5867,7 +5952,7 @@
               closeSheet();
               if (!requireBackendConnected()) return;
               window.AndroidBridge.scanSemesterNow('', '', '', '');
-              showToast('Сканирование 18 недель...');
+              showToast('Загрузка расписания семестра...');
             });
           }
           const closeBtn = $('rulesCloseBtn');
@@ -6107,12 +6192,6 @@
               </div>
               <span class="badge accent tabular">${APP_BUILD}</span>
             </div>
-            <div class="settings-row">
-              <div>
-                <div class="row-title">Приватность</div>
-                <div class="row-sub">Локальное хранение учётных данных</div>
-              </div>
-            </div>
           </div>
 
           <div class="section-label"><span>Разработчики</span></div>
@@ -6274,6 +6353,33 @@
       }
 
       /* ===== ONBOARDING ===== */
+      let onboardTimerId = null;
+
+      function startOnboardingCountdown() {
+        clearInterval(onboardTimerId);
+        const btn = $('startAppBtn');
+        if (!btn) return;
+        if (state.onboardingSeen) {
+          btn.disabled = false;
+          btn.textContent = 'Начать';
+          return;
+        }
+        let left = 5;
+        btn.disabled = true;
+        btn.textContent = `Начать (${left})`;
+        onboardTimerId = setInterval(() => {
+          left -= 1;
+          if (left <= 0) {
+            clearInterval(onboardTimerId);
+            onboardTimerId = null;
+            btn.disabled = false;
+            btn.textContent = 'Начать';
+          } else {
+            btn.textContent = `Начать (${left})`;
+          }
+        }, 1000);
+      }
+
       function openOnboarding(toDetails) {
         const creditsHost = $('onboardCreditsGroup');
         if (creditsHost) creditsHost.innerHTML = renderCreditsRowsHtml();
@@ -6281,9 +6387,12 @@
         overlay.classList.toggle('show-details', !!toDetails);
         overlay.classList.add('open');
         overlay.setAttribute('aria-hidden', 'false');
+        startOnboardingCountdown();
       }
 
       function closeOnboarding() {
+        clearInterval(onboardTimerId);
+        onboardTimerId = null;
         const overlay = $('onboardOverlay');
         overlay.classList.remove('open', 'show-details');
         overlay.setAttribute('aria-hidden', 'true');
