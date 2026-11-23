@@ -38,6 +38,7 @@ public class AppStorage {
     public static final String FILE_MUTED_SENDERS = "muted_senders_v4.json";
 
     public static final String FILE_BG_STATE = "bg_state_v4.json";
+    public static final String FILE_LOGS = "app_logs_v4.json";
     public static final String FILE_ENABLED_FLAG = "daemon_enabled.flag";
 
     private final File filesDir;
@@ -372,20 +373,36 @@ public class AppStorage {
 
     public synchronized void addLog(String msg) {
         String stamp = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date());
-        memoryLogs.add("[" + stamp + "] " + msg);
-        if (memoryLogs.size() > 90) {
-            memoryLogs.remove(0);
+        String line = "[" + stamp + "] " + msg;
+        JSONArray arr = getLogsArray();
+        arr.put(line);
+        JSONArray trimmed = new JSONArray();
+        int start = Math.max(0, arr.length() - 120);
+        for (int i = start; i < arr.length(); i++) {
+            trimmed.put(arr.optString(i, ""));
         }
+        memoryLogs.clear();
+        for (int i = 0; i < trimmed.length(); i++) {
+            memoryLogs.add(trimmed.optString(i, ""));
+        }
+        writeText(FILE_LOGS, trimmed.toString());
+    }
+
+    public synchronized JSONArray getLogsArray() {
+        File f = new File(filesDir, FILE_LOGS);
+        if (f.exists()) {
+            return readJsonArray(FILE_LOGS);
+        }
+        JSONObject state = readJson(FILE_BG_STATE, "{}");
+        JSONArray legacy = state.optJSONArray("logs");
+        return legacy != null ? legacy : new JSONArray();
     }
 
     public synchronized void loadLogsFromDisk() {
-        JSONObject state = readJson(FILE_BG_STATE, "{}");
-        JSONArray arr = state.optJSONArray("logs");
-        if (arr != null) {
-            memoryLogs.clear();
-            for (int i = 0; i < arr.length(); i++) {
-                memoryLogs.add(arr.optString(i, ""));
-            }
+        JSONArray arr = getLogsArray();
+        memoryLogs.clear();
+        for (int i = 0; i < arr.length(); i++) {
+            memoryLogs.add(arr.optString(i, ""));
         }
     }
 
@@ -405,7 +422,7 @@ public class AppStorage {
             obj.put("scanStatus", scanStatusText);
             obj.put("startMillis", serviceStartMillis);
             obj.put("todayDayIdx", todayDayIdx);
-            obj.put("logs", new JSONArray(memoryLogs));
+            obj.put("logs", getLogsArray());
             writeText(FILE_BG_STATE, obj.toString());
         } catch (Exception ignored) {}
     }

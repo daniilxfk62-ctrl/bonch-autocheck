@@ -428,20 +428,24 @@ public class SutApiClient {
                 if (!cookiesRestored) {
                     restoreCookiesFromStorage(storage);
                 }
-                if (hasCookies() && checkSessionAlive()) {
-                    authenticated = true;
-                    lastLogin = login;
-                    lastPass = password;
-                    storage.addLog("Сессия восстановлена без повторного входа (Анти-кик)");
-                    if (storage.getProfile().optString("name", "").isEmpty()) {
-                        try {
-                            String cabHtml = httpRequestFast("GET", LOGIN_PAGE_URL, null);
-                            if (!isLoginFormHtml(cabHtml)) {
-                                parseMenuAndProfile(cabHtml, login, storage);
-                            }
-                        } catch (Exception ignored) {}
+                if (hasCookies()) {
+                    if (checkSessionAlive()) {
+                        authenticated = true;
+                        lastLogin = login;
+                        lastPass = password;
+                        storage.addLog("Сессия восстановлена без повторного входа (Анти-кик)");
+                        if (storage.getProfile().optString("name", "").isEmpty()) {
+                            try {
+                                String cabHtml = httpRequestFast("GET", LOGIN_PAGE_URL, null);
+                                if (!isLoginFormHtml(cabHtml)) {
+                                    parseMenuAndProfile(cabHtml, login, storage);
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                        return true;
+                    } else {
+                        storage.addLog("Сохранённая сессия lk.sut.ru истекла или сброшена — выполняем повторный вход...");
                     }
-                    return true;
                 }
             }
 

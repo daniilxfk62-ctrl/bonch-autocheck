@@ -122,7 +122,7 @@ public class MessageManager {
 
             JSONArray existingArr = storage.readJsonArray(AppStorage.FILE_MESSAGES);
             Map<String, JSONObject> existingBySender = new LinkedHashMap<>();
-            Map<String, String> cachedBodyByServerId = new LinkedHashMap<>();
+            Map<String, JSONObject> cachedBubbleByServerId = new LinkedHashMap<>();
             Set<String> readLocallyIds = new HashSet<>();
 
             for (int i = 0; i < existingArr.length(); i++) {
@@ -144,7 +144,7 @@ public class MessageManager {
                         String sid = b.optString("serverId", "");
                         String txt = b.optString("text", "");
                         if (!sid.isEmpty() && !txt.isEmpty()) {
-                            cachedBodyByServerId.put(sid, txt);
+                            cachedBubbleByServerId.put(sid, b);
                         }
                     }
                 }
@@ -258,16 +258,29 @@ public class MessageManager {
                 if (isGarbageMessageToken(sender)) continue;
                 if (subject.isEmpty()) subject = "Личное сообщение";
 
-                // Открываем реальный текст и вложения сообщения через POST sendto2.php?id=<ID>&prosmotr
+                // Открываем реальный текст, тему и вложения сообщения через POST sendto2.php?id=<ID>&prosmotr
                 String fullText = "";
+                String detailTitle = "";
                 String idinfo = "0";
                 String itemnumber = serverId;
-                if (!serverId.isEmpty() && cachedBodyByServerId.containsKey(serverId)) {
-                    fullText = cachedBodyByServerId.get(serverId);
+                if (!serverId.isEmpty() && cachedBubbleByServerId.containsKey(serverId)) {
+                    JSONObject cachedB = cachedBubbleByServerId.get(serverId);
+                    fullText = cachedB.optString("text", "");
+                    detailTitle = cachedB.optString("subject", "");
+                    JSONArray cachedAtts = cachedB.optJSONArray("attachments");
+                    if (cachedAtts != null) {
+                        for (int ai = 0; ai < cachedAtts.length(); ai++) {
+                            JSONObject aObj = cachedAtts.optJSONObject(ai);
+                            if (aObj != null) {
+                                addUniqueAttachment(rowAttachments, aObj.optString("name", ""), aObj.optString("url", ""));
+                            }
+                        }
+                    }
                 } else if (!serverId.isEmpty() && fetchedDetailsCount < maxDetailsToFetch) {
                     fetchedDetailsCount++;
                     ParsedMessageDetail det = fetchMessageDetailViaSendto2(api, serverId);
                     fullText = det.text;
+                    detailTitle = det.title;
                     idinfo = det.idinfo;
                     itemnumber = det.itemnumber;
                     for (int ai = 0; ai < det.attachments.length(); ai++) {
@@ -280,6 +293,15 @@ public class MessageManager {
                 if (fullText.isEmpty()) {
                     fullText = !bodyPreview.isEmpty() ? bodyPreview : subject;
                 }
+                String msgSubject = !detailTitle.isEmpty()
+                    ? detailTitle
+                    : (!"Личное сообщение".equals(subject) ? subject : "");
+                String msgCaption = (!bodyPreview.isEmpty()
+                    && !bodyPreview.equals(fullText)
+                    && !bodyPreview.equals(msgSubject)
+                    && !fullText.contains(bodyPreview))
+                    ? bodyPreview
+                    : "";
 
                 boolean looksUnread = trLow.contains("<b")
                     || trLow.contains("<strong")
@@ -330,8 +352,11 @@ public class MessageManager {
 
                 JSONObject bubble = new JSONObject();
                 bubble.put("from", "them");
+                bubble.put("subject", msgSubject);
+                bubble.put("caption", msgCaption);
                 bubble.put("text", fullText);
                 bubble.put("time", timeShort);
+                bubble.put("date", foundDate);
                 bubble.put("serverId", serverId);
                 if (rowAttachments.length() > 0) {
                     bubble.put("attachments", rowAttachments);
@@ -384,6 +409,7 @@ public class MessageManager {
     }
 
     private static class ParsedMessageDetail {
+        String title = "";
         String text = "";
         String idinfo = "0";
         String itemnumber = "";
@@ -413,6 +439,10 @@ public class MessageManager {
                 JSONObject json = new JSONObject(trimmed);
                 det.itemnumber = json.optString("itemnumber", serverId);
                 det.idinfo = json.optString("idinfo", "0");
+
+                String rawTitle = json.optString("title",
+                    json.optString("tema", json.optString("subject", "")));
+                det.title = cleanMessageText(rawTitle);
 
                 String annotation = json.optString("annotation", "");
                 det.text = cleanMessageText(annotation);

@@ -735,11 +735,15 @@ public class ScheduleManager {
             if (isValidScheduleHtml(getHtml)) {
                 return getHtml;
             }
+            storage.addLog("Сессия lk.sut.ru не отвечает или истекла — переподключение...");
+            api.invalidateSession();
             if (api.authenticate(login, password, storage)) {
                 html = api.httpRequest("POST", url, body);
                 if (!isValidScheduleHtml(html)) {
                     html = api.httpRequest("GET", url, null);
                 }
+            } else {
+                storage.addLog("Не удалось переподключиться к lk.sut.ru: " + api.getLastAuthError());
             }
         }
         return html != null ? html : "";

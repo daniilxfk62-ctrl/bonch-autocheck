@@ -114,13 +114,17 @@ public class MainActivity extends Activity {
             } else {
                 startService(svc);
             }
-        } catch (IllegalStateException e) {
-            if (Build.VERSION.SDK_INT >= 26) {
-                try {
-                    startForegroundService(svc);
-                } catch (Exception ignored) {}
+        } catch (Exception e) {
+            storage.addLog("Ошибка запуска службы (" + action + "): " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            try {
+                startService(svc);
+            } catch (Exception e2) {
+                storage.addLog("Повторный запуск службы не удался (" + action + "): " + e2.getClass().getSimpleName() + ": " + e2.getMessage());
+                if (requiresForeground) {
+                    storage.setDaemonEnabled(false);
+                }
             }
-        } catch (Exception ignored) {}
+        }
     }
 
     private String buildCookieHeaderFromStorage() {
@@ -242,6 +246,7 @@ public class MainActivity extends Activity {
                 state.put("messagesMtime", storage.getFileMtime(AppStorage.FILE_MESSAGES));
                 state.put("filesMtime", storage.getFileMtime(AppStorage.FILE_GROUP_FILES));
                 state.put("profileMtime", storage.getFileMtime(AppStorage.FILE_PROFILE));
+                state.put("logs", storage.getLogsArray());
                 return state.toString();
             } catch (Exception e) {
                 return "{}";
@@ -293,9 +298,21 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void setAutoCheckEnabled(boolean enabled) {
             if (enabled) {
-                requestBatteryOptimizationIfNeeded();
+                JSONObject cfg = storage.getUserConfig();
+                String login = cfg.optString("login", "").trim();
+                String pass = cfg.optString("password", "").trim();
+                if (login.isEmpty() || pass.isEmpty()) {
+                    storage.setDaemonEnabled(false);
+                    storage.addLog("Автоотметка не запущена: логин или пароль не сохранены. Войдите в аккаунт заново.");
+                    return;
+                }
+                storage.setDaemonEnabled(true);
+                storage.addLog("Включение автоотметки...");
                 sendDaemonCommand("start");
+                requestBatteryOptimizationIfNeeded();
             } else {
+                storage.setDaemonEnabled(false);
+                storage.addLog("Отключение автоотметки...");
                 sendDaemonCommand("stop");
             }
         }

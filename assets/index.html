@@ -1182,6 +1182,42 @@
       background: var(--surface-hover);
     }
 
+    .cal-cell.is-outside {
+      color: var(--text-muted);
+      opacity: 0.28;
+      cursor: default;
+      pointer-events: none;
+    }
+
+    .cal-cell.is-empty {
+      pointer-events: none;
+    }
+
+    .cal-month-block {
+      margin-bottom: 14px;
+    }
+
+    .cal-month-block:last-child {
+      margin-bottom: 2px;
+    }
+
+    .cal-month-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 6px 7px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+      color: var(--text);
+    }
+
+    .cal-month-rows {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
     .day-hero-right {
       display: flex;
       align-items: center;
@@ -1825,6 +1861,48 @@
       color: var(--danger);
     }
 
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 9px;
+      padding-top: 9px;
+      border-top: 1px solid var(--border);
+    }
+
+    .ctrl-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      height: 26px;
+      padding: 0 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--surface-hover);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .ctrl-pill.ok {
+      background: var(--type-practice-soft);
+      border-color: var(--type-practice-ring);
+      color: var(--type-practice);
+    }
+
+    .ctrl-pill.fail {
+      background: var(--danger-soft);
+      border-color: rgba(220, 38, 38, 0.28);
+      color: var(--danger);
+    }
+
+    .ctrl-pill.accent {
+      background: var(--accent-soft);
+      border-color: var(--accent-ring);
+      color: var(--accent);
+    }
+
     .att-dot.excused {
       background: var(--warn);
     }
@@ -2400,6 +2478,26 @@
       color: var(--ink-text);
       border-color: transparent;
       align-self: flex-end;
+    }
+
+    .bubble-subject {
+      font-size: 12.5px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--accent);
+    }
+
+    .bubble.me .bubble-subject {
+      color: inherit;
+      opacity: 0.9;
+    }
+
+    .bubble-caption {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 5px;
+      padding-top: 5px;
+      border-top: 1px solid var(--border);
     }
 
     .bubble-time {
@@ -3623,6 +3721,7 @@
             lastMtimes.diary = st.diaryMtime || 0;
             state.diary = safeParse(bridge.getCachedDiarySummary(), []);
             needDiary = true;
+            needSchedule = true;
           }
 
           if (force) applyTheme();
@@ -4221,9 +4320,14 @@
 
           const lessonsHtml = filtered.length
             ? filtered.map((l) => {
-                const autoActive = isClassAutoActive(l);
                 const tKey = getTypeKey(l.type);
                 const lessonPast = isLessonPast(day.dateStr, l.start, l.end);
+                const lessonGrades = findDiaryGradesForLesson(day.dateStr, l.subject);
+
+                const gradeBadgeHtml = lessonGrades.length
+                  ? `<div style="display:inline-flex;gap:4px;flex-shrink:0;">${lessonGrades.map((g) => `<span class="grade-pill ${getGradePillClass(g)}" style="min-width:26px;height:26px;font-size:12.5px;">${escapeHtml(g.value || g.display)}</span>`).join('')}</div>`
+                  : '';
+
                 return `
                   <div class="mini-lesson tap ${lessonPast ? 'is-past' : ''}" data-sched-lesson="${encodeURIComponent(JSON.stringify(l))}">
                     <div class="mini-time tabular">
@@ -4238,7 +4342,8 @@
                         <span class="mini-sub">${escapeHtml(l.room)}</span>
                       </div>
                     </div>
-                    ${l.checked ? '<span class="badge accent">✓</span>' : (autoActive ? '<span class="badge accent">Авто</span>' : '')}
+                    ${gradeBadgeHtml}
+                    ${l.checked ? '<span class="badge accent">✓</span>' : ''}
                   </div>
                 `;
               }).join('')
@@ -4418,73 +4523,145 @@
         });
       }, { passive: true });
 
+      function findDiaryGradesForLesson(dateStr, subject) {
+        if (!dateStr || !subject || !Array.isArray(state.diary) || !state.diary.length) return [];
+        const parts = String(dateStr).split('.');
+        if (parts.length < 3) return [];
+        const shortDate = `${parts[0]}.${parts[1]}`;
+        const isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        const subjNorm = String(subject).trim().toLowerCase();
+
+        const matchedDiary = state.diary.find((d) => {
+          const dn = String(d.subject || '').trim().toLowerCase();
+          if (!dn) return false;
+          return dn === subjNorm || dn.includes(subjNorm) || subjNorm.includes(dn);
+        });
+        if (!matchedDiary) return [];
+
+        return getSubjectGradeEntries(matchedDiary).filter((e) =>
+          (e.dateIso && e.dateIso === isoDate) || (e.date && e.date === shortDate)
+        );
+      }
+
       function openScheduleCalendarSheet() {
         const flatDays = getAllDaysFlat();
         if (!flatDays.length) {
           showToast('Расписание ещё не загружено');
           return;
         }
-        const weekNums = Object.keys(state.semesterWeeks).map(Number).sort((a, b) => a - b);
         const activeDay = flatDays[state.activeGlobalDayIdx] || flatDays[0];
         const todayIdx = getTodayGlobalIdx();
         const todayTarget = flatDays[todayIdx];
         const hasExactToday = !!(todayTarget && todayTarget.isToday);
         const todayDateStr = getTodayDateStr();
 
-        const rowsHtml = weekNums.map((w) => {
-          const days = state.semesterWeeks[w] || [];
-          const weekStartIdx = flatDays.findIndex((d) => d.week === w && d.dayInWeek === 0);
-          const isCurWeek = activeDay && activeDay.week === w;
-          const cells = [];
-          for (let i = 0; i < 6; i++) {
-            const d = days[i];
-            if (!d) {
-              cells.push('<div></div>');
-              continue;
+        const dayByDateStr = {};
+        let minDate = null;
+        let maxDate = null;
+        flatDays.forEach((d, gIdx) => {
+          dayByDateStr[d.dateStr] = { day: d, gIdx };
+          const dt = parseDateStrToMidnight(d.dateStr);
+          if (dt) {
+            if (!minDate || dt < minDate) minDate = dt;
+            if (!maxDate || dt > maxDate) maxDate = dt;
+          }
+        });
+
+        const monthsHtml = [];
+        if (minDate && maxDate) {
+          let curY = minDate.getFullYear();
+          let curM = minDate.getMonth();
+          const endY = maxDate.getFullYear();
+          const endM = maxDate.getMonth();
+
+          while (curY < endY || (curY === endY && curM <= endM)) {
+            const firstOfMonth = new Date(curY, curM, 1);
+            const daysInMonth = new Date(curY, curM + 1, 0).getDate();
+            const leadEmpty = (firstOfMonth.getDay() + 6) % 7; // 0 = Пн .. 6 = Вс
+            const totalSlots = Math.ceil((leadEmpty + daysInMonth) / 7) * 7;
+
+            const weekRows = [];
+            for (let rowStart = 0; rowStart < totalSlots; rowStart += 7) {
+              const cells = [];
+              let rowWeekNum = 0;
+              let isCurWeekRow = false;
+
+              for (let col = 0; col < 7; col++) {
+                const dayNum = rowStart + col - leadEmpty + 1;
+                if (dayNum < 1 || dayNum > daysInMonth) {
+                  cells.push('<div class="cal-cell is-empty"></div>');
+                  continue;
+                }
+
+                const dStr = `${String(dayNum).padStart(2, '0')}.${String(curM + 1).padStart(2, '0')}.${curY}`;
+                if (col === 6) {
+                  const isSunToday = dStr === todayDateStr;
+                  cells.push(`
+                    <div class="cal-cell tabular is-sunday ${isSunToday ? 'is-sunday-today' : ''}" aria-hidden="true">
+                      <span>${dayNum}</span>
+                      <span class="cal-dots"></span>
+                    </div>
+                  `);
+                  continue;
+                }
+
+                const entry = dayByDateStr[dStr];
+                if (!entry) {
+                  cells.push(`
+                    <div class="cal-cell tabular is-outside" aria-hidden="true">
+                      <span>${dayNum}</span>
+                      <span class="cal-dots"></span>
+                    </div>
+                  `);
+                  continue;
+                }
+
+                const d = entry.day;
+                const gIdx = entry.gIdx;
+                if (!rowWeekNum && d.week) rowWeekNum = d.week;
+                if (activeDay && d.week === activeDay.week) isCurWeekRow = true;
+
+                const isAct = gIdx === state.activeGlobalDayIdx;
+                const isPast = !d.isToday && isDatePast(d.dateStr);
+                const typeSet = new Set((d.lessons || []).map((l) => getTypeKey(l.type)));
+                const hasNotes = getNotesForDate(d.dateStr).length > 0;
+                const dots = ['lecture', 'practice', 'lab']
+                  .filter((t) => typeSet.has(t))
+                  .map((t) => `<span class="cal-dot dot-${t}"></span>`)
+                  .join('') + (hasNotes ? '<span class="cal-dot dot-note"></span>' : '');
+
+                cells.push(`
+                  <button class="cal-cell tabular ${isAct ? 'is-active' : ''} ${d.isToday ? 'is-today' : ''} ${isPast ? 'is-past' : ''}" data-cal-idx="${gIdx}" aria-label="${escapeHtml(d.weekday)}, ${dayNum} ${escapeHtml(MONTHS_GEN[curM] || '')}">
+                    <span>${dayNum}</span>
+                    <span class="cal-dots">${dots}</span>
+                  </button>
+                `);
+              }
+
+              weekRows.push(`
+                <div class="cal-week-row ${isCurWeekRow ? 'is-current-week' : ''}">
+                  <span class="cal-week-tag tabular">${rowWeekNum ? rowWeekNum + 'н' : ''}</span>
+                  ${cells.join('')}
+                </div>
+              `);
             }
-            const gIdx = weekStartIdx + i;
-            const isAct = gIdx === state.activeGlobalDayIdx;
-            const isPast = !d.isToday && isDatePast(d.dateStr);
-            const typeSet = new Set((d.lessons || []).map((l) => getTypeKey(l.type)));
-            const hasNotes = getNotesForDate(d.dateStr).length > 0;
-            const dots = ['lecture', 'practice', 'lab']
-              .filter((t) => typeSet.has(t))
-              .map((t) => `<span class="cal-dot dot-${t}"></span>`)
-              .join('') + (hasNotes ? '<span class="cal-dot dot-note"></span>' : '');
 
-            cells.push(`
-              <button class="cal-cell tabular ${isAct ? 'is-active' : ''} ${d.isToday ? 'is-today' : ''} ${isPast ? 'is-past' : ''}" data-cal-idx="${gIdx}" aria-label="${escapeHtml(d.weekday)}, ${escapeHtml(d.num)} ${escapeHtml(d.month)}">
-                <span>${escapeHtml(d.num)}</span>
-                <span class="cal-dots">${dots}</span>
-              </button>
-            `);
-          }
-
-          let sunInfo = null;
-          if (days[5] && days[5].dateStr) {
-            sunInfo = addDaysToDateStr(days[5].dateStr, 1);
-          } else if (days[0] && days[0].dateStr) {
-            sunInfo = addDaysToDateStr(days[0].dateStr, 6);
-          }
-          if (sunInfo) {
-            const isSunToday = sunInfo.dateStr === todayDateStr;
-            cells.push(`
-              <div class="cal-cell tabular is-sunday ${isSunToday ? 'is-sunday-today' : ''}" aria-hidden="true">
-                <span>${escapeHtml(sunInfo.num)}</span>
-                <span class="cal-dots"></span>
+            monthsHtml.push(`
+              <div class="cal-month-block">
+                <div class="cal-month-head">
+                  <span>${escapeHtml(MONTHS_NOM[curM] || '')} ${curY}</span>
+                </div>
+                <div class="cal-month-rows">${weekRows.join('')}</div>
               </div>
             `);
-          } else {
-            cells.push('<div></div>');
-          }
 
-          return `
-            <div class="cal-week-row ${isCurWeek ? 'is-current-week' : ''}" data-cal-week="${w}">
-              <span class="cal-week-tag tabular">${w}н</span>
-              ${cells.join('')}
-            </div>
-          `;
-        }).join('');
+            curM += 1;
+            if (curM > 11) {
+              curM = 0;
+              curY += 1;
+            }
+          }
+        }
 
         openSheet(`
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
@@ -4495,7 +4672,7 @@
           <div class="cal-header-row">
             <span>Нед</span><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span style="opacity:0.5;">Вс</span>
           </div>
-          <div class="cal-weeks" id="calWeeksScroll">${rowsHtml}</div>
+          <div class="cal-weeks" id="calWeeksScroll">${monthsHtml.join('')}</div>
           <button class="full-btn secondary" id="calJumpTodayBtn" style="margin-top:8px;">${hasExactToday ? 'Перейти к сегодня' : 'Перейти к следующей неделе'}</button>
         `);
 
@@ -4655,6 +4832,9 @@
             list.forEach((m, idx) => {
               const thread = Array.isArray(m.thread) ? m.thread : [];
               const last = thread[thread.length - 1];
+              const hasAtt = last && Array.isArray(last.attachments) && last.attachments.length > 0;
+              const subjPref = last && last.subject && last.subject !== last.text ? `${last.subject} · ` : '';
+              const previewText = last ? `${hasAtt ? '📎 ' : ''}${subjPref}${last.text || ''}` : (m.role || '');
               html += `
                 <div class="msg-item tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-msg="${escapeHtml(m.id)}">
                   <div class="avatar">${escapeHtml(m.initials || 'ЛК')}</div>
@@ -4663,7 +4843,7 @@
                       <span class="msg-name">${escapeHtml(m.sender)}</span>
                       <span class="msg-time tabular">${escapeHtml(m.time || '')}</span>
                     </div>
-                    <div class="msg-preview">${escapeHtml(last ? last.text : (m.role || ''))}</div>
+                    <div class="msg-preview">${escapeHtml(previewText)}</div>
                   </div>
                   ${m.unread ? '<span class="unread-dot"></span>' : ''}
                 </div>
@@ -4730,7 +4910,14 @@
                 `<button type="button" class="pill-btn" data-dl-url="${escapeHtml(a.url || '')}" data-dl-name="${escapeHtml(a.name || 'file')}" style="height:28px;font-size:11.5px;padding:0 10px;">📎 ${escapeHtml(a.name || 'Файл')}</button>`
               ).join('')}</div>`
             : '';
-          return `<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${escapeHtml(b.text)}${attHtml}<span class="bubble-time tabular">${escapeHtml(b.time || '')}</span></div>`;
+          const subjHtml = b.subject && b.subject !== b.text
+            ? `<div class="bubble-subject">${escapeHtml(b.subject)}</div>`
+            : '';
+          const capHtml = b.caption && b.caption !== b.text && b.caption !== b.subject
+            ? `<div class="bubble-caption">${escapeHtml(b.caption)}</div>`
+            : '';
+          const stamp = b.date || b.time || '';
+          return `<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${subjHtml}${escapeHtml(b.text)}${capHtml}${attHtml}<span class="bubble-time tabular">${escapeHtml(stamp)}</span></div>`;
         }).join('');
 
         let pendingFile = null;
@@ -4945,25 +5132,66 @@
       }
 
       function getSubjectGradeEntries(d) {
-        if (Array.isArray(d.gradeEntries) && d.gradeEntries.length) {
-          return d.gradeEntries;
+        if (Array.isArray(d.gradeEntries)) {
+          return d.gradeEntries.filter((e) => !e.kind || e.kind === 'lesson');
         }
-        return (Array.isArray(d.grades) ? d.grades : []).map((g) => ({
-          value: String(g),
-          display: String(g),
-          date: '',
-          dateIso: '',
-          dow: '',
-          dowFull: '',
-          kind: String(g).toLowerCase().includes('атт') ? 'midterm' : 'lesson',
-          label: String(g).toLowerCase().includes('атт') ? 'Промежуточная аттестация' : 'Оценка'
-        }));
+        return (Array.isArray(d.grades) ? d.grades : [])
+          .filter((g) => !String(g).toLowerCase().includes('атт') && !String(g).toLowerCase().includes('зач'))
+          .map((g) => ({
+            value: String(g),
+            display: String(g),
+            date: '',
+            dateIso: '',
+            dow: '',
+            dowFull: '',
+            kind: 'lesson',
+            label: 'Занятие'
+          }));
+      }
+
+      function getSubjectControls(d) {
+        const list = Array.isArray(d.controls) ? d.controls.slice() : [];
+        if (d.credit && !['Контроль', ''].includes(d.credit)) {
+          const hasFinal = list.some((c) => c.type === d.credit);
+          if (!hasFinal) {
+            list.push({
+              type: d.credit,
+              label: d.credit,
+              value: '',
+              passed: '',
+              date: '',
+              dow: '',
+              dowFull: ''
+            });
+          }
+        }
+        return list;
+      }
+
+      function formatControlChipHtml(c) {
+        const val = String(c.value || '').trim();
+        if (!val) return '';
+        const isAtt = c.type === 'Аттестация';
+        const isPass = c.passed === 'true' || c.passed === true;
+        const isFail = c.passed === 'false' || c.passed === false;
+
+        if (isAtt) {
+          const mark = isPass ? '✓' : (isFail ? '✕' : val);
+          const cls = isPass ? 'ok' : (isFail ? 'fail' : 'accent');
+          return `<span class="ctrl-pill ${cls}">${escapeHtml(c.label || 'Аттестация')} ${escapeHtml(mark)}</span>`;
+        }
+        if (c.type === 'Зачёт') {
+          const mark = isPass ? '✓' : (isFail ? '✕' : val);
+          const cls = isPass ? 'ok' : (isFail ? 'fail' : 'accent');
+          return `<span class="ctrl-pill ${cls}">Зачёт ${escapeHtml(mark)}</span>`;
+        }
+        const cls = isFail ? 'fail' : (val === '5' ? 'accent' : 'ok');
+        return `<span class="ctrl-pill ${cls}">${escapeHtml(c.label || c.type)}: ${escapeHtml(val)}</span>`;
       }
 
       function getGradePillClass(entry) {
         const val = String(entry.value || entry.display || '');
         if (val === '2' || val === 'Незачёт') return 'fail';
-        if (entry.kind === 'midterm') return 'midterm';
         if (val === '5' || val === 'Зачёт') return 'top';
         return '';
       }
@@ -5019,36 +5247,81 @@
       }
 
       function openDiaryGradesSheet(d) {
+        const controls = getSubjectControls(d);
         const entries = getSubjectGradeEntries(d).slice().reverse();
 
+        const controlsHtml = controls.length
+          ? `
+            <div class="section-label" style="margin-top:2px;"><span>Аттестация и контроль</span></div>
+            <div class="diary-detail-list">${controls.map((c) => {
+              const val = String(c.value || '').trim();
+              const dowText = c.dowFull || c.dow || '';
+              const dateInfo = c.date ? (dowText ? `${c.date} · ${dowText}` : c.date) : '';
+              const isPass = c.passed === 'true' || c.passed === true;
+              const isFail = c.passed === 'false' || c.passed === false;
+
+              let rightHtml = '<span class="badge">Не выставлено</span>';
+              let subText = dateInfo || 'Ожидается выставление';
+              if (val) {
+                if (c.type === 'Аттестация') {
+                  const mark = isPass ? '✓' : (isFail ? '✕' : val);
+                  const cls = isPass ? 'ok' : (isFail ? 'fail' : 'accent');
+                  rightHtml = `<span class="ctrl-pill ${cls}">${escapeHtml(mark)}</span>`;
+                  subText = dateInfo ? `${val} · ${dateInfo}` : val;
+                } else if (c.type === 'Зачёт') {
+                  const mark = isPass ? '✓' : (isFail ? '✕' : val);
+                  const cls = isPass ? 'ok' : (isFail ? 'fail' : 'accent');
+                  rightHtml = `<span class="ctrl-pill ${cls}">${escapeHtml(mark)}</span>`;
+                  subText = dateInfo ? `${val} · ${dateInfo}` : val;
+                } else {
+                  const cls = isFail ? 'fail' : (val === '5' ? 'accent' : 'ok');
+                  rightHtml = `<span class="ctrl-pill ${cls}">${escapeHtml(val)}</span>`;
+                  subText = dateInfo || 'Итоговая оценка';
+                }
+              }
+
+              return `
+                <div class="diary-detail-row">
+                  <div style="min-width:0;">
+                    <div class="row-title">${escapeHtml(c.label || c.type)}</div>
+                    <div class="row-sub tabular">${escapeHtml(subText)}</div>
+                  </div>
+                  ${rightHtml}
+                </div>
+              `;
+            }).join('')}</div>
+          `
+          : '';
+
         const bodyHtml = entries.length
-          ? `<div class="diary-detail-list">${entries.map((e) => {
+          ? `
+            <div class="section-label"><span>Оценки за занятия</span></div>
+            <div class="diary-detail-list">${entries.map((e) => {
               const dowText = e.dowFull || e.dow || '';
               const datePart = e.date
                 ? (dowText ? `${e.date} · ${dowText}` : e.date)
                 : 'Дата не указана';
-              const subText = e.kind === 'midterm'
-                ? `${e.label || 'Промежуточная аттестация'} (не итоговый зачёт)`
-                : (e.label || 'Занятие');
               const pillCls = getGradePillClass(e);
               return `
                 <div class="diary-detail-row">
                   <div style="min-width:0;">
                     <div class="row-title tabular">${escapeHtml(datePart)}</div>
-                    <div class="row-sub">${escapeHtml(subText)}</div>
+                    <div class="row-sub">${escapeHtml(e.label || 'Занятие')}</div>
                   </div>
                   <span class="grade-pill ${pillCls}">${escapeHtml(e.value || e.display)}</span>
                 </div>
               `;
-            }).join('')}</div>`
-          : `<div class="empty-day" style="padding:20px 8px;">
-              <strong>Оценок пока нет</strong>
-              <span>Как только преподаватель выставит оценку или аттестацию, она появится здесь с датой.</span>
+            }).join('')}</div>
+          `
+          : `<div class="empty-day" style="padding:16px 8px;">
+              <strong>Оценок за занятия пока нет</strong>
+              <span>Оценки появятся здесь с датой и днём недели.</span>
             </div>`;
 
         openSheet(`
           <div class="sheet-title">${escapeHtml(d.subject)}</div>
-          <div class="sheet-sub">Итоговый контроль: ${escapeHtml(d.credit || 'Контроль')}</div>
+          <div class="sheet-sub">${d.credit && d.credit !== 'Контроль' ? 'Итоговый контроль: ' + escapeHtml(d.credit) : 'Аттестация и оценки по предмету'}</div>
+          ${controlsHtml}
           ${bodyHtml}
           <button class="full-btn secondary" id="closeDiaryGradesBtn">Закрыть</button>
         `);
@@ -5179,16 +5452,27 @@
             const pills = entries.length
               ? entries.map((e) => {
                   const pillCls = getGradePillClass(e);
-                  return `<span class="grade-pill ${pillCls}">${escapeHtml(e.display || e.value)}</span>`;
+                  return `<span class="grade-pill ${pillCls}">${escapeHtml(e.value || e.display)}</span>`;
                 }).join('')
               : '<span class="row-sub">Оценок пока нет</span>';
+
+            const filledControls = getSubjectControls(d).filter((c) => String(c.value || '').trim().length > 0);
+            const controlsRowHtml = filledControls.length
+              ? `<div class="controls-row">${filledControls.map(formatControlChipHtml).join('')}</div>`
+              : '';
+
+            const creditBadge = d.credit && d.credit !== 'Контроль'
+              ? `<span class="badge">${escapeHtml(d.credit)}</span>`
+              : '';
+
             html += `
               <div class="diary-card tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-diary-grades="${idx}">
                 <div class="diary-top" style="margin-bottom:8px;">
                   <span class="diary-name">${escapeHtml(d.subject)}</span>
-                  <span class="badge">${escapeHtml(d.credit || 'Контроль')}</span>
+                  ${creditBadge}
                 </div>
                 <div class="grades-row">${pills}</div>
+                ${controlsRowHtml}
               </div>
             `;
           });

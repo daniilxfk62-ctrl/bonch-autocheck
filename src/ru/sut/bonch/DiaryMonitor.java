@@ -209,9 +209,9 @@ public class DiaryMonitor {
         List<JSONObject> sessions = new ArrayList<>();
         List<String> grades = new ArrayList<>();
         List<JSONObject> gradeEntries = new ArrayList<>();
-        String credit = "Контроль";
+        List<JSONObject> controls = new ArrayList<>();
+        String credit = "";
     }
-
     private void parseJurnalDnevnikTable(
         String html,
         boolean hadBaseline,
@@ -346,73 +346,106 @@ public class DiaryMonitor {
             String rowLabel = (tdTextList.get(0) + " " + tdTextList.get(1)).toLowerCase(Locale.ROOT);
             String controlType = detectControlType(rowLabel);
             if (!controlType.isEmpty()) {
-                boolean isMidterm = "Аттестация".equals(controlType);
-                String midtermNum = isMidterm ? extractAttestationNum(rowLabel) : "";
-                String controlLabel = isMidterm
-                    ? (midtermNum.isEmpty() ? "Промежуточная аттестация" : (midtermNum + "-я пром. аттестация"))
+                boolean isAttestation = "Аттестация".equals(controlType);
+                String attNum = isAttestation ? extractAttestationNum(rowLabel) : "";
+                String controlLabel = isAttestation
+                    ? (attNum.isEmpty() ? "Аттестация" : ("Аттестация " + attNum))
                     : controlType;
-                String shortPrefix = isMidterm
-                    ? (midtermNum.isEmpty() ? "Пром. атт." : (midtermNum + " атт."))
-                    : "";
 
                 int maxCols = Math.min(tdTextList.size(), columns.size());
                 for (int col = 2; col < maxCols; col++) {
                     String subj = columns.get(col);
+                    if (subj.isEmpty()) continue;
+
+                    String cellAttrs = tdAttrsList.get(col);
                     String cellVal = tdTextList.get(col);
-                    if (subj.isEmpty() || cellVal.isEmpty()) continue;
+                    boolean hasValue = !cellVal.isEmpty();
+
+                    if (!hasValue && !isControlCellApplicable(cellAttrs, isAttestation)) {
+                        continue;
+                    }
 
                     SubjectDiaryStats st = getOrCreateSubject(bySubject, subj);
-                    if (!isMidterm) {
+                    if (!isAttestation) {
                         st.credit = controlType;
                     }
 
-                    Matcher titleMat = TITLE_ATTR_PAT.matcher(tdAttrsList.get(col));
+                    Matcher titleMat = TITLE_ATTR_PAT.matcher(cellAttrs);
                     String rawAttrTitle = titleMat.find() ? titleMat.group(1).trim() : "";
                     String ctrlDateIso = extractIsoDateFromText(rawAttrTitle);
                     String ctrlShortDate = !ctrlDateIso.isEmpty()
                         ? formatIsoToShortDate(ctrlDateIso)
-                        : (!rawAttrTitle.isEmpty() ? rawAttrTitle : controlLabel);
+                        : rawAttrTitle;
                     String[] ctrlDow = parseDowFromIso(ctrlDateIso);
 
-                    String kind = isMidterm ? "midterm" : "final";
-                    String lowVal = cellVal.toLowerCase(Locale.ROOT);
+                    String normVal = "";
+                    String passedState = ""; // "true", "false", or ""
 
-                    if (lowVal.contains("не аттест") || lowVal.contains("неаттест")
-                        || lowVal.contains("не зач") || lowVal.contains("незач")) {
-                        String val = "Незачёт";
-                        String display = isMidterm ? (shortPrefix + ": " + val) : val;
-                        addGradeEntry(st, val, display, ctrlShortDate, ctrlDateIso, ctrlDow[0], ctrlDow[1], kind, controlLabel);
-                    } else if (lowVal.contains("аттест") || lowVal.contains("зач")) {
-                        String val = "Зачёт";
-                        String display = isMidterm ? (shortPrefix + ": " + val) : val;
-                        addGradeEntry(st, val, display, ctrlShortDate, ctrlDateIso, ctrlDow[0], ctrlDow[1], kind, controlLabel);
-                    } else {
-                        extractNumericGradesToStats(
-                            cellVal,
-                            st,
-                            ctrlShortDate,
-                            ctrlDateIso,
-                            ctrlDow[0],
-                            ctrlDow[1],
-                            kind,
-                            controlLabel,
-                            shortPrefix
-                        );
+                    if (hasValue) {
+                        String lowVal = cellVal.toLowerCase(Locale.ROOT);
+                        if (isAttestation) {
+                            if (lowVal.contains("не аттест") || lowVal.contains("неаттест")
+                                || lowVal.contains("не зач") || lowVal.contains("незач")
+                                || lowVal.equals("2")) {
+                                normVal = "Неаттестован";
+                                passedState = "false";
+                            } else if (lowVal.contains("аттест") || lowVal.contains("зач")) {
+                                normVal = "Аттестован";
+                                passedState = "true";
+                            } else {
+                                normVal = cellVal;
+                            }
+                        } else if ("Зачёт".equals(controlType)) {
+                            if (lowVal.contains("не зач") || lowVal.contains("незач")) {
+                                normVal = "Незачёт";
+                                passedState = "false";
+                            } else if (lowVal.contains("зач")) {
+                                normVal = "Зачёт";
+                                passedState = "true";
+                            } else {
+                                normVal = cellVal;
+                            }
+                        } else {
+                            Matcher gm = GRADE_NUM_PAT.matcher(cellVal);
+                            if (gm.find()) {
+                                normVal = gm.group(1);
+                                passedState = "2".equals(normVal) ? "false" : "true";
+                            } else if (lowVal.contains("незач") || lowVal.contains("не зач") || lowVal.contains("неяв")) {
+                                normVal = cellVal;
+                                passedState = "false";
+                            } else {
+                                normVal = cellVal;
+                            }
+                        }
                     }
 
-                    recordEntry(
-                        subj,
-                        ctrlShortDate,
-                        !ctrlDateIso.isEmpty() ? ctrlDateIso : ctrlShortDate,
-                        "ctrl_" + controlLabel + "_" + col,
-                        cellVal,
-                        hadBaseline,
-                        oldSnap,
-                        newSnap,
-                        recentEntries,
-                        uniqueAllEntries,
-                        newAlerts
-                    );
+                    JSONObject ctrlObj = new JSONObject();
+                    ctrlObj.put("type", controlType);
+                    ctrlObj.put("label", controlLabel);
+                    ctrlObj.put("value", normVal);
+                    ctrlObj.put("rawValue", cellVal);
+                    ctrlObj.put("passed", passedState);
+                    ctrlObj.put("date", ctrlShortDate);
+                    ctrlObj.put("dateIso", ctrlDateIso);
+                    ctrlObj.put("dow", ctrlDow[0]);
+                    ctrlObj.put("dowFull", ctrlDow[1]);
+                    st.controls.add(ctrlObj);
+
+                    if (hasValue) {
+                        recordEntry(
+                            subj,
+                            !ctrlShortDate.isEmpty() ? ctrlShortDate : controlLabel,
+                            !ctrlDateIso.isEmpty() ? ctrlDateIso : controlLabel,
+                            "ctrl_" + controlLabel + "_" + col,
+                            cellVal,
+                            hadBaseline,
+                            oldSnap,
+                            newSnap,
+                            recentEntries,
+                            uniqueAllEntries,
+                            newAlerts
+                        );
+                    }
                 }
             }
         }
@@ -501,10 +534,25 @@ public class DiaryMonitor {
 
     private static String detectControlType(String rowLabel) {
         if (rowLabel.contains("экзамен")) return "Экзамен";
-        if (rowLabel.contains("зачет с оценк") || rowLabel.contains("зачёт с оценк")) return "Диф. зачёт";
+        if (rowLabel.contains("зачет с оценк") || rowLabel.contains("зачёт с оценк")) return "Зачёт с оценкой";
         if (rowLabel.contains("зачет") || rowLabel.contains("зачёт")) return "Зачёт";
         if (rowLabel.contains("аттестац")) return "Аттестация";
         return "";
+    }
+
+    private static boolean isControlCellApplicable(String cellAttrs, boolean isAttestation) {
+        if (cellAttrs == null) return isAttestation;
+        String low = cellAttrs.toLowerCase(Locale.ROOT);
+        if (low.contains("disabled") || low.contains("background:#ccc") || low.contains("background:#ddd")
+            || low.contains("background: #ccc") || low.contains("background: #ddd")
+            || low.contains("background-color:#ccc") || low.contains("background-color:#ddd")
+            || low.contains("background:gray") || low.contains("background:silver")) {
+            return false;
+        }
+        if (low.contains("title=") || low.contains("onclick=") || low.contains("rasp=") || low.contains("id=")) {
+            return true;
+        }
+        return isAttestation;
     }
 
     private static String extractAttestationNum(String rowLabel) {
@@ -635,6 +683,12 @@ public class DiaryMonitor {
                     gradeEntriesArr.put(ge);
                 }
                 obj.put("gradeEntries", gradeEntriesArr);
+
+                JSONArray controlsArr = new JSONArray();
+                for (JSONObject c : st.controls) {
+                    controlsArr.put(c);
+                }
+                obj.put("controls", controlsArr);
 
                 obj.put("credit", st.credit);
                 summaryArr.put(obj);

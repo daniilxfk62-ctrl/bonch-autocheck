@@ -5,6 +5,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.ServiceInfo;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -369,10 +370,22 @@ public class BonchBackgroundDaemon extends Service {
         }
 
         String fgTitle = singleCheckMode ? "⚡ Разовый режим (1 пара)" : "Pulse • Автоотметка активна";
-        startForeground(
-            NotificationHelper.FG_NOTIFICATION_ID,
-            NotificationHelper.buildForegroundNotification(this, fgTitle)
-        );
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                startForeground(
+                    NotificationHelper.FG_NOTIFICATION_ID,
+                    NotificationHelper.buildForegroundNotification(this, fgTitle),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                );
+            } else {
+                startForeground(
+                    NotificationHelper.FG_NOTIFICATION_ID,
+                    NotificationHelper.buildForegroundNotification(this, fgTitle)
+                );
+            }
+        } catch (Throwable t) {
+            storage.addLog("Ошибка startForeground: " + t.getClass().getSimpleName() + ": " + t.getMessage());
+        }
         scheduleWatchdogAlarm(25000L);
         apiClient.checkCredentialsChanged(login, pass);
 
@@ -453,6 +466,7 @@ public class BonchBackgroundDaemon extends Service {
                 flushState();
 
                 while (active) {
+                    try {
                     if (!storage.isDaemonEnabled()) break;
                     scheduleWatchdogAlarm(25000L);
 
@@ -462,6 +476,12 @@ public class BonchBackgroundDaemon extends Service {
                     String intervalStr = cfg.optString("interval", "1");
                     String mode = cfg.optString("mode", "full_lesson");
 
+                    if (login.isEmpty() || password.isEmpty()) {
+                        storage.addLog("Остановка службы: отсутствуют логин или пароль.");
+                        storage.setDaemonEnabled(false);
+                        break;
+                    }
+
                     double intervalMin = 1.0;
                     try {
                         intervalMin = Double.parseDouble(intervalStr);
@@ -470,10 +490,15 @@ public class BonchBackgroundDaemon extends Service {
                     scheduleManager.checkNewDayReset(storage);
 
                     if (!apiClient.isAuthenticated()) {
+                        storage.addLog("Подключение к lk.sut.ru...");
                         updateStatus("Подключение к lk.sut.ru...");
                         if (!apiClient.authenticate(login, password, storage)) {
-                            updateStatus("Повтор подключения к lk.sut.ru через 10 сек...");
-                            sleepQuietly(10000L);
+                            String authErr = apiClient.getLastAuthError();
+                            if (authErr == null || authErr.isEmpty()) authErr = "нет ответа от сервера";
+                            long retryMs = apiClient.wasLastAuthBadCredentials() ? 60000L : 15000L;
+                            storage.addLog("Не удалось войти в lk.sut.ru: " + authErr + " (повтор через " + (retryMs / 1000L) + " сек)");
+                            updateStatus("Ошибка входа: " + authErr);
+                            sleepQuietly(retryMs);
                             continue;
                         }
                         String[] initWin = scheduleManager.getCurrentWindowState(mode, storage);
@@ -593,6 +618,11 @@ public class BonchBackgroundDaemon extends Service {
                             updateStatus(prefix + "⏳ Ждём начала от преподавателя • " + winLabel);
                         }
                         sleepQuietly(Math.max(15000L, (long) (intervalMin * 60000L)));
+                    }
+                    } catch (Throwable loopErr) {
+                        storage.addLog("Сбой в фоновом цикле: " + loopErr.getClass().getSimpleName() + ": " + loopErr.getMessage());
+                        apiClient.invalidateSession();
+                        sleepQuietly(15000L);
                     }
                 }
             }
