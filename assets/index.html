@@ -3234,7 +3234,7 @@
                 </div>
                 <div>
                   <div class="pillar-title">Весь кабинет под рукой</div>
-                  <div class="pillar-desc">Расписание на семестр, дневник и файлы группы. Раздел сообщений пока тестовый — важное лучше проверять в ЛК.</div>
+                  <div class="pillar-desc">Расписание на семестр, дневник, личные сообщения и файлы группы в одном месте.</div>
                 </div>
               </div>
             </div>
@@ -3301,16 +3301,6 @@
                 </button>
                 <div class="faq-body"><div class="faq-inner">
                   <div class="faq-text">Служба сверяется с расписанием и твоими правилами по предметам, после чего отправляет отметку с выбранной задержкой. При первом входе сервер lk.sut.ru иногда бывает перегружен — если не вошло с первой попытки, просто попробуй ещё раз. Сразу после входа загружается весь семестр, поэтому в первые секунды расписание может обновляться.</div>
-                </div></div>
-              </div>
-
-              <div class="faq-item">
-                <button class="faq-trigger" data-faq>
-                  <span>Сообщения работают стабильно?</span>
-                  <svg class="faq-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-                </button>
-                <div class="faq-body"><div class="faq-inner">
-                  <div class="faq-text">Раздел сообщений пока работает в тестовом режиме и может отображать часть переписок некорректно. Важные сообщения от преподавателей и деканата лучше дополнительно проверять на lk.sut.ru.</div>
                 </div></div>
               </div>
 
@@ -3766,99 +3756,111 @@
         formatTodayHeader();
       }
 
+      function bridgeRead(fnName, fallback) {
+        if (!HAS_BRIDGE) return fallback;
+        try {
+          const fn = window.AndroidBridge && window.AndroidBridge[fnName];
+          if (typeof fn !== 'function') return fallback;
+          const res = fn.call(window.AndroidBridge);
+          return res != null ? res : fallback;
+        } catch (e) {
+          return fallback;
+        }
+      }
+
       function syncFromAndroid(force) {
         if (!HAS_BRIDGE) return;
-        try {
-          const bridge = window.AndroidBridge;
-          const st = safeParse(bridge.getState(), {});
+        const st = safeParse(bridgeRead('getState', '{}'), {});
 
-          const prevActive = state.autoCheckEnabled;
-          const prevStatus = state.daemonStatus;
-          const prevScan = state.scanningSemester;
-          const prevScanText = state.scanStatus;
+        const prevActive = state.autoCheckEnabled;
+        const prevStatus = state.daemonStatus;
+        const prevScan = state.scanningSemester;
+        const prevScanText = state.scanStatus;
 
-          state.autoCheckEnabled = !!st.daemonEnabled;
-          state.daemonStatus = st.status || (state.autoCheckEnabled ? 'Активно' : 'Отключено');
-          state.scanningSemester = !!st.scanningSemester;
-          state.scanStatus = st.scanStatus || '';
-          state.logs = Array.isArray(st.logs) ? st.logs : [];
+        state.autoCheckEnabled = !!st.daemonEnabled;
+        state.daemonStatus = st.status || (state.autoCheckEnabled ? 'Активно' : 'Отключено');
+        state.scanningSemester = !!st.scanningSemester;
+        state.scanStatus = st.scanStatus || '';
+        state.logs = Array.isArray(st.logs) ? st.logs : [];
 
-          let needToday = force || prevActive !== state.autoCheckEnabled || prevStatus !== state.daemonStatus || prevScan !== state.scanningSemester || prevScanText !== state.scanStatus;
-          let needSchedule = force;
-          let needMessages = force;
-          let needDiary = force;
-          let needSettings = force || prevActive !== state.autoCheckEnabled || prevScan !== state.scanningSemester;
+        let needToday = force || prevActive !== state.autoCheckEnabled || prevStatus !== state.daemonStatus || prevScan !== state.scanningSemester || prevScanText !== state.scanStatus;
+        let needSchedule = force;
+        let needMessages = force;
+        let needDiary = force;
+        let needSettings = force || prevActive !== state.autoCheckEnabled || prevScan !== state.scanningSemester;
 
-          if (force) {
-            const cfg = safeParse(bridge.getSavedConfig(), {});
-            if (cfg.autoDelay) state.autoDelay = cfg.autoDelay;
-            if (typeof cfg.antiKick === 'boolean') state.antiKick = cfg.antiKick;
-            if (cfg.themeMode) state.themeMode = cfg.themeMode;
-            applySmartRulesFromBridge(bridge.getSmartRules());
+        if (force) {
+          const cfg = safeParse(bridgeRead('getSavedConfig', '{}'), {});
+          if (cfg.autoDelay) state.autoDelay = cfg.autoDelay;
+          if (typeof cfg.antiKick === 'boolean') state.antiKick = cfg.antiKick;
+          if (cfg.themeMode) state.themeMode = cfg.themeMode;
+          applySmartRulesFromBridge(bridgeRead('getSmartRules', '{}'));
+        }
+
+        if (force || st.profileMtime !== lastMtimes.profile) {
+          lastMtimes.profile = st.profileMtime || 0;
+          const prof = safeParse(bridgeRead('getProfile', '{}'), {});
+          const resolvedName = prof.fio || prof.fullName || prof.name || '';
+          state.account = {
+            loggedIn: !!prof.loggedIn,
+            name: resolvedName || (prof.loggedIn ? 'Аккаунт ЛК СПбГУТ' : ''),
+            group: prof.group || '',
+            email: prof.email || ''
+          };
+          needToday = true;
+          needSettings = true;
+        }
+
+        if (loginAttempt.pending) {
+          if (st.authState === 'ok' || state.account.loggedIn) {
+            handleLoginResult(true);
+          } else if (st.authState === 'error') {
+            handleLoginResult(false, st.authError || 'Неверный логин или пароль от lk.sut.ru');
           }
+        }
 
-          if (force || st.profileMtime !== lastMtimes.profile) {
-            lastMtimes.profile = st.profileMtime || 0;
-            const prof = safeParse(bridge.getProfile(), {});
-            const resolvedName = prof.fio || prof.fullName || prof.name || '';
-            state.account = {
-              loggedIn: !!prof.loggedIn,
-              name: resolvedName || (prof.loggedIn ? 'Аккаунт ЛК СПбГУТ' : ''),
-              group: prof.group || '',
-              email: prof.email || ''
-            };
-            needToday = true;
-            needSettings = true;
-          }
+        if (force || st.catMtime !== lastMtimes.cat) {
+          lastMtimes.cat = st.catMtime || 0;
+          try { applyCatalogFromBridge(bridgeRead('getCachedSmartCatalog', '[]')); } catch (e) {}
+          needSettings = true;
+        }
 
-          if (loginAttempt.pending) {
-            if (st.authState === 'ok' || state.account.loggedIn) {
-              handleLoginResult(true);
-            } else if (st.authState === 'error') {
-              handleLoginResult(false, st.authError || 'Неверный логин или пароль от lk.sut.ru');
-            }
-          }
+        if (force || st.daysMtime !== lastMtimes.days) {
+          lastMtimes.days = st.daysMtime || 0;
+          try { applySemesterDaysFromBridge(bridgeRead('getCachedSemesterDays', '[]')); } catch (e) {}
+          checkingIds.clear();
+          needToday = true;
+          needSchedule = true;
+        }
 
-          if (force || st.catMtime !== lastMtimes.cat) {
-            lastMtimes.cat = st.catMtime || 0;
-            applyCatalogFromBridge(bridge.getCachedSmartCatalog());
-            needSettings = true;
-          }
+        if (force || st.messagesMtime !== lastMtimes.messages) {
+          lastMtimes.messages = st.messagesMtime || 0;
+          const parsedMsgs = safeParse(bridgeRead('getCachedMessages', '[]'), []);
+          state.messages = Array.isArray(parsedMsgs) ? parsedMsgs : [];
+          needMessages = true;
+        }
 
-          if (force || st.daysMtime !== lastMtimes.days) {
-            lastMtimes.days = st.daysMtime || 0;
-            applySemesterDaysFromBridge(bridge.getCachedSemesterDays());
-            checkingIds.clear();
-            needToday = true;
-            needSchedule = true;
-          }
+        if (force || st.filesMtime !== lastMtimes.files) {
+          lastMtimes.files = st.filesMtime || 0;
+          const parsedFiles = safeParse(bridgeRead('getCachedGroupFiles', '[]'), []);
+          state.groupFiles = Array.isArray(parsedFiles) ? parsedFiles : [];
+          needMessages = true;
+        }
 
-          if (force || st.messagesMtime !== lastMtimes.messages) {
-            lastMtimes.messages = st.messagesMtime || 0;
-            state.messages = safeParse(bridge.getCachedMessages(), []);
-            needMessages = true;
-          }
+        if (force || st.diaryMtime !== lastMtimes.diary) {
+          lastMtimes.diary = st.diaryMtime || 0;
+          const parsedDiary = safeParse(bridgeRead('getCachedDiarySummary', '[]'), []);
+          state.diary = Array.isArray(parsedDiary) ? parsedDiary : [];
+          needDiary = true;
+          needSchedule = true;
+        }
 
-          if (force || st.filesMtime !== lastMtimes.files) {
-            lastMtimes.files = st.filesMtime || 0;
-            state.groupFiles = safeParse(bridge.getCachedGroupFiles(), []);
-            needMessages = true;
-          }
-
-          if (force || st.diaryMtime !== lastMtimes.diary) {
-            lastMtimes.diary = st.diaryMtime || 0;
-            state.diary = safeParse(bridge.getCachedDiarySummary(), []);
-            needDiary = true;
-            needSchedule = true;
-          }
-
-          if (force) applyTheme();
-          if (needToday) renderToday();
-          if (needSchedule) renderSchedule();
-          if (needMessages) renderMessages();
-          if (needDiary) renderDiary();
-          if (needSettings) renderSettings();
-        } catch (e) {}
+        if (force) applyTheme();
+        if (needToday) { try { renderToday(); } catch (e) {} }
+        if (needSchedule) { try { renderSchedule(); } catch (e) {} }
+        if (needMessages) { try { renderMessages(); } catch (e) {} }
+        if (needDiary) { try { renderDiary(); } catch (e) {} }
+        if (needSettings) { try { renderSettings(); } catch (e) {} }
       }
 
       function getAllDaysFlat() {
@@ -4945,10 +4947,6 @@
         let searchEl = $('msgSearchInput');
         if (!searchEl) {
           container.innerHTML = `
-            <div class="beta-notice">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              <span>Раздел сообщений работает в тестовом режиме и может отображать данные некорректно — важные сообщения лучше проверять в ЛК.</span>
-            </div>
             <div class="search-box">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
               <input type="text" id="msgSearchInput" placeholder="" value="" />

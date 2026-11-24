@@ -98,8 +98,7 @@ public class BonchBackgroundDaemon extends Service {
         diaryThread.start();
         msgThread.start();
         try {
-            diaryThread.join(25000L);
-            msgThread.join(25000L);
+            diaryThread.join(8000L);
         } catch (InterruptedException ignored) {}
     }
 

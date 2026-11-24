@@ -174,6 +174,8 @@ public class MessageManager {
                 || TR_CLICK_PAT.matcher(sanitizedHtml).find();
 
             Matcher trMat = trPat.matcher(sanitizedHtml);
+            int fetchedDetailsCount = 0;
+            int maxDetailsPerPass = manualTrigger ? 10 : 5;
 
             while (trMat.find()) {
                 String trAttrs = trMat.group(1);
@@ -277,7 +279,8 @@ public class MessageManager {
                             }
                         }
                     }
-                } else if (!serverId.isEmpty()) {
+                } else if (!serverId.isEmpty() && fetchedDetailsCount < maxDetailsPerPass) {
+                    fetchedDetailsCount++;
                     ParsedMessageDetail det = fetchMessageDetailViaSendto2(api, serverId);
                     fullText = det.text;
                     detailTitle = det.title;
@@ -405,6 +408,32 @@ public class MessageManager {
                 if (!threadsBySender.containsKey(oldEntry.getKey())) {
                     threadsBySender.put(oldEntry.getKey(), oldEntry.getValue());
                 }
+            }
+
+            // Разворачиваем порядок сообщений в каждом диалоге: сверху старые -> снизу новые
+            for (JSONObject t : threadsBySender.values()) {
+                JSONArray th = t.optJSONArray("thread");
+                if (th == null || th.length() <= 1) continue;
+                List<JSONObject> incoming = new ArrayList<>();
+                List<JSONObject> outgoing = new ArrayList<>();
+                for (int i = 0; i < th.length(); i++) {
+                    JSONObject b = th.optJSONObject(i);
+                    if (b == null) continue;
+                    if ("me".equals(b.optString("from", ""))) {
+                        outgoing.add(b);
+                    } else {
+                        incoming.add(b);
+                    }
+                }
+                // В таблице lk.sut.ru входящие идут сверху вниз (новые -> старые), переворачиваем
+                JSONArray ordered = new JSONArray();
+                for (int i = incoming.size() - 1; i >= 0; i--) {
+                    ordered.put(incoming.get(i));
+                }
+                for (JSONObject outB : outgoing) {
+                    ordered.put(outB);
+                }
+                t.put("thread", ordered);
             }
 
             storage.writeText(AppStorage.FILE_MESSAGES_SNAPSHOT, newSnap.toString());
