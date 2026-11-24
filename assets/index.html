@@ -3352,7 +3352,10 @@
       const DEV_SECRET_PASSWORD = 'данИИл';
       const EASTER_EGG_PASSWORD = 'Данила';
       const DEV_TAP_THRESHOLD = 5;
-
+      const PRIMARY_REPO_URL = 'https://github.com/daniilxfk62-ctrl/bonch-autocheck';
+      const FALLBACK_REPO_URL = 'https://github.com/g1tm4estr0/bonch-autocheck';
+      const STAR_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
+      const STAR_FIRST_DELAY_MS = 3 * 24 * 60 * 60 * 1000; // первый раз через 3 дня
       const DEVELOPERS = [
         {
           name: 'daniilxfk62-ctrl',
@@ -3388,6 +3391,10 @@
       const INITIAL_STATE = {
         onboardingSeen: false,
         devModeUnlocked: false,
+        firstSeenAt: 0,
+        starLastDismissedAt: 0,
+        dismissedUpdateVersion: '',
+        updateInfo: null,
         activeTab: 'today',
         themeMode: 'light',
         autoCheckEnabled: false,
@@ -3440,6 +3447,8 @@
           const merged = Object.assign(cloneObj(INITIAL_STATE), parsed);
           if (!merged.subjectRules) merged.subjectRules = {};
           if (!merged.dayNotes || typeof merged.dayNotes !== 'object') merged.dayNotes = {};
+          if (!merged.firstSeenAt) merged.firstSeenAt = Date.now();
+          merged.updateInfo = null;
           // Runtime backend data is never restored from localStorage
           merged.todayClasses = [];
           merged.semesterWeeks = {};
@@ -3459,6 +3468,9 @@
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
             onboardingSeen: !!state.onboardingSeen,
             devModeUnlocked: !!state.devModeUnlocked,
+            firstSeenAt: state.firstSeenAt || Date.now(),
+            starLastDismissedAt: state.starLastDismissedAt || 0,
+            dismissedUpdateVersion: state.dismissedUpdateVersion || '',
             activeTab: state.activeTab,
             themeMode: state.themeMode,
             scheduleFilter: state.scheduleFilter,
@@ -3860,7 +3872,17 @@
           needSchedule = true;
         }
 
-        if (force) applyTheme();
+        const updRaw = bridgeRead('getUpdateInfo', '');
+        if (updRaw) {
+          const upd = safeParse(updRaw, null);
+          const prevUpdKey = state.updateInfo ? `${state.updateInfo.hasUpdate}|${state.updateInfo.latestVersion}|${state.updateInfo.checkedAt}` : '';
+          const nextUpdKey = upd ? `${upd.hasUpdate}|${upd.latestVersion}|${upd.checkedAt}` : '';
+          if (upd && prevUpdKey !== nextUpdKey) {
+            state.updateInfo = upd;
+            needToday = true;
+            needSettings = true;
+          }
+        }
         if (needToday) { try { renderToday(); } catch (e) {} }
         if (needSchedule) { try { renderSchedule(); } catch (e) {} }
         if (needMessages) { try { renderMessages(); } catch (e) {} }
@@ -4179,7 +4201,36 @@
             </div>
           `;
         }
-
+        if (state.updateInfo && state.updateInfo.hasUpdate && state.dismissedUpdateVersion !== state.updateInfo.latestVersion) {
+          html += `
+            <div class="state-banner tap anim-in" id="todayUpdateBanner" style="border-color:var(--accent-ring);align-items:center;">
+              <div class="state-banner-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div class="row-title" style="font-weight:600;">Вышла версия ${escapeHtml(state.updateInfo.latestVersion)}</div>
+                <div class="row-sub">Нажмите, чтобы скачать и установить обновление</div>
+              </div>
+              <span class="badge accent">Обновить</span>
+            </div>
+          `;
+        } else if (shouldShowStarBanner()) {
+          html += `
+            <div class="state-banner anim-in" id="todayStarBanner" style="flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;width:100%;">
+                <div>
+                  <div class="row-title" style="font-weight:600;">Нравится Pulse? ⭐</div>
+                  <div class="row-sub" style="line-height:1.4;">Если приложение экономит тебе время, будем рады звёздочке на GitHub обоим разработчикам — это лучшая мотивация развивать проект.</div>
+                </div>
+                <button type="button" id="dismissStarBtn" aria-label="Скрыть" style="border:none;background:transparent;color:var(--text-muted);font-size:16px;padding:2px 4px;cursor:pointer;">✕</button>
+              </div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button type="button" class="pill-btn" data-star-url="${PRIMARY_REPO_URL}">⭐ daniilxfk62-ctrl</button>
+                <button type="button" class="pill-btn" data-star-url="${FALLBACK_REPO_URL}">⭐ g1tm4estr0</button>
+              </div>
+            </div>
+          `;
+        }
         const todayDateStr = getTodayDateStr();
         const todayNotes = getNotesForDate(todayDateStr);
         if (todayNotes.length) {
@@ -4273,7 +4324,18 @@
         }
 
         container.innerHTML = html;
+        const updBanner = $('todayUpdateBanner');
+        if (updBanner) updBanner.addEventListener('click', openUpdateSheet);
 
+        const dismissStar = $('dismissStarBtn');
+        if (dismissStar) dismissStar.addEventListener('click', dismissStarBanner);
+
+        container.querySelectorAll('[data-star-url]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            openExternalLink(btn.dataset.starUrl);
+            dismissStarBanner();
+          });
+        });
         const todayNotesBox = $('todayNotesBox');
         if (todayNotesBox) {
           todayNotesBox.addEventListener('click', () => {
@@ -5850,6 +5912,13 @@
 
           <div class="section-label"><span>О проекте</span></div>
           <div class="settings-group">
+            <div class="settings-row tap" id="checkUpdatesRow">
+              <div>
+                <div class="row-title">Обновления</div>
+                <div class="row-sub tabular">${state.updateInfo && state.updateInfo.hasUpdate ? `Доступна новая версия v${escapeHtml(state.updateInfo.latestVersion)}` : `Текущая версия v${escapeHtml((state.updateInfo && state.updateInfo.currentVersion) || APP_BUILD)}`}</div>
+              </div>
+              <span class="badge ${state.updateInfo && state.updateInfo.hasUpdate ? 'accent' : ''}">${state.updateInfo && state.updateInfo.hasUpdate ? 'Обновить' : 'Проверить'}</span>
+            </div>
             <div class="settings-row tap" id="openWelcomeRow">
               <div>
                 <div class="row-title">Приветственный экран</div>
@@ -5897,7 +5966,25 @@
 
         const devRow = $('openDevMenuRow');
         if (devRow) devRow.addEventListener('click', openDeveloperMenuSheet);
-
+        const updRow = $('checkUpdatesRow');
+        if (updRow) {
+          updRow.addEventListener('click', () => {
+            if (state.updateInfo && state.updateInfo.hasUpdate) {
+              openUpdateSheet();
+              return;
+            }
+            if (HAS_BRIDGE && window.AndroidBridge.checkForUpdatesNow) {
+              window.AndroidBridge.checkForUpdatesNow();
+              showToast('Проверяем обновления на GitHub...');
+              setTimeout(() => {
+                syncFromAndroid(false);
+                openUpdateSheet();
+              }, 2000);
+            } else {
+              openUpdateSheet();
+            }
+          });
+        }
         $('openWelcomeRow').addEventListener('click', () => openOnboarding(false));
         $('openCreditsRow').addEventListener('click', openCreditsSheet);
       }
@@ -6321,7 +6408,111 @@
           });
         }
       }
+      function openExternalLink(url) {
+        if (!url) return;
+        if (HAS_BRIDGE && window.AndroidBridge && typeof window.AndroidBridge.openExternalUrl === 'function') {
+          try {
+            window.AndroidBridge.openExternalUrl(url);
+            return;
+          } catch (e) {}
+        }
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
 
+      function shouldShowStarBanner() {
+        if (!state.account.loggedIn) return false;
+        const now = Date.now();
+        if (!state.firstSeenAt) {
+          state.firstSeenAt = now;
+          saveState();
+          return false;
+        }
+        if (now - state.firstSeenAt < STAR_FIRST_DELAY_MS) return false;
+        if (state.starLastDismissedAt && (now - state.starLastDismissedAt) < STAR_COOLDOWN_MS) return false;
+        return true;
+      }
+
+      function dismissStarBanner() {
+        state.starLastDismissedAt = Date.now();
+        saveState();
+        renderToday();
+      }
+
+      function openUpdateSheet() {
+        const u = state.updateInfo || {};
+        const curVer = u.currentVersion || APP_BUILD;
+        const latestVer = u.latestVersion || curVer;
+        const sourceNote = u.isFallback
+          ? `Запасной репозиторий (${u.sourceRepo || 'g1tm4estr0/bonch-autocheck'})`
+          : `Основной репозиторий (${u.sourceRepo || 'daniilxfk62-ctrl/bonch-autocheck'})`;
+        const notesHtml = u.releaseNotes
+          ? `<div style="padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--border);font-size:12.5px;line-height:1.45;color:var(--text-secondary);white-space:pre-wrap;margin-bottom:14px;max-height:180px;overflow-y:auto;">${escapeHtml(u.releaseNotes)}</div>`
+          : '';
+
+        if (u.hasUpdate) {
+          openSheet(`
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+              <div class="sheet-title" style="margin-bottom:0;">Доступно обновление</div>
+              <span class="badge accent tabular">v${escapeHtml(latestVer)}</span>
+            </div>
+            <div class="sheet-sub">${escapeHtml(sourceNote)} · текущая v${escapeHtml(curVer)}</div>
+            ${notesHtml}
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <button class="full-btn accent" id="downloadApkBtn">Скачать обновление (APK)</button>
+              <button class="full-btn secondary" id="openReleasePageBtn">Открыть релиз на GitHub</button>
+              <button class="full-btn secondary" id="dismissUpdateBtn">Напомнить позже</button>
+            </div>
+          `);
+
+          $('downloadApkBtn').addEventListener('click', () => {
+            if (HAS_BRIDGE && window.AndroidBridge.downloadAndInstallUpdate) {
+              const ok = window.AndroidBridge.downloadAndInstallUpdate(u.apkUrl || '', u.apkName || '', u.releaseUrl || PRIMARY_REPO_URL + '/releases');
+              closeSheet();
+              showToast(ok ? 'Загрузка APK началась — откройте уведомление после скачивания' : 'Не удалось начать загрузку', ok ? 'success' : 'error');
+            } else {
+              openExternalLink(u.apkUrl || u.releaseUrl || PRIMARY_REPO_URL + '/releases');
+              closeSheet();
+            }
+          });
+
+          $('openReleasePageBtn').addEventListener('click', () => {
+            openExternalLink(u.releaseUrl || PRIMARY_REPO_URL + '/releases');
+          });
+
+          $('dismissUpdateBtn').addEventListener('click', () => {
+            state.dismissedUpdateVersion = latestVer;
+            saveState();
+            renderToday();
+            closeSheet();
+          });
+        } else {
+          openSheet(`
+            <div class="sheet-title">Обновления Pulse</div>
+            <div class="sheet-sub tabular">Установлена актуальная версия v${escapeHtml(curVer)}</div>
+            <div class="settings-group">
+              <div class="settings-row">
+                <div>
+                  <div class="row-title">Источники проверки</div>
+                  <div class="row-sub">1. daniilxfk62-ctrl/bonch-autocheck<br/>2. g1tm4estr0/bonch-autocheck</div>
+                </div>
+              </div>
+            </div>
+            <button class="full-btn secondary" id="recheckUpdateBtn">Проверить ещё раз</button>
+          `);
+
+          $('recheckUpdateBtn').addEventListener('click', () => {
+            if (HAS_BRIDGE && window.AndroidBridge.checkForUpdatesNow) {
+              window.AndroidBridge.checkForUpdatesNow();
+              showToast('Проверяем GitHub...');
+              setTimeout(() => {
+                syncFromAndroid(false);
+                if (state.updateInfo && state.updateInfo.hasUpdate) openUpdateSheet();
+                else showToast('У вас последняя версия', 'success');
+              }, 2200);
+            }
+          });
+        }
+      }
       function openCreditsSheet() {
         versionTapCount = 0;
         openSheet(`
@@ -6340,6 +6531,12 @@
           <div class="section-label"><span>Разработчики</span></div>
           <div class="settings-group">
             ${renderCreditsRowsHtml()}
+          </div>
+
+          <div class="section-label"><span>Поддержать проект ⭐</span></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+            <button type="button" class="pill-btn" style="flex:1;" data-credits-star="${PRIMARY_REPO_URL}">⭐ Репозиторий 1</button>
+            <button type="button" class="pill-btn" style="flex:1;" data-credits-star="${FALLBACK_REPO_URL}">⭐ Репозиторий 2</button>
           </div>
 
           <button class="full-btn secondary" id="closeCreditsBtn">Готово</button>
@@ -6363,7 +6560,9 @@
             openDevPasswordSheet();
           }
         });
-
+        $('sheetContent').querySelectorAll('[data-credits-star]').forEach((btn) => {
+          btn.addEventListener('click', () => openExternalLink(btn.dataset.creditsStar));
+        });
         $('closeCreditsBtn').addEventListener('click', closeSheet);
       }
 
@@ -6373,9 +6572,32 @@
         if (ind) ind.style.transform = `translate3d(${idx * 100}%, 0, 0)`;
       }
 
-      function switchTab(tabName) {
+      let swipeCleanupTimer = null;
+
+      function clearSwipeInlineStyles() {
+        if (swipeCleanupTimer) {
+          clearTimeout(swipeCleanupTimer);
+          swipeCleanupTimer = null;
+        }
+        TAB_ORDER.forEach((name) => {
+          const el = $(`view-${name}`);
+          if (!el) return;
+          el.style.transition = '';
+          el.style.transform = '';
+          el.style.opacity = '';
+          el.style.pointerEvents = '';
+        });
+        const ind = $('dockIndicator');
+        if (ind) ind.style.transition = '';
+      }
+
+      function switchTab(tabName, keepInlineTransition) {
         const nextIdx = TAB_ORDER.indexOf(tabName);
         if (nextIdx < 0) return;
+
+        if (!keepInlineTransition) {
+          clearSwipeInlineStyles();
+        }
 
         state.activeTab = tabName;
         saveState();
@@ -6406,26 +6628,185 @@
         btn.addEventListener('click', () => switchTab(btn.dataset.tab));
       });
 
-      let touchStartX = 0, touchStartY = 0, touchValid = false;
-      $('tabStage').addEventListener('touchstart', (e) => {
+      const tabStageEl = $('tabStage');
+      const swipe = {
+        active: false,
+        axis: null, // null | 'x' | 'y'
+        startX: 0,
+        startY: 0,
+        lastX: 0,
+        lastTime: 0,
+        vx: 0,
+        dx: 0,
+        curIdx: 0,
+        neighborIdx: -1,
+        width: 360
+      };
+
+      function resetNeighborStyle(idx) {
+        if (idx < 0 || idx >= TAB_ORDER.length) return;
+        const el = $(`view-${TAB_ORDER[idx]}`);
+        if (!el) return;
+        el.style.transition = '';
+        el.style.transform = '';
+        el.style.opacity = '';
+        el.style.pointerEvents = '';
+      }
+
+      tabStageEl.addEventListener('touchstart', (e) => {
+        if (!e.touches || e.touches.length !== 1) return;
         if ($('sheet').classList.contains('open')) return;
-        if (e.target.closest('input, textarea')) return;
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        touchValid = true;
+        if ($('onboardOverlay').classList.contains('open')) return;
+        if (e.target.closest('input, textarea, .day-rail')) return;
+
+        clearSwipeInlineStyles();
+
+        const t = e.touches[0];
+        swipe.active = true;
+        swipe.axis = null;
+        swipe.startX = t.clientX;
+        swipe.startY = t.clientY;
+        swipe.lastX = t.clientX;
+        swipe.lastTime = Date.now();
+        swipe.vx = 0;
+        swipe.dx = 0;
+        swipe.curIdx = TAB_ORDER.indexOf(state.activeTab);
+        swipe.neighborIdx = -1;
+        swipe.width = tabStageEl.clientWidth || window.innerWidth || 360;
       }, { passive: true });
 
-      $('tabStage').addEventListener('touchend', (e) => {
-        if (!touchValid) return;
-        touchValid = false;
-        const dx = e.changedTouches[0].clientX - touchStartX;
-        const dy = e.changedTouches[0].clientY - touchStartY;
-        if (Math.abs(dx) > 54 && Math.abs(dx) > Math.abs(dy) * 1.45) {
-          const curIdx = TAB_ORDER.indexOf(state.activeTab);
-          if (dx < 0 && curIdx < TAB_ORDER.length - 1) switchTab(TAB_ORDER[curIdx + 1]);
-          else if (dx > 0 && curIdx > 0) switchTab(TAB_ORDER[curIdx - 1]);
+      tabStageEl.addEventListener('touchmove', (e) => {
+        if (!swipe.active) return;
+        if (!e.touches || e.touches.length !== 1) {
+          swipe.active = false;
+          clearSwipeInlineStyles();
+          return;
         }
-      }, { passive: true });
+
+        const t = e.touches[0];
+        const rawDx = t.clientX - swipe.startX;
+        const rawDy = t.clientY - swipe.startY;
+        const absX = Math.abs(rawDx);
+        const absY = Math.abs(rawDy);
+
+        // Определяем ось один раз после выхода из мёртвой зоны 10px
+        if (swipe.axis === null) {
+          if (absX < 10 && absY < 10) return;
+          if (absX > absY * 1.55) {
+            swipe.axis = 'x';
+          } else {
+            swipe.axis = 'y';
+            return;
+          }
+        }
+
+        if (swipe.axis !== 'x') return;
+
+        // Блокируем вертикальный скролл только после точного определения горизонтального свайпа
+        e.preventDefault();
+
+        const now = Date.now();
+        const dt = Math.max(1, now - swipe.lastTime);
+        const instVx = (t.clientX - swipe.lastX) / dt;
+        swipe.vx = swipe.vx * 0.65 + instVx * 0.35;
+        swipe.lastX = t.clientX;
+        swipe.lastTime = now;
+
+        const w = swipe.width;
+        const nextNeighbor = rawDx < 0 ? swipe.curIdx + 1 : (rawDx > 0 ? swipe.curIdx - 1 : -1);
+        const hasNeighbor = nextNeighbor >= 0 && nextNeighbor < TAB_ORDER.length;
+
+        if (swipe.neighborIdx !== nextNeighbor) {
+          resetNeighborStyle(swipe.neighborIdx);
+          swipe.neighborIdx = hasNeighbor ? nextNeighbor : -1;
+        }
+
+        // Резинка на краях, свободный ход между вкладками
+        const offsetX = hasNeighbor
+          ? Math.max(-w, Math.min(w, rawDx))
+          : Math.max(-w * 0.28, Math.min(w * 0.28, rawDx * 0.24));
+        swipe.dx = offsetX;
+
+        const progress = Math.min(1, Math.abs(offsetX) / w);
+        const curEl = $(`view-${TAB_ORDER[swipe.curIdx]}`);
+        if (curEl) {
+          curEl.style.transition = 'none';
+          curEl.style.transform = `translate3d(${offsetX}px, 0, 0) scale(${(1 - progress * 0.018).toFixed(4)})`;
+          curEl.style.opacity = String((1 - progress * 0.22).toFixed(3));
+        }
+
+        if (hasNeighbor) {
+          const nbEl = $(`view-${TAB_ORDER[swipe.neighborIdx]}`);
+          if (nbEl) {
+            const baseX = offsetX < 0 ? w : -w;
+            nbEl.style.transition = 'none';
+            nbEl.style.pointerEvents = 'none';
+            nbEl.style.transform = `translate3d(${baseX + offsetX}px, 0, 0) scale(${(0.982 + progress * 0.018).toFixed(4)})`;
+            nbEl.style.opacity = String((0.78 + progress * 0.22).toFixed(3));
+          }
+          const ind = $('dockIndicator');
+          if (ind) {
+            ind.style.transition = 'none';
+            const dockPos = swipe.curIdx - (offsetX / w);
+            ind.style.transform = `translate3d(${dockPos * 100}%, 0, 0)`;
+          }
+        }
+      }, { passive: false });
+
+      function finishTabSwipe() {
+        if (!swipe.active) return;
+        const wasHorizontal = swipe.axis === 'x';
+        swipe.active = false;
+        swipe.axis = null;
+
+        if (!wasHorizontal) return;
+
+        const w = swipe.width;
+        const offsetX = swipe.dx;
+        const curEl = $(`view-${TAB_ORDER[swipe.curIdx]}`);
+        const hasNeighbor = swipe.neighborIdx >= 0 && swipe.neighborIdx < TAB_ORDER.length;
+        const nbEl = hasNeighbor ? $(`view-${TAB_ORDER[swipe.neighborIdx]}`) : null;
+        const ind = $('dockIndicator');
+
+        const fastFlick = Math.abs(swipe.vx) > 0.42 && Math.sign(swipe.vx) === Math.sign(offsetX);
+        const shouldSwitch = hasNeighbor && (Math.abs(offsetX) > w * 0.24 || fastFlick);
+
+        const springTr = 'transform 0.36s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
+        if (ind) ind.style.transition = '';
+
+        if (shouldSwitch) {
+          const exitX = offsetX < 0 ? -w : w;
+          if (curEl) {
+            curEl.style.transition = springTr;
+            curEl.style.transform = `translate3d(${exitX}px, 0, 0) scale(0.982)`;
+            curEl.style.opacity = '0';
+          }
+          if (nbEl) {
+            nbEl.style.transition = springTr;
+            nbEl.style.transform = 'translate3d(0, 0, 0) scale(1)';
+            nbEl.style.opacity = '1';
+          }
+          switchTab(TAB_ORDER[swipe.neighborIdx], true);
+        } else {
+          if (curEl) {
+            curEl.style.transition = springTr;
+            curEl.style.transform = 'translate3d(0, 0, 0) scale(1)';
+            curEl.style.opacity = '1';
+          }
+          if (nbEl) {
+            const backX = offsetX < 0 ? w : -w;
+            nbEl.style.transition = springTr;
+            nbEl.style.transform = `translate3d(${backX}px, 0, 0) scale(0.982)`;
+            nbEl.style.opacity = '0';
+          }
+          updateDockIndicator(swipe.curIdx);
+        }
+
+        swipeCleanupTimer = setTimeout(clearSwipeInlineStyles, 380);
+      }
+
+      tabStageEl.addEventListener('touchend', finishTabSwipe, { passive: true });
+      tabStageEl.addEventListener('touchcancel', finishTabSwipe, { passive: true });
 
       let sheetStartY = 0, sheetDragY = 0, sheetDragging = false;
       $('sheetHandleZone').addEventListener('touchstart', (e) => {

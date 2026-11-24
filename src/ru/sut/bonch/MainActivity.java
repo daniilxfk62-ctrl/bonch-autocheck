@@ -67,6 +67,7 @@ public class MainActivity extends Activity {
         setContentView(webView);
 
         webView.loadUrl("file:///android_asset/index.html");
+        UpdateChecker.checkAsync(this, storage, false);
     }
 
     @Override
@@ -477,6 +478,57 @@ public class MainActivity extends Activity {
                 storage.saveUserConfig(login, password, intervalStr, mode);
             }
             sendDaemonCommand("scan_semester");
+        }
+
+        @JavascriptInterface
+        public String getUpdateInfo() {
+            return UpdateChecker.getCachedInfoJson(MainActivity.this, storage);
+        }
+
+        @JavascriptInterface
+        public void checkForUpdatesNow() {
+            UpdateChecker.checkAsync(MainActivity.this, storage, true);
+        }
+
+        @JavascriptInterface
+        public boolean downloadAndInstallUpdate(String apkUrl, String fileName, String fallbackPageUrl) {
+            String targetUrl = (apkUrl != null && !apkUrl.trim().isEmpty()) ? apkUrl.trim() : "";
+            String pageUrl = (fallbackPageUrl != null && !fallbackPageUrl.trim().isEmpty()) ? fallbackPageUrl.trim() : targetUrl;
+            if (targetUrl.isEmpty() && pageUrl.isEmpty()) return false;
+
+            if (!targetUrl.isEmpty()) {
+                String safeName = (fileName != null && !fileName.trim().isEmpty())
+                    ? fileName.trim().replaceAll("[\\\\/:*?\"<>|]", "_")
+                    : "Pulse-Update.apk";
+                try {
+                    DownloadManager dm = (DownloadManager) getSystemService(Context.DOWNLOAD_SERVICE);
+                    if (dm != null) {
+                        DownloadManager.Request req = new DownloadManager.Request(Uri.parse(targetUrl));
+                        req.setTitle("Обновление Pulse");
+                        req.setDescription("Нажмите после загрузки для установки");
+                        req.setMimeType("application/vnd.android.package-archive");
+                        req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                        req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, safeName);
+                        dm.enqueue(req);
+                        storage.addLog("⬇️ Загрузка обновления: " + safeName);
+                        return true;
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            return openExternalUrl(!targetUrl.isEmpty() ? targetUrl : pageUrl);
+        }
+
+        @JavascriptInterface
+        public boolean openExternalUrl(String url) {
+            if (url == null || url.trim().isEmpty()) return false;
+            try {
+                Intent viewIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(url.trim()));
+                startActivity(viewIntent);
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
         }
     }
 }
