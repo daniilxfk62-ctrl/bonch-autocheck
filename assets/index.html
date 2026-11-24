@@ -3376,6 +3376,7 @@
       ];
 
       const HAS_BRIDGE = typeof window.AndroidBridge !== 'undefined';
+      const IS_IOS_BRIDGE = HAS_BRIDGE && !!window.AndroidBridge.__isIOS;
       const STORAGE_KEY = 'pulse_autocheck_state_v6';
       const TAB_ORDER = ['today', 'schedule', 'messages', 'diary', 'settings'];
       const DAY_SHORTS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
@@ -3890,6 +3891,18 @@
         if (needSettings) { try { renderSettings(); } catch (e) {} }
       }
 
+      window.__pulseForceSync = () => syncFromAndroid(true);
+
+      async function handleIosClipboardImport() {
+        if (!IS_IOS_BRIDGE || typeof window.AndroidBridge.importFromClipboard !== 'function') return;
+        const res = await window.AndroidBridge.importFromClipboard();
+        if (res && res.ok) {
+          showToast(`Обновлено: ${(res.updated || []).join(', ') || 'данные приняты'}`, 'success');
+        } else {
+          showToast((res && res.reason) || 'Нет новых данных в буфере', 'error');
+        }
+      }
+
       function getAllDaysFlat() {
         const weekNums = Object.keys(state.semesterWeeks).map(Number).sort((a, b) => a - b);
         const flat = [];
@@ -4148,6 +4161,25 @@
           || (Array.isArray(state.messages) && state.messages.length > 0);
 
         if (!state.account.loggedIn && !hasLoadedData) {
+          if (IS_IOS_BRIDGE) {
+            container.innerHTML = `
+              <div class="empty-day anim-in" style="margin-top:26px;">
+                <div class="empty-icon" style="background:var(--accent-soft);border-color:var(--accent-ring);color:var(--accent);">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+                </div>
+                <strong>Подключите Apple-команду</strong>
+                <span style="margin-bottom:12px;">Запустите команду Pulse AutoCheck на iPhone, затем нажмите «Принять данные» для загрузки расписания, дневника и сообщений.</span>
+                <div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:260px;">
+                  <button class="full-btn accent" id="iosImportClipBtn">Принять данные из Команды</button>
+                  <button class="full-btn secondary" id="iosRunSyncBtn">Запустить синхронизацию</button>
+                  <a class="link-btn" href="./setup.html" style="text-decoration:none;">Инструкция и установка команды</a>
+                </div>
+              </div>
+            `;
+            $('iosImportClipBtn').addEventListener('click', handleIosClipboardImport);
+            $('iosRunSyncBtn').addEventListener('click', () => window.AndroidBridge.syncAll());
+            return;
+          }
           container.innerHTML = `
             <div class="empty-day anim-in" style="margin-top:26px;">
               <div class="empty-icon" style="background:var(--accent-soft);border-color:var(--accent-ring);color:var(--accent);">
@@ -5891,10 +5923,26 @@
           <div class="settings-group">
             <div class="settings-row tap" id="syncAllRow">
               <div>
-                <div class="row-title">Синхронизировать всё</div>
+                <div class="row-title">${IS_IOS_BRIDGE ? 'Запустить команду синхронизации' : 'Синхронизировать всё'}</div>
                 <div class="row-sub">${state.scanningSemester && state.scanStatus ? escapeHtml(state.scanStatus) : 'Расписание семестра, дневник, сообщения и файлы'}</div>
               </div>
             </div>
+            ${IS_IOS_BRIDGE ? `
+            <div class="settings-row tap" id="iosSettingsImportRow">
+              <div>
+                <div class="row-title">Принять данные из буфера</div>
+                <div class="row-sub">Загрузить пакет после выполнения Apple-команды</div>
+              </div>
+              <span class="badge accent">Вставить</span>
+            </div>
+            <div class="settings-row tap" id="iosOpenSetupRow">
+              <div>
+                <div class="row-title">Настройка iPhone и Команды</div>
+                <div class="row-sub">Установка iCloud-команды и фоновой автоматизации</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+            ` : ''}
           </div>
 
           <div class="section-label"><span>Внешний вид</span></div>
@@ -5962,7 +6010,10 @@
           window.AndroidBridge.syncAll();
           showToast('Синхронизация с ЛК...');
         });
-
+        const iosImportRow = $('iosSettingsImportRow');
+        if (iosImportRow) iosImportRow.addEventListener('click', handleIosClipboardImport);
+        const iosSetupRow = $('iosOpenSetupRow');
+        if (iosSetupRow) iosSetupRow.addEventListener('click', () => { window.location.href = './setup.html'; });
         const devRow = $('openDevMenuRow');
         if (devRow) devRow.addEventListener('click', openDeveloperMenuSheet);
         const updRow = $('checkUpdatesRow');

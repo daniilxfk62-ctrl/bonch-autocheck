@@ -1,0 +1,95 @@
+name: Deploy iOS PWA to GitHub Pages
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "assets/index.html"
+      - "ios-web/**"
+      - ".github/workflows/deploy-ios.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages-ios-pwa"
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Assemble iOS PWA bundle
+        env:
+          BUILD_SHA: ${{ github.sha }}
+          SOURCE_REPO: ${{ github.repository }}
+        run: |
+          python3 - << 'EOF'
+          import os, shutil, pathlib
+
+          root = pathlib.Path(".")
+          site = root / "_site"
+          if site.exists():
+              shutil.rmtree(site)
+          shutil.copytree(root / "ios-web", site)
+
+          # Инжектим PWA-теги и подключение runtime/bridge.js в копию assets/index.html
+          src_html = (root / "assets" / "index.html").read_text(encoding="utf-8")
+          ios_head_snippet = """  <!-- iOS PWA & Runtime Bridge (injected by deploy-ios.yml) -->
+            <meta name="apple-mobile-web-app-capable" content="yes" />
+            <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+            <meta name="apple-mobile-web-app-title" content="Pulse" />
+            <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+            <meta name="theme-color" content="#070709" media="(prefers-color-scheme: dark)" />
+            <link rel="manifest" href="./pwa/manifest.json" />
+            <link rel="apple-touch-icon" sizes="180x180" href="./pwa/icons/apple-touch-icon.png" />
+            <script>
+              if (typeof window.AndroidBridge === 'undefined') {
+                window.AndroidBridge = { __isIOS: true, __pending: true };
+              }
+            </script>
+            <script type="module" src="./runtime/bridge.js"></script>
+          </head>"""
+
+          if "</head>" not in src_html:
+              raise RuntimeError("assets/index.html does not contain </head>")
+
+          out_html = src_html.replace("</head>", ios_head_snippet, 1)
+          (site / "index.html").write_text(out_html, encoding="utf-8")
+
+          # Обновляем версию кэша в Service Worker по хэшу коммита
+          short_sha = os.environ.get("BUILD_SHA", "dev")[:8]
+          sw_path = site / "pwa" / "sw.js"
+          if sw_path.exists():
+              sw_text = sw_path.read_text(encoding="utf-8")
+              sw_path.write_text(sw_text.replace("__BUILD_HASH__", short_sha), encoding="utf-8")
+
+          # Запрещаем Jekyll ломать файлы с подчёркиваниями
+          (site / ".nojekyll").write_text("", encoding="utf-8")
+          print(f"Built iOS PWA for {os.environ.get('SOURCE_REPO')} (cache: {short_sha})")
+          EOF
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "_site"
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

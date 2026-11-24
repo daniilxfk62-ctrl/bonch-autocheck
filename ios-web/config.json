@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "appVersion": "02.09.00",
+  "shortcutMinVersion": "1.0",
+  "shortcutName": "Pulse AutoCheck",
+  "shortcutIcloudUrl": "",
+  "ipcPrefix": "PULSE_SYNC_V1:",
+  "minIntervalSec": 300,
+  "nightPause": {
+    "startHour": 23,
+    "endHour": 7
+  },
+  "repos": [
+    "daniilxfk62-ctrl/bonch-autocheck",
+    "g1tm4estr0/bonch-autocheck"
+  ],
+  "endpoints": {
+    "base": "https://lk.sut.ru",
+    "login": "https://lk.sut.ru/cabinet/lib/autentificationok.php",
+    "cabinet": "https://lk.sut.ru/cabinet/",
+    "schedule": "https://lk.sut.ru/cabinet/project/cabinet/forms/raspisanie.php",
+    "diary": "https://lk.sut.ru/cabinet/project/cabinet/forms/jurnal_dnevnik.php",
+    "messages": "https://lk.sut.ru/cabinet/project/cabinet/forms/message.php?type=in",
+    "messageView": "https://lk.sut.ru/cabinet/project/cabinet/forms/sendto2.php",
+    "groupFiles": "https://lk.sut.ru/cabinet/project/cabinet/forms/files_group_pr.php"
+  },
+  "regex": {
+    "loginRequired": "autentification|name=[\"']users[\"']",
+    "checkinButton": "open_zan\\((\\d+)\\s*,\\s*(\\d+)\\)",
+    "stripTags": "<(head|script|style|noscript)[\\s\\S]*?<\\/\\1>"
+  },
+  "lessonSlots": [
+    "09:00-10:35",
+    "10:45-12:20",
+    "13:00-14:35",
+    "14:45-16:20",
+    "16:30-18:05",
+    "18:15-19:50"
+  ]
+}
