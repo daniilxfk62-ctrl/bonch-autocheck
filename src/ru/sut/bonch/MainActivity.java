@@ -88,7 +88,24 @@ public class MainActivity extends Activity {
         }
         super.onActivityResult(requestCode, resultCode, data);
     }
-
+    @Override
+    public void onBackPressed() {
+        if (webView != null) {
+            webView.evaluateJavascript(
+                "(function(){ return window.__pulseHandleBack ? !!window.__pulseHandleBack() : false; })()",
+                new ValueCallback<String>() {
+                    @Override
+                    public void onReceiveValue(String value) {
+                        if (!"true".equals(value)) {
+                            MainActivity.super.onBackPressed();
+                        }
+                    }
+                }
+            );
+            return;
+        }
+        super.onBackPressed();
+    }
     private void requestBatteryOptimizationIfNeeded() {
         if (Build.VERSION.SDK_INT >= 23) {
             try {
@@ -247,6 +264,8 @@ public class MainActivity extends Activity {
                 state.put("messagesMtime", storage.getFileMtime(AppStorage.FILE_MESSAGES));
                 state.put("filesMtime", storage.getFileMtime(AppStorage.FILE_GROUP_FILES));
                 state.put("profileMtime", storage.getFileMtime(AppStorage.FILE_PROFILE));
+                state.put("teachersMtime", storage.getFileMtime(AppStorage.FILE_TEACHERS));
+                state.put("notesMtime", storage.getFileMtime(AppStorage.FILE_DAY_NOTES));
                 state.put("logs", storage.getLogsArray());
                 return state.toString();
             } catch (Exception e) {
@@ -373,6 +392,73 @@ public class MainActivity extends Activity {
             svc.putExtra("threadId", threadId);
             svc.putExtra("text", text.trim());
             sendDaemonIntent(svc);
+        }
+        @JavascriptInterface
+        public String getDayNotes() {
+            return storage.getDayNotesJson();
+        }
+
+        @JavascriptInterface
+        public void saveDayNotes(String notesJsonStr) {
+            storage.saveDayNotesJson(notesJsonStr);
+            NotificationHelper.rescheduleNoteAlarms(MainActivity.this, storage);
+        }
+
+        @JavascriptInterface
+        public String getMessageTeachers() {
+            return storage.getMessageTeachers().toString();
+        }
+
+        @JavascriptInterface
+        public void refreshMessageTeachers() {
+            sendDaemonCommand("fetch_teachers");
+        }
+
+        @JavascriptInterface
+        public boolean sendNewMessage(
+            String adresatId,
+            String adresatName,
+            String title,
+            String text,
+            String fileName,
+            String base64Data
+        ) {
+            if (adresatId == null || adresatId.trim().isEmpty() || "0".equals(adresatId.trim())) return false;
+            if (title == null || title.trim().isEmpty()) return false;
+
+            String savedPath = "";
+            String safeName = (fileName != null && !fileName.trim().isEmpty())
+                ? fileName.trim().replaceAll("[\\\\/:*?\"<>|]", "_")
+                : "attachment";
+
+            if (base64Data != null && !base64Data.isEmpty()) {
+                try {
+                    byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
+                    if (bytes.length > 5 * 1024 * 1024) {
+                        storage.addLog("Ошибка: файл больше 5 МБ");
+                        return false;
+                    }
+                    File tmp = new File(getCacheDir(), "newmsg_" + System.currentTimeMillis() + "_" + safeName);
+                    try (FileOutputStream fos = new FileOutputStream(tmp)) {
+                        fos.write(bytes);
+                    }
+                    savedPath = tmp.getAbsolutePath();
+                } catch (Exception e) {
+                    storage.addLog("Ошибка подготовки файла: " + e.getMessage());
+                    return false;
+                }
+            }
+
+            Intent svc = new Intent(MainActivity.this, BonchBackgroundDaemon.class);
+            svc.putExtra("action", "send_new_message");
+            svc.putExtra("adresatId", adresatId.trim());
+            svc.putExtra("adresatName", adresatName != null ? adresatName.trim() : "");
+            svc.putExtra("title", title.trim());
+            svc.putExtra("text", text != null ? text.trim() : "");
+            svc.putExtra("filePath", savedPath);
+            svc.putExtra("fileName", safeName);
+            sendDaemonIntent(svc);
+            return true;
         }
 
         @JavascriptInterface

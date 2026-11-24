@@ -24,6 +24,18 @@ public class MessageManager {
     // Точные паттерны строк lk.sut.ru: <tr id='tr_3908722'> и onclick="tr_click(3908722);"
     private static final Pattern TR_ID_PAT = Pattern.compile("id\\s*=\\s*['\"]?tr_(\\d+)['\"]?", Pattern.CASE_INSENSITIVE);
     private static final Pattern TR_CLICK_PAT = Pattern.compile("tr_click\\s*\\(\\s*['\"]?(\\d+)['\"]?\\s*\\)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SELECT_ADRESAT_PAT = Pattern.compile(
+        "<select[^>]*name\\s*=\\s*['\"]?adresat['\"]?[^>]*>(.*?)</select>",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern OPTION_PAT = Pattern.compile(
+        "<option[^>]*value\\s*=\\s*['\"]?(\\d+)['\"]?[^>]*>(.*?)</option>",
+        Pattern.DOTALL | Pattern.CASE_INSENSITIVE
+    );
+    private static final Pattern IDINFO_JSON_PAT = Pattern.compile(
+        "['\"]?idinfo['\"]?\\s*[:=]\\s*['\"]?(\\d+)['\"]?",
+        Pattern.CASE_INSENSITIVE
+    );
 
     public boolean isTimeForPeriodicPoll(AppStorage storage) {
         long intervalMs = storage.getAutoUpdateIntervalMillis();
@@ -50,6 +62,9 @@ public class MessageManager {
 
         int msgCount = pollPersonalMessages(ctx, api, storage, login, password, manualTrigger);
         int fileCount = pollGroupFiles(ctx, api, storage, login, password, manualTrigger);
+        if (manualTrigger || storage.getMessageTeachers().length() == 0) {
+            pollMessageTeachers(api, storage, login, password);
+        }
 
         if (manualTrigger) {
             storage.addLog("💬 Синхронизация завершена (диалогов: " + msgCount + ", файлов группы: " + fileCount + ")");
@@ -863,7 +878,115 @@ public class MessageManager {
             }
         }
     }
+    public synchronized int pollMessageTeachers(
+        SutApiClient api,
+        AppStorage storage,
+        String login,
+        String password
+    ) {
+        if (!api.isAuthenticated() && !api.authenticate(login, password, storage)) {
+            return storage.getMessageTeachers().length();
+        }
+        try {
+            String html = fetchExactPage(api, storage, login, password, SutApiClient.MESSAGE_CREATE_URL);
+            if (html.isEmpty()) return storage.getMessageTeachers().length();
 
+            Matcher sm = SELECT_ADRESAT_PAT.matcher(html);
+            if (!sm.find()) return storage.getMessageTeachers().length();
+
+            JSONArray arr = new JSONArray();
+            Matcher om = OPTION_PAT.matcher(sm.group(1));
+            while (om.find()) {
+                String id = om.group(1).trim();
+                String name = cleanHtml(om.group(2));
+                if ("0".equals(id) || id.isEmpty() || name.isEmpty() || "...".equals(name)) continue;
+                JSONObject obj = new JSONObject();
+                obj.put("id", id);
+                obj.put("name", name);
+                arr.put(obj);
+            }
+            storage.saveMessageTeachers(arr);
+            storage.addLog("👤 Список преподавателей для сообщений обновлён (" + arr.length() + ")");
+            return arr.length();
+        } catch (Exception e) {
+            storage.addLog("Ошибка загрузки списка преподавателей: " + e.getMessage());
+            return 0;
+        }
+    }
+
+    public synchronized boolean sendNewMessage(
+        SutApiClient api,
+        AppStorage storage,
+        String login,
+        String password,
+        String adresatId,
+        String adresatName,
+        String title,
+        String text,
+        String filePath,
+        String fileName
+    ) {
+        String cleanAdresat = adresatId != null ? adresatId.trim() : "";
+        String cleanTitle = title != null ? title.trim() : "";
+        String cleanText = text != null ? text.trim() : "";
+        File attachFile = (filePath != null && !filePath.isEmpty()) ? new File(filePath) : null;
+        boolean hasFile = attachFile != null && attachFile.exists() && attachFile.length() > 0;
+
+        if (cleanAdresat.isEmpty() || "0".equals(cleanAdresat) || cleanTitle.isEmpty()) {
+            storage.addLog("Ошибка отправки: выберите преподавателя и укажите тему.");
+            return false;
+        }
+        if (hasFile && attachFile.length() > 5L * 1024L * 1024L) {
+            storage.addLog("Ошибка: файл больше 5 МБ");
+            return false;
+        }
+
+        try {
+            if (!api.isAuthenticated() && !api.authenticate(login, password, storage)) {
+                storage.addLog("Ошибка входа в ЛК при отправке нового сообщения.");
+                return false;
+            }
+
+            String idinfo = "0";
+            if (hasFile) {
+                Map<String, String> fields = new LinkedHashMap<>();
+                fields.put("id", "0");
+                fields.put("item", "0");
+                fields.put("upload", "Загрузить");
+                String upResp = api.httpPostMultipart(
+                    SutApiClient.MESSAGE_CREATE_URL, fields, "userfile", attachFile, fileName
+                );
+                if (upResp != null) {
+                    Matcher im = IDINFO_JSON_PAT.matcher(upResp);
+                    if (im.find()) {
+                        idinfo = im.group(1);
+                    }
+                }
+            }
+
+            String payload = "idinfo=" + URLEncoder.encode(idinfo, "UTF-8")
+                + "&item=0"
+                + "&title=" + URLEncoder.encode(cleanTitle, "UTF-8")
+                + "&mes_otvet=" + URLEncoder.encode(cleanText, "UTF-8")
+                + "&adresat=" + URLEncoder.encode(cleanAdresat, "UTF-8")
+                + "&saveotv=";
+
+            String resp = api.httpRequest("POST", SutApiClient.MESSAGE_SEND_URL, payload);
+            boolean ok = resp != null && !resp.toLowerCase(Locale.ROOT).contains("ошибка");
+            String who = (adresatName != null && !adresatName.trim().isEmpty()) ? adresatName.trim() : ("ID " + cleanAdresat);
+            storage.addLog(ok
+                ? ("📤 Новое сообщение отправлено: " + who + " («" + cleanTitle + "»)")
+                : ("⚠️ Не удалось подтвердить отправку сообщения для " + who));
+            return ok;
+        } catch (Exception e) {
+            storage.addLog("Ошибка отправки нового сообщения: " + e.getMessage());
+            return false;
+        } finally {
+            if (attachFile != null && attachFile.exists()) {
+                try { attachFile.delete(); } catch (Exception ignored) {}
+            }
+        }
+    }
     private static String stripScriptsAndStyles(String raw) {
         if (raw == null || raw.isEmpty()) return "";
         return raw

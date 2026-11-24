@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
 package="ru.sut.bonch"
 android:versionCode="200"
-android:versionName="02.09.00">
+android:versionName="02.09.07">
 
 <uses-sdk android:minSdkVersion="24" android:targetSdkVersion="33" />
 <uses-permission android:name="android.permission.INTERNET" />

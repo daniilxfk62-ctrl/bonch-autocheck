@@ -246,8 +246,100 @@
       flex: 1;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
-      padding: 12px 18px 108px;
+      padding: 8px 16px 104px;
       scrollbar-width: none;
+      overscroll-behavior-y: contain;
+    }
+
+    .scroll-area.has-bottom-bar {
+      padding-bottom: 162px;
+    }
+
+    /* Pull-to-Refresh Indicator */
+    .ptr-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      height: 0;
+      overflow: hidden;
+      opacity: 0;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      transition: height 0.26s var(--spring), opacity 0.2s ease;
+    }
+
+    .ptr-indicator.pulling {
+      transition: none;
+    }
+
+    .ptr-indicator.ready {
+      color: var(--accent);
+    }
+
+    .ptr-indicator .ptr-arrow {
+      transition: transform 0.22s var(--spring);
+    }
+
+    .ptr-indicator.ready .ptr-arrow {
+      transform: rotate(180deg);
+    }
+
+    /* Bottom Action Bar above Dock */
+    .bottom-bar {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: calc(max(12px, env(safe-area-inset-bottom)) + 72px);
+      z-index: 35;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 7px;
+      border-radius: 20px;
+      background: var(--dock-bg);
+      backdrop-filter: blur(22px) saturate(180%);
+      -webkit-backdrop-filter: blur(22px) saturate(180%);
+      border: 1px solid var(--border);
+      box-shadow: 0 8px 26px rgba(0, 0, 0, 0.08);
+    }
+
+    .bottom-bar .segment {
+      flex: 1;
+      border: none;
+      background: transparent;
+      padding: 2px;
+    }
+
+    .bottom-bar .seg-indicator {
+      top: 2px;
+      bottom: 2px;
+      left: 2px;
+      width: calc((100% - 4px) / 2);
+    }
+
+    .bottom-bar .seg-btn {
+      height: 34px;
+    }
+
+    .compose-fab {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid var(--accent-ring);
+      background: var(--accent-soft);
+      color: var(--accent);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.22s var(--spring-bounce), background-color 0.2s ease;
+    }
+
+    .compose-fab:active {
+      transform: scale(0.88);
     }
 
     .scroll-area::-webkit-scrollbar {
@@ -299,7 +391,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: max(18px, env(safe-area-inset-top)) 18px 12px;
+      padding: max(14px, env(safe-area-inset-top)) 16px 8px;
       flex-shrink: 0;
       background: var(--bg);
       z-index: 10;
@@ -359,23 +451,30 @@
       transform: scale(0.972);
     }
 
-    /* Auto-check Master Card */
+    /* Auto-check Master Card with ECG Pulse Diagram */
     .auto-card {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 15px 16px;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 10px;
+      padding: 15px 16px 13px;
       border-radius: 22px;
       background: var(--surface);
       border: 1px solid var(--border);
-      margin-bottom: 18px;
+      margin-bottom: 14px;
       transition: border-color 0.32s var(--spring), background-color 0.32s var(--spring), box-shadow 0.32s var(--spring), transform 0.22s var(--spring);
     }
 
     .auto-card.is-on {
       border-color: var(--accent-ring);
-      box-shadow: 0 6px 24px -10px var(--accent-ring);
+      box-shadow: 0 8px 28px -12px var(--accent-ring);
+    }
+
+    .auto-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
 
     .auto-toggle-btn {
@@ -383,12 +482,12 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      height: 36px;
-      padding: 0 15px;
+      height: 40px;
+      padding: 0 18px;
       border-radius: 999px;
       border: 1px solid transparent;
       font-family: inherit;
-      font-size: 13px;
+      font-size: 13.5px;
       font-weight: 600;
       letter-spacing: -0.01em;
       cursor: pointer;
@@ -396,6 +495,57 @@
       background: var(--ink);
       color: var(--ink-text);
       transition: transform 0.22s var(--spring-bounce), background-color 0.24s ease, color 0.24s ease, border-color 0.24s ease;
+    }
+
+    .pulse-ecg-wrap {
+      position: relative;
+      width: 100%;
+      height: 30px;
+      border-radius: 11px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+
+    .pulse-ecg-svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .pulse-ecg-base {
+      fill: none;
+      stroke: var(--border-strong);
+      stroke-width: 1.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.55;
+    }
+
+    .pulse-ecg-wave {
+      fill: none;
+      stroke: var(--text-muted);
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      opacity: 0.35;
+      transition: stroke 0.3s ease, opacity 0.3s ease;
+    }
+
+    .auto-card.is-on .pulse-ecg-wave {
+      stroke: var(--accent);
+      opacity: 1;
+      stroke-dasharray: 120 260;
+      stroke-dashoffset: 380;
+      animation: ecgSweep 2.1s linear infinite;
+      filter: drop-shadow(0 0 4px var(--accent-ring));
+    }
+
+    @keyframes ecgSweep {
+      0% { stroke-dashoffset: 380; }
+      100% { stroke-dashoffset: 0; }
     }
 
     .auto-toggle-btn:active {
@@ -575,13 +725,13 @@
     .class-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
     }
 
     .class-card {
       position: relative;
-      padding: 15px 16px 15px 19px;
-      border-radius: 20px;
+      padding: 11px 13px 11px 16px;
+      border-radius: 17px;
       background: var(--surface);
       border: 1px solid var(--border);
       box-shadow: var(--shadow-card);
@@ -629,8 +779,8 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 8px;
-      margin-bottom: 8px;
+      gap: 6px;
+      margin-bottom: 5px;
     }
 
     .class-time {
@@ -679,22 +829,22 @@
     }
 
     .class-name {
-      font-size: 15.5px;
+      font-size: 14.5px;
       font-weight: 600;
       letter-spacing: -0.02em;
-      line-height: 1.28;
-      margin-bottom: 6px;
+      line-height: 1.24;
+      margin-bottom: 5px;
     }
 
     .class-meta-row {
       display: flex;
       align-items: center;
-      gap: 7px;
+      gap: 6px;
       flex-wrap: wrap;
     }
 
     .class-meta {
-      font-size: 12.5px;
+      font-size: 12px;
       color: var(--text-secondary);
     }
 
@@ -702,9 +852,9 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      margin-top: 13px;
-      padding-top: 11px;
+      gap: 8px;
+      margin-top: 9px;
+      padding-top: 8px;
       border-top: 1px solid var(--border);
     }
 
@@ -862,14 +1012,14 @@
     /* Vertical Spatial Day Rail */
     .day-rail {
       position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-58%);
+      right: 5px;
+      top: 46%;
+      transform: translateY(-50%);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
-      padding: 5px 3px;
+      gap: 3px;
+      padding: 4px 2px;
       border-radius: 999px;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -882,15 +1032,15 @@
 
     .rail-pill {
       position: absolute;
-      top: 5px;
-      left: 3px;
-      width: 28px;
-      height: 28px;
+      top: 4px;
+      left: 2px;
+      width: 26px;
+      height: 26px;
       border-radius: 999px;
       background: var(--ink);
       pointer-events: none;
       z-index: 1;
-      transition: transform 0.12s var(--spring-snappy);
+      transition: transform 0.24s var(--spring);
       will-change: transform;
     }
 
@@ -901,14 +1051,14 @@
     .rail-day {
       position: relative;
       z-index: 2;
-      width: 28px;
-      height: 28px;
+      width: 26px;
+      height: 26px;
       border-radius: 999px;
       border: none;
       background: transparent;
       color: var(--text-muted);
       font-family: inherit;
-      font-size: 10.5px;
+      font-size: 10px;
       font-weight: 600;
       display: inline-flex;
       align-items: center;
@@ -973,7 +1123,7 @@
       height: 100%;
       scroll-snap-align: start;
       scroll-snap-stop: always;
-      padding: 8px 48px 104px 18px;
+      padding: max(12px, env(safe-area-inset-top)) 38px 158px 14px;
       display: flex;
       flex-direction: column;
       overflow-y: auto;
@@ -981,7 +1131,7 @@
     }
 
     .day-slide.full-width {
-      padding: 8px 18px 104px;
+      padding: max(12px, env(safe-area-inset-top)) 16px 158px;
     }
 
     .day-slide::-webkit-scrollbar {
@@ -990,10 +1140,10 @@
 
     .day-hero {
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
-      padding-bottom: 10px;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
       border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
@@ -1001,11 +1151,11 @@
     .day-num-row {
       display: flex;
       align-items: baseline;
-      gap: 10px;
+      gap: 9px;
     }
 
     .day-big-num {
-      font-size: 38px;
+      font-size: 32px;
       font-weight: 600;
       letter-spacing: -0.04em;
       line-height: 1;
@@ -1014,36 +1164,44 @@
     .day-name-col {
       display: flex;
       flex-direction: column;
-      gap: 2px;
+      gap: 1px;
     }
 
     .day-weekday {
-      font-size: 15.5px;
+      font-size: 15px;
       font-weight: 600;
       letter-spacing: -0.02em;
     }
 
     .day-month {
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--text-secondary);
     }
 
     .day-cards {
       display: flex;
       flex-direction: column;
-      gap: 9px;
+      gap: 7px;
       flex: 1;
     }
 
     .mini-lesson {
       display: flex;
       align-items: center;
-      gap: 11px;
-      padding: 12px 13px;
-      border-radius: 18px;
+      gap: 9px;
+      padding: 10px 11px;
+      border-radius: 16px;
       background: var(--surface);
       border: 1px solid var(--border);
       transition: opacity 0.22s ease, filter 0.22s ease, transform 0.22s var(--spring);
+    }
+
+    .mini-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+      flex-shrink: 0;
     }
 
     .mini-lesson.is-past {
@@ -1360,19 +1518,22 @@
     }
 
     .mini-title {
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 600;
       letter-spacing: -0.015em;
-      white-space: nowrap;
+      line-height: 1.24;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
       overflow: hidden;
-      text-overflow: ellipsis;
     }
 
     .mini-sub-row {
       display: flex;
       align-items: center;
-      gap: 6px;
-      margin-top: 4px;
+      gap: 5px;
+      flex-wrap: wrap;
+      margin-top: 3px;
     }
 
     .mini-sub {
@@ -2476,25 +2637,131 @@
       color: var(--danger);
     }
 
+    .sheet.sheet-tall {
+      max-height: 92%;
+      height: 86dvh;
+    }
+
+    .sheet.sheet-tall .sheet-scroll {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .teacher-subjects-hint {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 4px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 11.5px;
+      font-weight: 500;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .field select,
+    .field textarea {
+      width: 100%;
+      padding: 10px 13px;
+      border-radius: 14px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13.5px;
+      outline: none;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .field select {
+      height: 44px;
+    }
+
+    .field textarea {
+      min-height: 96px;
+      resize: vertical;
+      line-height: 1.42;
+    }
+
+    .field select:focus,
+    .field textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .note-time-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .note-time-input {
+      flex: 1;
+      height: 36px;
+      padding: 0 10px;
+      border-radius: 11px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      outline: none;
+    }
+
+    .note-meta-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--surface-hover);
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 500;
+      margin-top: 4px;
+    }
+
+    .note-meta-pill.notify-on {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
     /* Chat Bubbles inside Sheet */
     .chat-list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 14px;
-      max-height: 280px;
+      gap: 7px;
+      margin-bottom: 10px;
+      flex: 1;
+      min-height: 200px;
       overflow-y: auto;
+      padding-right: 2px;
+      scrollbar-width: none;
+    }
+
+    .chat-list::-webkit-scrollbar {
+      display: none;
     }
 
     .bubble {
-      max-width: 86%;
-      padding: 10px 13px;
+      max-width: 88%;
+      padding: 9px 12px;
       border-radius: 16px;
-      font-size: 13.5px;
-      line-height: 1.4;
+      font-size: 13px;
+      line-height: 1.38;
       background: var(--surface);
       border: 1px solid var(--border);
       align-self: flex-start;
+      word-break: break-word;
     }
 
     .bubble.me {
@@ -3057,20 +3324,26 @@
               <h1 class="top-title">Сегодня</h1>
               <div class="top-sub tabular" id="todaySubtitle"></div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <button class="icon-btn" id="quickSyncBtn" aria-label="Синхронизировать" title="Синхронизировать с ЛК">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-              </button>
-              <button class="icon-btn" id="quickThemeBtn" aria-label="Сменить тему" title="Сменить тему"></button>
-            </div>
+            <button class="icon-btn" id="quickThemeBtn" aria-label="Сменить тему" title="Сменить тему"></button>
           </header>
 
+          <div class="ptr-indicator" id="ptr-today">
+            <svg class="ptr-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            <span class="ptr-text">Потяните для обновления</span>
+          </div>
           <div class="scroll-area" id="todayContent"></div>
         </section>
 
         <!-- TAB 2: РАСПИСАНИЕ (Continuous Multi-Week Vertical Snap) -->
         <section class="tab-view" id="view-schedule" aria-label="Расписание">
-          <header class="sched-header">
+          <div id="scheduleSyncBanner" style="padding:max(8px, env(safe-area-inset-top)) 14px 0;"></div>
+
+          <div class="snap-wrap">
+            <div class="day-feed" id="dayFeed"></div>
+            <div class="day-rail" id="dayRail" aria-label="Индикатор дней недели"></div>
+          </div>
+
+          <div class="bottom-bar" id="scheduleBottomBar">
             <div class="week-nav">
               <button class="week-btn" id="prevWeekBtn" aria-label="Предыдущая неделя">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
@@ -3080,23 +3353,19 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
             </div>
-            <div class="sched-actions">
-              <button class="pill-btn" id="jumpTodayBtn" style="display:none;">Сегодня</button>
+            <div class="sched-actions" style="margin-left:auto;gap:6px;">
+              <button class="pill-btn" id="jumpTodayBtn" style="display:none;height:32px;padding:0 10px;">Сегодня</button>
               <button class="icon-btn sm" id="scheduleCalendarBtn" aria-label="Календарь" title="Открыть календарь">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg>
+              </button>
+              <button class="icon-btn sm" id="scheduleRefreshBtn" aria-label="Обновить расписание" title="Обновить расписание">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
               </button>
               <button class="icon-btn sm" id="scheduleFilterBtn" aria-label="Фильтр занятий" title="Фильтр занятий">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
                 <span class="filter-dot" id="scheduleFilterDot" style="display:none;"></span>
               </button>
             </div>
-          </header>
-
-          <div id="scheduleSyncBanner" style="padding:0 18px;"></div>
-
-          <div class="snap-wrap">
-            <div class="day-feed" id="dayFeed"></div>
-            <div class="day-rail" id="dayRail" aria-label="Индикатор дней недели"></div>
           </div>
         </section>
 
@@ -3107,12 +3376,15 @@
               <h1 class="top-title">Сообщения</h1>
               <div class="top-sub" id="msgSubtitle">Личные и файлы группы</div>
             </div>
-            <button class="icon-btn" id="syncMessagesBtn" aria-label="Обновить сообщения" title="Обновить сообщения">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-            </button>
           </header>
 
-          <div class="segment-wrap">
+          <div class="ptr-indicator" id="ptr-messages">
+            <svg class="ptr-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            <span class="ptr-text">Потяните для обновления</span>
+          </div>
+          <div class="scroll-area has-bottom-bar" id="messagesContent"></div>
+
+          <div class="bottom-bar" id="msgBottomBar">
             <div class="segment" id="msgSegment">
               <div class="seg-indicator" id="msgSegIndicator"></div>
               <button class="seg-btn active" id="segPersonalBtn" data-msg-tab="personal">
@@ -3120,9 +3392,10 @@
               </button>
               <button class="seg-btn" id="segFilesBtn" data-msg-tab="files">Файлы группы</button>
             </div>
+            <button class="compose-fab" id="composeMsgBtn" aria-label="Новое сообщение преподавателю" title="Написать преподавателю">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+            </button>
           </div>
-
-          <div class="scroll-area" id="messagesContent"></div>
         </section>
 
         <!-- TAB 4: ДНЕВНИК -->
@@ -3132,12 +3405,21 @@
               <h1 class="top-title">Дневник</h1>
               <div class="top-sub" id="diarySubtitle">Посещаемость и оценки</div>
             </div>
-            <button class="icon-btn" id="syncDiaryBtn" aria-label="Обновить дневник" title="Обновить дневник">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-            </button>
           </header>
 
-          <div class="scroll-area" id="diaryContent"></div>
+          <div class="ptr-indicator" id="ptr-diary">
+            <svg class="ptr-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            <span class="ptr-text">Потяните для обновления</span>
+          </div>
+          <div class="scroll-area has-bottom-bar" id="diaryContent"></div>
+
+          <div class="bottom-bar" id="diaryBottomBar">
+            <div class="segment" id="diarySegment">
+              <div class="seg-indicator" id="diarySegIndicator"></div>
+              <button class="seg-btn active" id="segDiaryAttBtn" data-diary-tab="attendance">Посещаемость</button>
+              <button class="seg-btn" id="segDiaryGradesBtn" data-diary-tab="grades">Оценки</button>
+            </div>
+          </div>
         </section>
 
         <!-- TAB 5: НАСТРОЙКИ -->
@@ -3149,6 +3431,10 @@
             </div>
           </header>
 
+          <div class="ptr-indicator" id="ptr-settings">
+            <svg class="ptr-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+            <span class="ptr-text">Потяните для обновления</span>
+          </div>
           <div class="scroll-area" id="settingsContent"></div>
         </section>
       </main>
@@ -3192,7 +3478,7 @@
             <div class="onboard-top reveal reveal-d1">
               <div class="brand-pill">
                 <span class="brand-orb"></span>
-                <span>Pulse · v2.9</span>
+                <span>Pulse · v2.9.7</span>
               </div>
               <button class="icon-btn" id="onboardThemeBtn" aria-label="Сменить тему"></button>
             </div>
@@ -3347,8 +3633,8 @@
        * КОНФИГУРАЦИЯ ПРИЛОЖЕНИЯ И КРЕДИТЫ РАЗРАБОТЧИКОВ
        * Вставьте сюда реальные имена, роли и ссылки на GitHub разработчиков.
        * ===================================================================== */
-      const APP_VERSION = 'v2.9';
-      const APP_BUILD = '02.09.00';
+      const APP_VERSION = 'v2.9.7';
+      const APP_BUILD = '02.09.07';
       const DEV_SECRET_PASSWORD = 'данИИл';
       const EASTER_EGG_PASSWORD = 'Данила';
       const DEV_TAP_THRESHOLD = 5;
@@ -3407,6 +3693,8 @@
         antiKick: true,
         autoTypes: { Лекция: true, Практика: true, Лаба: true },
         subjectRules: {},
+        groupChoices: {},
+        subgroupsPrompted: false,
         dayNotes: {},
         scheduleFilter: 'Все',
         activeGlobalDayIdx: 0,
@@ -3423,6 +3711,7 @@
         todayClasses: [],
         semesterWeeks: {},
         messages: [],
+        messageTeachers: [],
         groupFiles: [],
         diary: []
       };
@@ -3447,6 +3736,7 @@
           const parsed = JSON.parse(raw);
           const merged = Object.assign(cloneObj(INITIAL_STATE), parsed);
           if (!merged.subjectRules) merged.subjectRules = {};
+          if (!merged.groupChoices || typeof merged.groupChoices !== 'object') merged.groupChoices = {};
           if (!merged.dayNotes || typeof merged.dayNotes !== 'object') merged.dayNotes = {};
           if (!merged.firstSeenAt) merged.firstSeenAt = Date.now();
           merged.updateInfo = null;
@@ -3454,6 +3744,7 @@
           merged.todayClasses = [];
           merged.semesterWeeks = {};
           merged.messages = [];
+          merged.messageTeachers = [];
           merged.groupFiles = [];
           merged.diary = [];
           merged.logs = [];
@@ -3481,6 +3772,8 @@
             autoDelay: state.autoDelay,
             antiKick: !!state.antiKick,
             subjectRules: state.subjectRules,
+            groupChoices: state.groupChoices,
+            subgroupsPrompted: !!state.subgroupsPrompted,
             dayNotes: state.dayNotes
           }));
         } catch (e) {}
@@ -3489,11 +3782,14 @@
       let state = loadState();
       let toastTimer = null;
       let checkingIds = new Set();
-      let lastMtimes = { days: -1, cat: -1, diary: -1, messages: -1, files: -1, profile: -1 };
+      let lastMtimes = { days: -1, cat: -1, diary: -1, messages: -1, files: -1, profile: -1, teachers: -1, notes: -1 };
+      let rawSemesterDays = [];
+      let lessonOrderMap = {};
       let currentWeekNum = 0;
       let lastTodayStamp = '';
       let versionTapCount = 0;
       let versionTapTimer = null;
+      let programmaticScrollUntil = 0;
       let loginAttempt = { pending: false, startedAt: 0, prevLogCount: 0, timeoutId: null };
 
       const $ = (id) => document.getElementById(id);
@@ -3675,11 +3971,151 @@
         });
       }
 
+      function matchesChoiceTokenJs(chosenToken, sNorm, tNorm, rNorm) {
+        const parts = String(chosenToken || '').split('||');
+        if (parts.length >= 3) {
+          const cSubj = parts[0].trim();
+          const cTeach = parts[1].trim();
+          const cRoom = parts[2].trim();
+          if (cSubj && sNorm && cSubj.toLowerCase() !== sNorm.toLowerCase()) return false;
+          if (cTeach && tNorm && cTeach.toLowerCase() !== tNorm.toLowerCase()) return false;
+          if (!cTeach && cRoom && rNorm && cRoom.toLowerCase() !== rNorm.toLowerCase()) return false;
+          return true;
+        }
+        const cTeach = (parts[0] || '').trim();
+        const cRoom = (parts[1] || '').trim();
+        if (cTeach && tNorm) return cTeach.toLowerCase() === tNorm.toLowerCase();
+        if (cRoom && rNorm) return cRoom.toLowerCase() === rNorm.toLowerCase();
+        return true;
+      }
+
+      function isLessonAllowedByGroupChoices(dowIdx, startTime, subject, teacher, room) {
+        const choices = state.groupChoices || {};
+        const sNorm = String(subject || '').trim();
+        const tNorm = String(teacher || '').trim();
+        const rNorm = String(room || '').trim();
+
+        if (dowIdx >= 0 && startTime) {
+          const slotKey = `SLOT||${dowIdx}||${startTime}`;
+          if (Object.prototype.hasOwnProperty.call(choices, slotKey)) {
+            const chosenSlot = String(choices[slotKey] || '').trim();
+            if (chosenSlot && chosenSlot !== 'ALL') {
+              if (!matchesChoiceTokenJs(chosenSlot, sNorm, tNorm, rNorm)) return false;
+            }
+          }
+        }
+        if (sNorm && Object.prototype.hasOwnProperty.call(choices, sNorm)) {
+          const chosenSubj = String(choices[sNorm] || '').trim();
+          if (chosenSubj && chosenSubj !== 'ALL') {
+            if (!matchesChoiceTokenJs(chosenSubj, sNorm, tNorm, rNorm)) return false;
+          }
+        }
+        return true;
+      }
+
+      function detectSubgroupConflicts(daysArr) {
+        if (!Array.isArray(daysArr) || !daysArr.length) return [];
+        const subjectVariants = {}; // subject -> Map(teacherLower -> { teacher, room, count })
+        const subjectHasSameSlotDup = new Set();
+
+        daysArr.forEach((d) => {
+          const lessons = Array.isArray(d.lessons) ? d.lessons : [];
+          const bySlotAndSubj = {};
+          lessons.forEach((l) => {
+            const subj = String(l.subjectTitle || '').trim();
+            const teach = String(l.teacher || '').trim();
+            const room = String(l.room || '').trim();
+            const st = String(l.startTime || '').trim();
+            if (!subj || !st || !teach || teach === 'Преподаватель не указан') return;
+
+            const k = `${st}||${subj.toLowerCase()}`;
+            if (!bySlotAndSubj[k]) bySlotAndSubj[k] = new Set();
+            bySlotAndSubj[k].add(teach.toLowerCase());
+
+            if (!subjectVariants[subj]) subjectVariants[subj] = {};
+            const tk = teach.toLowerCase();
+            if (!subjectVariants[subj][tk]) {
+              subjectVariants[subj][tk] = { teacher: teach, room, count: 0 };
+            }
+            subjectVariants[subj][tk].count += 1;
+            if (!subjectVariants[subj][tk].room && room) {
+              subjectVariants[subj][tk].room = room;
+            }
+          });
+
+          Object.keys(bySlotAndSubj).forEach((k) => {
+            if (bySlotAndSubj[k].size > 1) {
+              const subjLow = k.split('||')[1];
+              subjectHasSameSlotDup.add(subjLow);
+            }
+          });
+        });
+
+        const conflicts = [];
+        Object.keys(subjectVariants).forEach((subj) => {
+          if (!subjectHasSameSlotDup.has(subj.toLowerCase())) return;
+          const varMap = subjectVariants[subj];
+          const variants = Object.values(varMap).sort((a, b) => b.count - a.count);
+          if (variants.length < 2) return;
+          conflicts.push({
+            key: subj,
+            title: subj,
+            subtitle: `Найдено преподавателей в одно время: ${variants.length}`,
+            options: variants.map((v) => ({
+              token: `${v.teacher}||${v.room || ''}`,
+              label: v.teacher,
+              sublabel: v.room ? `ауд. ${v.room} · ${v.count} пар` : `${v.count} пар`
+            }))
+          });
+        });
+        return conflicts;
+      }
+
+      function getLessonOrderKey(dateStr, start, subject, type) {
+        return `${dateStr}||${start}||${String(subject || '').trim().toLowerCase()}||${String(type || '').trim().toLowerCase()}`;
+      }
+
+      function rebuildLessonOrderMap() {
+        const flat = getAllDaysFlat();
+        const totals = {};
+        flat.forEach((day) => {
+          (day.lessons || []).forEach((l) => {
+            const k = `${String(l.subject || '').trim().toLowerCase()}||${String(l.type || '').trim().toLowerCase()}`;
+            totals[k] = (totals[k] || 0) + 1;
+          });
+        });
+
+        const running = {};
+        const map = {};
+        flat.forEach((day) => {
+          (day.lessons || []).forEach((l) => {
+            const typeKey = `${String(l.subject || '').trim().toLowerCase()}||${String(l.type || '').trim().toLowerCase()}`;
+            running[typeKey] = (running[typeKey] || 0) + 1;
+            const num = running[typeKey];
+            const total = totals[typeKey] || num;
+            const fullKey = getLessonOrderKey(day.dateStr, l.start, l.subject, l.type);
+            map[fullKey] = { num, total, isLast: total > 1 && num === total };
+          });
+        });
+        lessonOrderMap = map;
+      }
+
+      function getLessonOrderBadgeHtml(dateStr, start, subject, type) {
+        const info = lessonOrderMap[getLessonOrderKey(dateStr, start, subject, type)];
+        if (!info || info.total <= 1) return '';
+        if (info.isLast) {
+          return `<span class="badge warn tabular" title="Последняя пара этого типа в семестре">Последняя · ${info.num}/${info.total}</span>`;
+        }
+        return `<span class="badge tabular" style="opacity:0.82;">${info.num}/${info.total}</span>`;
+      }
+
       function applySemesterDaysFromBridge(rawDays) {
         const arr = safeParse(rawDays, []);
-        if (!Array.isArray(arr) || !arr.length) {
+        rawSemesterDays = Array.isArray(arr) ? arr : [];
+        if (!rawSemesterDays.length) {
           state.semesterWeeks = {};
           state.todayClasses = [];
+          lessonOrderMap = {};
           currentWeekNum = 0;
           formatTodayHeader();
           return;
@@ -3692,7 +4128,7 @@
         let todayLessons = [];
         let foundTodayWeek = 0;
 
-        arr.forEach((d, dayIdx) => {
+        rawSemesterDays.forEach((d, dayIdx) => {
           const wNum = d.weekNum && d.weekNum > 0 ? d.weekNum : 1;
           if (!weeks[wNum]) weeks[wNum] = [];
 
@@ -3705,30 +4141,32 @@
           const isToday = dateStr === todayStr;
           if (isToday) foundTodayWeek = wNum;
 
-          const lessons = (Array.isArray(d.lessons) ? d.lessons : []).map((l, lIdx) => {
-            const start = l.startTime || '09:00';
-            const end = l.endTime || '';
-            const subj = l.subjectTitle || 'Предмет';
-            const type = l.lessonType || 'Практика';
-            const room = l.room || '—';
-            const teacher = l.teacher || 'Преподаватель не указан';
-            const id = `les_${dateStr}_${start}_${lIdx}`;
-            return {
-              id,
-              start,
-              end,
-              subject: subj,
-              type,
-              room,
-              teacher,
-              raspId: l.raspId || '',
-              weekId: l.weekId || '',
-              waitingTeacher: !!l.waitingTeacher,
-              checked: !!l.checked,
-              checkTime: l.checkTime || '',
-              checkedBy: l.checkedBy || ''
-            };
-          });
+          const lessons = (Array.isArray(d.lessons) ? d.lessons : [])
+            .filter((l) => isLessonAllowedByGroupChoices(dowIdx, l.startTime || '', l.subjectTitle || '', l.teacher || '', l.room || ''))
+            .map((l, lIdx) => {
+              const start = l.startTime || '09:00';
+              const end = l.endTime || '';
+              const subj = l.subjectTitle || 'Предмет';
+              const type = l.lessonType || 'Практика';
+              const room = l.room || '—';
+              const teacher = l.teacher || 'Преподаватель не указан';
+              const id = `les_${dateStr}_${start}_${lIdx}`;
+              return {
+                id,
+                start,
+                end,
+                subject: subj,
+                type,
+                room,
+                teacher,
+                raspId: l.raspId || '',
+                weekId: l.weekId || '',
+                waitingTeacher: !!l.waitingTeacher,
+                checked: !!l.checked,
+                checkTime: l.checkTime || '',
+                checkedBy: l.checkedBy || ''
+              };
+            });
 
           weeks[wNum].push({
             num: numStr,
@@ -3764,6 +4202,8 @@
 
         state.semesterWeeks = weeks;
         state.todayClasses = todayLessons;
+        rebuildLessonOrderMap();
+
         const targetIdx = getTodayGlobalIdx();
         const flatAfter = getAllDaysFlat();
         currentWeekNum = foundTodayWeek || (flatAfter[targetIdx] ? flatAfter[targetIdx].week : 0);
@@ -3772,6 +4212,97 @@
           state.activeGlobalDayIdx = targetIdx;
         }
         formatTodayHeader();
+      }
+
+      function maybePromptSubgroups() {
+        if (state.scanningSemester || state.subgroupsPrompted) return;
+        if ($('sheet').classList.contains('open') || $('onboardOverlay').classList.contains('open')) return;
+        if (rawSemesterDays.length < 12) return;
+        if (Object.keys(state.groupChoices || {}).length > 0) {
+          state.subgroupsPrompted = true;
+          saveState();
+          return;
+        }
+        const conflicts = detectSubgroupConflicts(rawSemesterDays);
+        if (conflicts.length > 0) {
+          state.subgroupsPrompted = true;
+          saveState();
+          openSubgroupsSheet(true);
+        }
+      }
+
+      function openSubgroupsSheet(isAutoPrompt) {
+        const conflicts = detectSubgroupConflicts(rawSemesterDays);
+        if (!conflicts.length) {
+          openSheet(`
+            <div class="sheet-title">Подгруппы и преподаватели</div>
+            <div class="sheet-sub">В расписании не найдено предметов с несколькими преподавателями в одно время.</div>
+            <button class="full-btn secondary" id="closeSubgroupsEmpty">Понятно</button>
+          `);
+          $('closeSubgroupsEmpty').addEventListener('click', closeSheet);
+          return;
+        }
+
+        const draft = Object.assign({}, state.groupChoices || {});
+
+        function renderSubgroupsContent() {
+          const blocks = conflicts.map((c) => {
+            const cur = draft[c.key] || 'ALL';
+            const optsHtml = c.options.map((o) => `
+              <button type="button" class="toggle-chip ${cur === o.token ? 'active' : ''}" data-sg-key="${escapeHtml(c.key)}" data-sg-val="${escapeHtml(o.token)}" style="height:auto;padding:7px 12px;border-radius:13px;text-align:left;">
+                <span><strong>${escapeHtml(o.label)}</strong><br/><span style="font-size:11px;opacity:0.75;">${escapeHtml(o.sublabel)}</span></span>
+              </button>
+            `).join('') + `
+              <button type="button" class="toggle-chip ${cur === 'ALL' ? 'active' : ''}" data-sg-key="${escapeHtml(c.key)}" data-sg-val="ALL" style="height:36px;">Показывать всех</button>
+            `;
+            return `
+              <div class="rule-card">
+                <div class="rule-head" style="margin-bottom:6px;">
+                  <div>
+                    <div class="rule-title">${escapeHtml(c.title)}</div>
+                    <div class="row-sub">${escapeHtml(c.subtitle)}</div>
+                  </div>
+                </div>
+                <div class="rule-pills">${optsHtml}</div>
+              </div>
+            `;
+          }).join('');
+
+          openSheet(`
+            <div class="sheet-title">${isAutoPrompt ? 'Выберите ваши подгруппы' : 'Подгруппы и преподаватели'}</div>
+            <div class="sheet-sub">Лишние преподаватели скроются из расписания и не будут мешать автоотметке. Поменять можно в Настройках.</div>
+            ${blocks}
+            <div style="display:flex;gap:8px;margin-top:8px;">
+              <button type="button" class="full-btn secondary" id="cancelSubgroupsBtn" style="flex:1;">Позже</button>
+              <button type="button" class="full-btn accent" id="saveSubgroupsBtn" style="flex:1.5;">Сохранить</button>
+            </div>
+          `);
+
+          $('sheetContent').querySelectorAll('[data-sg-key]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              draft[btn.dataset.sgKey] = btn.dataset.sgVal;
+              renderSubgroupsContent();
+            });
+          });
+
+          $('cancelSubgroupsBtn').addEventListener('click', closeSheet);
+          $('saveSubgroupsBtn').addEventListener('click', () => {
+            state.groupChoices = Object.assign({}, draft);
+            state.subgroupsPrompted = true;
+            saveState();
+            if (HAS_BRIDGE && window.AndroidBridge.saveGroupChoices) {
+              try { window.AndroidBridge.saveGroupChoices(JSON.stringify(state.groupChoices)); } catch (e) {}
+            }
+            applySemesterDaysFromBridge(JSON.stringify(rawSemesterDays));
+            renderToday();
+            renderSchedule();
+            renderSettings();
+            closeSheet();
+            showToast('Подгруппы сохранены', 'success');
+          });
+        }
+
+        renderSubgroupsContent();
       }
 
       function bridgeRead(fnName, fallback) {
@@ -3813,6 +4344,11 @@
           if (typeof cfg.antiKick === 'boolean') state.antiKick = cfg.antiKick;
           if (cfg.themeMode) state.themeMode = cfg.themeMode;
           applySmartRulesFromBridge(bridgeRead('getSmartRules', '{}'));
+          const gc = safeParse(bridgeRead('getGroupChoices', '{}'), {});
+          if (gc && typeof gc === 'object' && Object.keys(gc).length) {
+            state.groupChoices = gc;
+          }
+          syncDayNotesFromBridge();
         }
 
         if (force || st.profileMtime !== lastMtimes.profile) {
@@ -3871,6 +4407,20 @@
           state.diary = Array.isArray(parsedDiary) ? parsedDiary : [];
           needDiary = true;
           needSchedule = true;
+          needToday = true;
+        }
+
+        if (force || (st.teachersMtime != null && st.teachersMtime !== lastMtimes.teachers)) {
+          lastMtimes.teachers = st.teachersMtime || 0;
+          const parsedTeachers = safeParse(bridgeRead('getMessageTeachers', '[]'), []);
+          if (Array.isArray(parsedTeachers)) state.messageTeachers = parsedTeachers;
+        }
+
+        if (!force && st.notesMtime != null && st.notesMtime !== lastMtimes.notes) {
+          lastMtimes.notes = st.notesMtime || 0;
+          syncDayNotesFromBridge();
+          needToday = true;
+          needSchedule = true;
         }
 
         const updRaw = bridgeRead('getUpdateInfo', '');
@@ -3889,6 +4439,9 @@
         if (needMessages) { try { renderMessages(); } catch (e) {} }
         if (needDiary) { try { renderDiary(); } catch (e) {} }
         if (needSettings) { try { renderSettings(); } catch (e) {} }
+        if (needSchedule && !state.scanningSemester) {
+          setTimeout(maybePromptSubgroups, 450);
+        }
       }
 
       window.__pulseForceSync = () => syncFromAndroid(true);
@@ -3950,16 +4503,69 @@
         return Array.isArray(arr) ? arr : [];
       }
 
-      function addDayNote(dateStr, text) {
+      function syncDayNotesFromBridge() {
+        if (!HAS_BRIDGE) return;
+        const raw = bridgeRead('getDayNotes', '');
+        const fromDisk = safeParse(raw, null);
+        if (fromDisk && typeof fromDisk === 'object' && Object.keys(fromDisk).length > 0) {
+          state.dayNotes = fromDisk;
+          saveState();
+        } else if (state.dayNotes && Object.keys(state.dayNotes).length > 0) {
+          // Мигрируем старые заметки из localStorage в AppStorage
+          try {
+            if (window.AndroidBridge.saveDayNotes) {
+              window.AndroidBridge.saveDayNotes(JSON.stringify(state.dayNotes));
+            }
+          } catch (e) {}
+        }
+      }
+
+      function persistDayNotes() {
+        saveState();
+        if (HAS_BRIDGE && window.AndroidBridge.saveDayNotes) {
+          try { window.AndroidBridge.saveDayNotes(JSON.stringify(state.dayNotes || {})); } catch (e) {}
+        }
+      }
+
+      function formatNoteTimeLabel(n) {
+        if (!n) return '';
+        if (n.timeMode === 'morning') return `Утром · ${n.timeStart || '08:00'}`;
+        if (n.timeMode === 'range') {
+          if (n.timeStart && n.timeEnd) return `${n.timeStart}–${n.timeEnd}`;
+          if (n.timeStart) return `С ${n.timeStart}`;
+        }
+        return '';
+      }
+
+      function addDayNote(dateStr, text, opts) {
         const clean = String(text || '').trim();
         if (!dateStr || !clean) return;
+        const o = opts || {};
         if (!state.dayNotes || typeof state.dayNotes !== 'object') state.dayNotes = {};
         if (!Array.isArray(state.dayNotes[dateStr])) state.dayNotes[dateStr] = [];
         state.dayNotes[dateStr].push({
           id: 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-          text: clean
+          text: clean,
+          timeMode: o.timeMode || 'none',
+          timeStart: o.timeStart || '',
+          timeEnd: o.timeEnd || '',
+          notify: !!o.notify
         });
-        saveState();
+        persistDayNotes();
+        renderToday();
+        renderSchedule();
+      }
+
+      function toggleDayNoteNotify(dateStr, noteId) {
+        const list = getNotesForDate(dateStr);
+        const item = list.find((n) => n.id === noteId);
+        if (!item) return;
+        item.notify = !item.notify;
+        if (item.notify && (!item.timeMode || item.timeMode === 'none')) {
+          item.timeMode = 'morning';
+          item.timeStart = item.timeStart || '08:00';
+        }
+        persistDayNotes();
         renderToday();
         renderSchedule();
       }
@@ -3970,54 +4576,154 @@
         if (!state.dayNotes[dateStr].length) {
           delete state.dayNotes[dateStr];
         }
-        saveState();
+        persistDayNotes();
         renderToday();
         renderSchedule();
       }
 
       function openDayNotesSheet(dateStr, titleLabel) {
         if (!dateStr) return;
-        const notes = getNotesForDate(dateStr);
-        const listHtml = notes.length
-          ? `<div class="diary-detail-list">${notes.map((n) => `
-              <div class="note-sheet-row">
-                <div style="font-size:13.5px;line-height:1.4;word-break:break-word;">${escapeHtml(n.text)}</div>
-                <button type="button" class="note-del-btn" data-del-note="${escapeHtml(n.id)}" aria-label="Удалить заметку">✕</button>
+        let draftMode = 'none';
+        let draftStart = '08:00';
+        let draftEnd = '10:00';
+        let draftNotify = false;
+
+        function renderSheetBody(preserveText) {
+          const notes = getNotesForDate(dateStr);
+          const listHtml = notes.length
+            ? `<div class="diary-detail-list">${notes.map((n) => {
+                const tLabel = formatNoteTimeLabel(n);
+                const metaHtml = (tLabel || n.notify)
+                  ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">
+                      ${tLabel ? `<span class="note-meta-pill tabular">${escapeHtml(tLabel)}</span>` : ''}
+                      ${n.notify ? '<span class="note-meta-pill notify-on">🔔 Уведомление</span>' : ''}
+                    </div>`
+                  : '';
+                return `
+                  <div class="note-sheet-row">
+                    <div style="min-width:0;flex:1;">
+                      <div style="font-size:13.5px;line-height:1.38;word-break:break-word;">${escapeHtml(n.text)}</div>
+                      ${metaHtml}
+                    </div>
+                    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                      <button type="button" class="icon-btn sm" data-toggle-note-notify="${escapeHtml(n.id)}" aria-label="Уведомление" title="${n.notify ? 'Выключить уведомление' : 'Включить уведомление'}" style="width:28px;height:28px;${n.notify ? 'background:var(--accent-soft);border-color:var(--accent-ring);color:var(--accent);' : ''}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
+                      </button>
+                      <button type="button" class="note-del-btn" data-del-note="${escapeHtml(n.id)}" aria-label="Удалить заметку">✕</button>
+                    </div>
+                  </div>
+                `;
+              }).join('')}</div>`
+            : `<div class="empty-day" style="padding:14px 8px;">
+                <strong>Заметок нет</strong>
+                <span>Добавьте заметку со временем и напоминанием — она появится в расписании и календаре.</span>
+              </div>`;
+
+          const timeInputsHtml = draftMode === 'morning'
+            ? `<div class="note-time-row"><span class="row-sub" style="margin:0;">Время утром:</span><input type="time" class="note-time-input tabular" id="noteTimeStart" value="${escapeHtml(draftStart)}" /></div>`
+            : (draftMode === 'range'
+                ? `<div class="note-time-row">
+                    <input type="time" class="note-time-input tabular" id="noteTimeStart" value="${escapeHtml(draftStart)}" aria-label="Начало" />
+                    <span class="row-sub" style="margin:0;">—</span>
+                    <input type="time" class="note-time-input tabular" id="noteTimeEnd" value="${escapeHtml(draftEnd)}" aria-label="Конец" />
+                  </div>`
+                : '');
+
+          openSheet(`
+            <div class="sheet-title">Заметки</div>
+            <div class="sheet-sub">${escapeHtml(titleLabel || dateStr)}</div>
+            ${listHtml}
+            <form id="dayNoteForm" style="padding:12px;border-radius:16px;background:var(--surface);border:1px solid var(--border);">
+              <div class="field" style="margin-bottom:8px;">
+                <input type="text" id="dayNoteInput" placeholder="Текст заметки..." autocomplete="off" value="${escapeHtml(preserveText || '')}" />
               </div>
-            `).join('')}</div>`
-          : `<div class="empty-day" style="padding:18px 8px;">
-              <strong>Заметок нет</strong>
-              <span>Добавьте напоминание на этот день — оно появится в расписании и календаре.</span>
-            </div>`;
+              <div class="chip-group" style="margin-top:0;">
+                <button type="button" class="toggle-chip ${draftMode === 'none' ? 'active' : ''}" data-note-mode="none">Без времени</button>
+                <button type="button" class="toggle-chip ${draftMode === 'morning' ? 'active' : ''}" data-note-mode="morning">Утром</button>
+                <button type="button" class="toggle-chip ${draftMode === 'range' ? 'active' : ''}" data-note-mode="range">С — до</button>
+              </div>
+              ${timeInputsHtml}
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
+                <div>
+                  <div class="row-title" style="font-size:13px;">Напомнить уведомлением</div>
+                  <div class="row-sub" style="font-size:11px;">${draftNotify ? (draftMode === 'range' ? 'В начале интервала' : 'Утром в ' + draftStart) : 'Без пуш-уведомления'}</div>
+                </div>
+                <button type="button" class="switch" id="noteNotifySwitch" role="switch" aria-checked="${draftNotify}" style="transform:scale(0.86);transform-origin:right center;"></button>
+              </div>
+              <button type="submit" class="full-btn" style="height:40px;margin-top:10px;font-size:13.5px;">Добавить заметку</button>
+            </form>
+          `);
 
-        openSheet(`
-          <div class="sheet-title">Заметки</div>
-          <div class="sheet-sub">${escapeHtml(titleLabel || dateStr)}</div>
-          ${listHtml}
-          <form class="chat-compose" id="dayNoteForm">
-            <input type="text" id="dayNoteInput" placeholder="Новая заметка..." autocomplete="off" />
-            <button type="submit" class="send-btn" aria-label="Добавить заметку">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
-            </button>
-          </form>
-        `);
-
-        $('sheetContent').querySelectorAll('[data-del-note]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            deleteDayNote(dateStr, btn.dataset.delNote);
-            openDayNotesSheet(dateStr, titleLabel);
-            showToast('Заметка удалена');
+          $('sheetContent').querySelectorAll('[data-del-note]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              deleteDayNote(dateStr, btn.dataset.delNote);
+              renderSheetBody($('dayNoteInput') ? $('dayNoteInput').value : '');
+              showToast('Заметка удалена');
+            });
           });
-        });
 
-        $('dayNoteForm').addEventListener('submit', (e) => {
-          e.preventDefault();
-          const val = $('dayNoteInput').value.trim();
-          if (!val) return;
-          addDayNote(dateStr, val);
-          openDayNotesSheet(dateStr, titleLabel);
-          showToast('Заметка добавлена', 'success');
-        });
+          $('sheetContent').querySelectorAll('[data-toggle-note-notify]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              toggleDayNoteNotify(dateStr, btn.dataset.toggleNoteNotify);
+              renderSheetBody($('dayNoteInput') ? $('dayNoteInput').value : '');
+              showToast('Уведомление обновлено');
+            });
+          });
+
+          $('sheetContent').querySelectorAll('[data-note-mode]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const curTxt = $('dayNoteInput') ? $('dayNoteInput').value : '';
+              draftMode = btn.dataset.noteMode;
+              if (draftMode === 'morning') {
+                draftStart = '08:00';
+                draftNotify = true;
+              } else if (draftMode === 'range') {
+                draftStart = '09:00';
+                draftEnd = '10:30';
+                draftNotify = true;
+              } else {
+                draftNotify = false;
+              }
+              renderSheetBody(curTxt);
+            });
+          });
+
+          const tsEl = $('noteTimeStart');
+          if (tsEl) tsEl.addEventListener('change', (e) => { draftStart = e.target.value || '08:00'; });
+          const teEl = $('noteTimeEnd');
+          if (teEl) teEl.addEventListener('change', (e) => { draftEnd = e.target.value || '10:00'; });
+
+          $('noteNotifySwitch').addEventListener('click', () => {
+            const curTxt = $('dayNoteInput') ? $('dayNoteInput').value : '';
+            draftNotify = !draftNotify;
+            if (draftNotify && draftMode === 'none') {
+              draftMode = 'morning';
+              draftStart = '08:00';
+            }
+            renderSheetBody(curTxt);
+          });
+
+          $('dayNoteForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const val = $('dayNoteInput').value.trim();
+            if (!val) {
+              showToast('Введите текст заметки', 'error');
+              return;
+            }
+            addDayNote(dateStr, val, {
+              timeMode: draftMode,
+              timeStart: draftMode === 'none' ? '' : draftStart,
+              timeEnd: draftMode === 'range' ? draftEnd : '',
+              notify: draftNotify
+            });
+            draftMode = 'none';
+            draftNotify = false;
+            renderSheetBody('');
+            showToast('Заметка добавлена', 'success');
+          });
+        }
+
+        renderSheetBody('');
       }
 
       function isSubjectTypeAuto(subject, type) {
@@ -4090,10 +4796,11 @@
         });
       }
 
-      function openSheet(html) {
+      function openSheet(html, opts) {
         const sheet = $('sheet');
         sheet.style.transform = '';
         sheet.classList.remove('dragging');
+        sheet.classList.toggle('sheet-tall', !!(opts && opts.tall));
         $('sheetContent').innerHTML = html;
         $('sheetBackdrop').classList.add('open');
         sheet.classList.add('open');
@@ -4103,7 +4810,7 @@
       function closeSheet() {
         const sheet = $('sheet');
         sheet.style.transform = '';
-        sheet.classList.remove('dragging');
+        sheet.classList.remove('dragging', 'sheet-tall');
         $('sheetBackdrop').classList.remove('open');
         sheet.classList.remove('open');
         sheet.setAttribute('aria-hidden', 'true');
@@ -4206,18 +4913,27 @@
           autoDesc = state.scanStatus;
         }
 
+        const ecgPath = 'M0,17 L52,17 L64,17 L72,11 L79,23 L88,4 L97,29 L106,14 L114,17 L172,17 L184,17 L192,12 L199,22 L208,6 L217,27 L225,15 L233,17 L280,17';
         let html = `
           <div class="auto-card tap anim-in ${state.autoCheckEnabled ? 'is-on' : ''}" id="masterAutoCard">
-            <div class="auto-left">
-              <div class="pulse-wrap"><div class="pulse-dot"></div></div>
-              <div style="min-width:0;">
-                <div class="auto-title">Автоотметка</div>
-                <div class="auto-desc" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(autoDesc)}</div>
+            <div class="auto-card-top">
+              <div class="auto-left">
+                <div class="pulse-wrap"><div class="pulse-dot"></div></div>
+                <div style="min-width:0;">
+                  <div class="auto-title">Автоотметка</div>
+                  <div class="auto-desc" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(autoDesc)}</div>
+                </div>
               </div>
+              <button class="auto-toggle-btn ${state.autoCheckEnabled ? 'is-on' : ''}" id="masterAutoSwitch" aria-pressed="${state.autoCheckEnabled}">
+                ${state.autoCheckEnabled ? 'Включена' : 'Включить'}
+              </button>
             </div>
-            <button class="auto-toggle-btn ${state.autoCheckEnabled ? 'is-on' : ''}" id="masterAutoSwitch" aria-pressed="${state.autoCheckEnabled}">
-              ${state.autoCheckEnabled ? 'Включена' : 'Включить'}
-            </button>
+            <div class="pulse-ecg-wrap" aria-hidden="true">
+              <svg class="pulse-ecg-svg" viewBox="0 0 280 34" preserveAspectRatio="none">
+                <path class="pulse-ecg-base" d="${ecgPath}" />
+                <path class="pulse-ecg-wave" d="${ecgPath}" />
+              </svg>
+            </div>
           </div>
         `;
 
@@ -4272,12 +4988,15 @@
                 <span>Заметки на сегодня (${todayNotes.length})</span>
                 <span>Изменить</span>
               </div>
-              ${todayNotes.map((n) => `
-                <div class="day-note-item">
-                  <span class="day-note-dot"></span>
-                  <span>${escapeHtml(n.text)}</span>
-                </div>
-              `).join('')}
+              ${todayNotes.map((n) => {
+                const tl = formatNoteTimeLabel(n);
+                return `
+                  <div class="day-note-item">
+                    <span class="day-note-dot"></span>
+                    <span>${tl ? `<strong class="tabular" style="font-size:11.5px;color:var(--accent);margin-right:5px;">${escapeHtml(tl)}</strong>` : ''}${escapeHtml(n.text)}</span>
+                  </div>
+                `;
+              }).join('')}
             </div>
           `;
         }
@@ -4334,19 +5053,26 @@
             }
 
             const pastCls = cls.isPast ? 'is-past' : (isChecked ? 'is-done' : '');
+            const ordBadge = getLessonOrderBadgeHtml(todayDateStr, cls.start, cls.subject, cls.type);
+            const absMeta = findDiaryAbsenceForLesson(todayDateStr, cls.subject);
+            const absBadge = absMeta ? `<span class="badge ${absMeta.badgeClass}" title="${escapeHtml(absMeta.label)}">${escapeHtml(absMeta.code)}</span>` : '';
             html += `
-              <article class="class-card tap anim-in bar-${tKey} ${isLive ? 'is-live' : ''} ${pastCls}" style="--d:${Math.min(idx * 45, 240)}ms" data-open-class="${escapeHtml(cls.id)}">
+              <article class="class-card tap anim-in bar-${tKey} ${isLive ? 'is-live' : ''} ${pastCls}" style="--d:${Math.min(idx * 40, 200)}ms" data-open-class="${escapeHtml(cls.id)}">
                 <div class="class-top">
                   <span class="class-time tabular">${escapeHtml(cls.start)}${cls.end ? ' – ' + escapeHtml(cls.end) : ''}</span>
-                  ${statusBadge}
+                  <div style="display:flex;align-items:center;gap:5px;">
+                    ${absBadge}
+                    ${statusBadge}
+                  </div>
                 </div>
                 <div class="class-name">${escapeHtml(cls.subject)}</div>
                 <div class="class-meta-row">
                   <span class="type-pill type-${tKey}">${escapeHtml(cls.type)}</span>
+                  ${ordBadge}
                   <span class="class-meta">${escapeHtml(cls.room)}</span>
                 </div>
                 <div class="class-footer">
-                  <span class="class-meta">${escapeHtml(cls.teacher)}</span>
+                  <span class="class-meta" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cls.teacher)}</span>
                   ${btnHtml}
                 </div>
               </article>
@@ -4523,13 +5249,17 @@
 
         const pill = $('railPill');
         if (pill) {
-          pill.style.transform = `translate3d(0, ${activeInWeek * 32}px, 0)`;
+          pill.classList.remove('tracking');
+          pill.style.transform = `translate3d(0, ${activeInWeek * 29}px, 0)`;
         }
       }
 
       function renderSchedule() {
         const flatDays = getAllDaysFlat();
         const feed = $('dayFeed');
+
+        const filterDot = $('scheduleFilterDot');
+        if (filterDot) filterDot.style.display = state.scheduleFilter === 'Все' ? 'none' : 'block';
 
         const schedBanner = $('scheduleSyncBanner');
         if (schedBanner) {
@@ -4586,13 +5316,23 @@
                 const tKey = getTypeKey(l.type);
                 const lessonPast = isLessonPast(day.dateStr, l.start, l.end);
                 const lessonGrades = findDiaryGradesForLesson(day.dateStr, l.subject);
+                const absMeta = findDiaryAbsenceForLesson(day.dateStr, l.subject);
+                const ordBadge = getLessonOrderBadgeHtml(day.dateStr, l.start, l.subject, l.type);
 
                 const gradeBadgeHtml = lessonGrades.length
-                  ? `<div style="display:inline-flex;gap:4px;flex-shrink:0;">${lessonGrades.map((g) => `<span class="grade-pill ${getGradePillClass(g)}" style="min-width:26px;height:26px;font-size:12.5px;">${escapeHtml(g.value || g.display)}</span>`).join('')}</div>`
+                  ? `<div style="display:inline-flex;gap:4px;">${lessonGrades.map((g) => `<span class="grade-pill ${getGradePillClass(g)}" style="min-width:24px;height:24px;font-size:12px;">${escapeHtml(g.value || g.display)}</span>`).join('')}</div>`
+                  : '';
+
+                const absBadgeHtml = absMeta
+                  ? `<span class="badge ${absMeta.badgeClass}" title="${escapeHtml(absMeta.label)}">${escapeHtml(absMeta.code)}</span>`
                   : '';
 
                 const teacherHtml = l.teacher && l.teacher !== 'Преподаватель не указан'
                   ? `<div class="mini-teacher">${escapeHtml(l.teacher)}</div>`
+                  : '';
+
+                const rightBadges = (gradeBadgeHtml || absBadgeHtml || l.checked)
+                  ? `<div class="mini-right">${absBadgeHtml}${gradeBadgeHtml}${l.checked ? '<span class="badge accent">✓</span>' : ''}</div>`
                   : '';
 
                 return `
@@ -4606,12 +5346,12 @@
                       <div class="mini-title">${escapeHtml(l.subject)}</div>
                       <div class="mini-sub-row">
                         <span class="type-pill type-${tKey}">${escapeHtml(l.type)}</span>
+                        ${ordBadge}
                         <span class="mini-sub">${escapeHtml(l.room)}</span>
                       </div>
                       ${teacherHtml}
                     </div>
-                    ${gradeBadgeHtml}
-                    ${l.checked ? '<span class="badge accent">✓</span>' : ''}
+                    ${rightBadges}
                   </div>
                 `;
               }).join('')
@@ -4650,12 +5390,15 @@
                   <span>Заметки (${dayNotes.length})</span>
                   <span>+ Добавить</span>
                 </div>
-                ${dayNotes.map((n) => `
-                  <div class="day-note-item">
-                    <span class="day-note-dot"></span>
-                    <span>${escapeHtml(n.text)}</span>
-                  </div>
-                `).join('')}
+                ${dayNotes.map((n) => {
+                  const tl = formatNoteTimeLabel(n);
+                  return `
+                    <div class="day-note-item">
+                      <span class="day-note-dot"></span>
+                      <span>${tl ? `<strong class="tabular" style="font-size:11.5px;color:var(--accent);margin-right:5px;">${escapeHtml(tl)}</strong>` : ''}${escapeHtml(n.text)}</span>
+                    </div>
+                  `;
+                }).join('')}
               </div>`
             : '';
 
@@ -4749,6 +5492,8 @@
         if (!flatDays.length) return;
         const clamped = Math.max(0, Math.min(idx, flatDays.length - 1));
         state.activeGlobalDayIdx = clamped;
+        programmaticScrollUntil = smooth ? (Date.now() + 560) : (Date.now() + 120);
+        clearTimeout(feedTrackEndTimer);
         const h = feed.clientHeight || 500;
         feed.scrollTo({ top: clamped * h, behavior: smooth ? 'smooth' : 'auto' });
         renderScheduleHeaderControls(flatDays);
@@ -4757,9 +5502,11 @@
       let feedRafId = 0;
       let feedTrackEndTimer = null;
       $('dayFeed').addEventListener('scroll', () => {
+        if (Date.now() < programmaticScrollUntil) return;
         if (feedRafId) return;
         feedRafId = requestAnimationFrame(() => {
           feedRafId = 0;
+          if (Date.now() < programmaticScrollUntil) return;
           const feed = $('dayFeed');
           const flatDays = getAllDaysFlat();
           if (!flatDays.length) return;
@@ -4777,19 +5524,41 @@
             const weekDaysCount = (state.semesterWeeks[activeDay.week] || []).length;
             const relPos = Math.max(0, Math.min(exactIdx - weekStartIdx, Math.max(0, weekDaysCount - 1)));
             pill.classList.add('tracking');
-            pill.style.transform = `translate3d(0, ${relPos * 32}px, 0)`;
+            pill.style.transform = `translate3d(0, ${relPos * 29}px, 0)`;
             clearTimeout(feedTrackEndTimer);
             feedTrackEndTimer = setTimeout(() => {
               const pEl = $('railPill');
               if (pEl) {
                 pEl.classList.remove('tracking');
                 const cur = flatDays[state.activeGlobalDayIdx];
-                if (cur) pEl.style.transform = `translate3d(0, ${cur.dayInWeek * 32}px, 0)`;
+                if (cur) pEl.style.transform = `translate3d(0, ${cur.dayInWeek * 29}px, 0)`;
               }
             }, 90);
           }
         });
       }, { passive: true });
+
+      function findDiaryAbsenceForLesson(dateStr, subject) {
+        if (!dateStr || !subject || !Array.isArray(state.diary) || !state.diary.length) return null;
+        const parts = String(dateStr).split('.');
+        if (parts.length < 3) return null;
+        const shortDate = `${parts[0]}.${parts[1]}`;
+        const isoDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        const subjNorm = String(subject).trim().toLowerCase();
+
+        const matchedDiary = state.diary.find((d) => {
+          const dn = String(d.subject || '').trim().toLowerCase();
+          if (!dn) return false;
+          return dn === subjNorm || dn.includes(subjNorm) || subjNorm.includes(dn);
+        });
+        if (!matchedDiary || !Array.isArray(matchedDiary.sessions)) return null;
+
+        const sess = matchedDiary.sessions.find((s) =>
+          (s.dateIso && s.dateIso === isoDate) || (s.date && s.date === shortDate)
+        );
+        if (!sess || !sess.status || sess.status === 'present') return null;
+        return getAbsenceMeta(sess.status, sess.value);
+      }
 
       function findDiaryGradesForLesson(dateStr, subject) {
         if (!dateStr || !subject || !Array.isArray(state.diary) || !state.diary.length) return [];
@@ -5041,6 +5810,14 @@
       }
 
       $('scheduleFilterBtn').addEventListener('click', openScheduleFilterSheet);
+      $('scheduleRefreshBtn').addEventListener('click', () => {
+        const btn = $('scheduleRefreshBtn');
+        btn.classList.add('spin');
+        setTimeout(() => btn.classList.remove('spin'), 420);
+        if (!requireBackendConnected()) return;
+        window.AndroidBridge.syncAll();
+        showToast('Обновление расписания...');
+      });
 
       /* ===== RENDER TAB 3: MESSAGES & GROUP FILES ===== */
       function updateSegmentPill(indicatorId, index) {
@@ -5177,6 +5954,182 @@
         }
         return t;
       }
+      function findSubjectsForTeacher(senderName) {
+        const raw = String(senderName || '').trim().toLowerCase().replace(/ё/g, 'е');
+        if (!raw) return '';
+        const parts = raw.split(/[\s.]+/).filter(Boolean);
+        const surname = parts[0] || '';
+        if (surname.length < 3) return '';
+        const firstInit = parts[1] ? parts[1][0] : '';
+
+        const map = {}; // subject -> Set<type>
+        const daysSource = rawSemesterDays.length ? rawSemesterDays : [];
+        daysSource.forEach((d) => {
+          (d.lessons || []).forEach((l) => {
+            const tRaw = String(l.teacher || '').trim().toLowerCase().replace(/ё/g, 'е');
+            if (!tRaw || !tRaw.includes(surname)) return;
+            if (firstInit) {
+              const tParts = tRaw.split(/[\s.,]+/).filter(Boolean);
+              const sIdx = tParts.indexOf(surname);
+              if (sIdx >= 0 && tParts[sIdx + 1] && tParts[sIdx + 1][0] !== firstInit) return;
+            }
+            const subj = String(l.subjectTitle || '').trim();
+            const type = String(l.lessonType || '').trim();
+            if (!subj) return;
+            if (!map[subj]) map[subj] = new Set();
+            if (type) map[subj].add(type);
+          });
+        });
+
+        const entries = Object.keys(map);
+        if (!entries.length) return '';
+        const formatted = entries.slice(0, 2).map((s) => {
+          const types = Array.from(map[s]).join(', ');
+          return types ? `${s} (${types})` : s;
+        });
+        if (entries.length > 2) formatted.push(`+${entries.length - 2}`);
+        return formatted.join(' · ');
+      }
+
+      function openComposeMessageSheet() {
+        if (!requireBackendConnected()) return;
+        if (!state.messageTeachers.length && window.AndroidBridge.refreshMessageTeachers) {
+          try { window.AndroidBridge.refreshMessageTeachers(); } catch (e) {}
+        }
+
+        let pendingFile = null;
+
+        function renderCompose() {
+          const teachers = Array.isArray(state.messageTeachers) ? state.messageTeachers : [];
+          const optionsHtml = '<option value="0">Выберите преподавателя...</option>' + teachers.map((t) =>
+            `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`
+          ).join('');
+
+          openSheet(`
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+              <div class="sheet-title" style="margin-bottom:0;">Новое сообщение</div>
+              <button type="button" class="pill-btn" id="refreshTeachersBtn" style="height:28px;font-size:11.5px;">Обновить список</button>
+            </div>
+            <div class="sheet-sub" style="margin-bottom:12px;">Преподавателям текущего семестра из расписания</div>
+
+            <form id="composeMsgForm">
+              <div class="field">
+                <label for="newMsgTeacher">Адресат *</label>
+                <select id="newMsgTeacher">${optionsHtml}</select>
+                <div id="composeTeacherSubj" style="margin-top:4px;"></div>
+              </div>
+              <div class="field">
+                <label for="newMsgTitle">Тема *</label>
+                <input id="newMsgTitle" type="text" placeholder="Например: Вопрос по лабораторной №3" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label for="newMsgText">Текст сообщения</label>
+                <textarea id="newMsgText" placeholder="Введите текст сообщения..."></textarea>
+              </div>
+              <div id="composeFileRow" style="display:none;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;margin-bottom:10px;border-radius:12px;background:var(--surface);border:1px solid var(--border);font-size:12px;">
+                <span id="composeFileName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+                <button type="button" id="clearComposeFileBtn" style="border:none;background:transparent;color:var(--danger);font-size:14px;cursor:pointer;">✕</button>
+              </div>
+              <div class="row-sub" style="margin-bottom:12px;line-height:1.4;">В ЛК можно написать только преподавателям текущего семестра из расписания. Если нужного нет в списке — обратитесь к методисту факультета.</div>
+              <div style="display:flex;gap:8px;">
+                <input type="file" id="composeFileInput" style="display:none;" />
+                <button type="button" class="full-btn secondary" id="composeAttachBtn" style="flex:0 0 48px;padding:0;" aria-label="Прикрепить файл" title="Прикрепить файл (до 5 МБ)">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                </button>
+                <button type="submit" class="full-btn accent" style="flex:1;">Отправить сообщение</button>
+              </div>
+            </form>
+          `);
+
+          $('refreshTeachersBtn').addEventListener('click', () => {
+            if (window.AndroidBridge.refreshMessageTeachers) {
+              window.AndroidBridge.refreshMessageTeachers();
+              showToast('Загрузка списка преподавателей...');
+              setTimeout(() => {
+                syncFromAndroid(false);
+                renderCompose();
+              }, 2000);
+            }
+          });
+
+          $('newMsgTeacher').addEventListener('change', (e) => {
+            const sel = e.target;
+            const name = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+            const hint = sel.value !== '0' ? findSubjectsForTeacher(name) : '';
+            $('composeTeacherSubj').innerHTML = hint
+              ? `<span class="teacher-subjects-hint">Ведёт: ${escapeHtml(hint)}</span>`
+              : '';
+          });
+
+          $('composeAttachBtn').addEventListener('click', () => $('composeFileInput').click());
+          $('composeFileInput').addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            if (file.size > 5 * 1024 * 1024) {
+              showToast('Файл больше 5 МБ', 'error');
+              e.target.value = '';
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = () => {
+              const res = String(reader.result || '');
+              const commaIdx = res.indexOf(',');
+              pendingFile = { name: file.name, base64: commaIdx >= 0 ? res.slice(commaIdx + 1) : res };
+              $('composeFileName').textContent = `📎 ${file.name} (${(file.size / 1024).toFixed(0)} КБ)`;
+              $('composeFileRow').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+          });
+
+          $('clearComposeFileBtn').addEventListener('click', () => {
+            pendingFile = null;
+            $('composeFileInput').value = '';
+            $('composeFileRow').style.display = 'none';
+          });
+
+          $('composeMsgForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const sel = $('newMsgTeacher');
+            const adresatId = sel.value;
+            const adresatName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
+            const title = $('newMsgTitle').value.trim();
+            const body = $('newMsgText').value.trim();
+
+            if (!adresatId || adresatId === '0') {
+              showToast('Выберите преподавателя', 'error');
+              return;
+            }
+            if (!title) {
+              showToast('Укажите тему сообщения', 'error');
+              return;
+            }
+            if (!body && !pendingFile) {
+              showToast('Введите текст или прикрепите файл', 'error');
+              return;
+            }
+
+            if (window.AndroidBridge.sendNewMessage) {
+              const ok = window.AndroidBridge.sendNewMessage(
+                adresatId,
+                adresatName,
+                title,
+                body,
+                pendingFile ? pendingFile.name : '',
+                pendingFile ? pendingFile.base64 : ''
+              );
+              if (ok) {
+                closeSheet();
+                showToast(`Отправка: ${adresatName}`, 'success');
+              } else {
+                showToast('Не удалось отправить сообщение', 'error');
+              }
+            }
+          });
+        }
+
+        renderCompose();
+      }
+
       function openMessageSheet(id) {
         const msg = state.messages.find((m) => m.id === id);
         if (!msg) return;
@@ -5188,11 +6141,13 @@
           renderMessages();
         }
 
+        const taughtSubjects = findSubjectsForTeacher(msg.sender);
+
         const bubbles = (msg.thread || []).map((b) => {
           const atts = Array.isArray(b.attachments) ? b.attachments : [];
           const attHtml = atts.length
-            ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${atts.map((a) =>
-                `<button type="button" class="pill-btn" data-dl-url="${escapeHtml(a.url || '')}" data-dl-name="${escapeHtml(a.name || 'file')}" style="height:28px;font-size:11.5px;padding:0 10px;">📎 ${escapeHtml(a.name || 'Файл')}</button>`
+            ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">${atts.map((a) =>
+                `<button type="button" class="pill-btn" data-dl-url="${escapeHtml(a.url || '')}" data-dl-name="${escapeHtml(a.name || 'file')}" style="height:26px;font-size:11px;padding:0 9px;">📎 ${escapeHtml(a.name || 'Файл')}</button>`
               ).join('')}</div>`
             : '';
           const subjHtml = b.subject && b.subject !== b.text
@@ -5202,25 +6157,29 @@
             ? `<div class="bubble-caption">${escapeHtml(b.caption)}</div>`
             : '';
           const stamp = formatMessageStamp(b.date, b.time, false);
-          return `<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${subjHtml}${escapeHtml(b.text)}${capHtml}${attHtml}<span class="bubble-time tabular">${escapeHtml(stamp)}</span></div>`;
+          const cleanBody = String(b.text || '').replace(/\n{3,}/g, '\n\n').trim();
+          return `<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${subjHtml}${escapeHtml(cleanBody)}${capHtml}${attHtml}<span class="bubble-time tabular">${escapeHtml(stamp)}</span></div>`;
         }).join('');
 
         let pendingFile = null;
 
         openSheet(`
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
-            <div style="min-width:0;">
-              <div class="sheet-title" style="margin-bottom:2px;">${escapeHtml(msg.sender)}</div>
-              <div class="sheet-sub" style="margin-bottom:0;">${escapeHtml(msg.role || 'Сообщение ЛК')}</div>
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;flex-shrink:0;">
+            <div style="min-width:0;flex:1;">
+              <div class="sheet-title" style="margin-bottom:2px;font-size:16.5px;">${escapeHtml(msg.sender)}</div>
+              ${taughtSubjects
+                ? `<div class="teacher-subjects-hint" title="${escapeHtml(taughtSubjects)}">Ведёт: ${escapeHtml(taughtSubjects)}</div>`
+                : `<div class="sheet-sub" style="margin-bottom:0;font-size:12px;">${escapeHtml(msg.role || 'Сообщение ЛК')}</div>`
+              }
             </div>
-            <button class="pill-btn" id="muteSenderBtn">${msg.muted ? 'Уведомления выкл' : 'Уведомления вкл'}</button>
+            <button class="pill-btn" id="muteSenderBtn" style="height:30px;font-size:11.5px;padding:0 10px;flex-shrink:0;">${msg.muted ? '🔕 Выкл' : '🔔 Вкл'}</button>
           </div>
           <div class="chat-list" id="chatList">${bubbles}</div>
           <div id="pendingFileRow" style="display:none;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;margin-bottom:8px;border-radius:12px;background:var(--surface);border:1px solid var(--border);font-size:12px;">
             <span id="pendingFileName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
             <button type="button" id="clearPendingFileBtn" style="border:none;background:transparent;color:var(--danger);font-size:14px;cursor:pointer;">✕</button>
           </div>
-          <form class="chat-compose" id="chatForm">
+          <form class="chat-compose" id="chatForm" style="flex-shrink:0;">
             <input type="file" id="chatFileInput" style="display:none;" />
             <button type="button" class="icon-btn" id="attachFileBtn" aria-label="Прикрепить файл" title="Прикрепить файл (до 5 МБ)" style="width:42px;height:42px;flex-shrink:0;">
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
@@ -5230,7 +6189,7 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
             </button>
           </form>
-        `);
+        `, { tall: true });
 
         const listEl = $('chatList');
         listEl.scrollTop = listEl.scrollHeight;
@@ -5354,6 +6313,8 @@
         saveState();
         renderMessages();
       });
+
+      $('composeMsgBtn').addEventListener('click', openComposeMessageSheet);
 
       /* ===== RENDER TAB 4: DIARY ===== */
       function getEffectiveSubjectAttendance(d) {
@@ -5716,23 +6677,15 @@
             </div>
           </div>
 
-          <div class="segment" style="margin-bottom:14px;">
-            <div class="seg-indicator" id="diarySegIndicator" style="transform:translate3d(${isAtt ? 0 : 100}%, 0, 0)"></div>
-            <button class="seg-btn ${isAtt ? 'active' : ''}" data-diary-tab="attendance">Посещаемость</button>
-            <button class="seg-btn ${!isAtt ? 'active' : ''}" data-diary-tab="grades">Оценки</button>
-          </div>
         `;
 
+        const dAttBtn = $('segDiaryAttBtn');
+        const dGrBtn = $('segDiaryGradesBtn');
+        if (dAttBtn) dAttBtn.classList.toggle('active', isAtt);
+        if (dGrBtn) dGrBtn.classList.toggle('active', !isAtt);
+        updateSegmentPill('diarySegIndicator', isAtt ? 0 : 1);
+
         if (isAtt) {
-          html += `
-            <div class="diary-setting-card">
-              <div>
-                <div class="row-title">Засчитывать Б и У</div>
-                <div class="row-sub">Считать болезнь и уважительную как посещение</div>
-              </div>
-              <button class="switch" id="diaryExcusedSwitch" role="switch" aria-checked="${!!state.countExcusedAsAttended}"></button>
-            </div>
-          `;
 
           list.forEach((d, idx) => {
             const st = perSubjectStats[idx];
@@ -5802,23 +6755,7 @@
 
         container.innerHTML = html;
 
-        container.querySelectorAll('[data-diary-tab]').forEach((btn) => {
-          btn.addEventListener('click', () => {
-            state.diarySubTab = btn.dataset.diaryTab;
-            saveState();
-            renderDiary();
-          });
-        });
-
-        const excSw = $('diaryExcusedSwitch');
-        if (excSw) {
-          excSw.addEventListener('click', () => {
-            state.countExcusedAsAttended = !state.countExcusedAsAttended;
-            saveState();
-            renderDiary();
-            showToast(state.countExcusedAsAttended ? 'Б и У засчитываются как посещение' : 'Учитываются только реальные посещения');
-          });
-        }
+        // Diary bottom bar buttons are bound once below
 
         container.querySelectorAll('[data-open-diary-att]').forEach((card) => {
           card.addEventListener('click', () => {
@@ -5834,6 +6771,18 @@
           });
         });
       }
+
+      $('segDiaryAttBtn').addEventListener('click', () => {
+        state.diarySubTab = 'attendance';
+        saveState();
+        renderDiary();
+      });
+
+      $('segDiaryGradesBtn').addEventListener('click', () => {
+        state.diarySubTab = 'grades';
+        saveState();
+        renderDiary();
+      });
 
       /* ===== RENDER TAB 5: SETTINGS ===== */
       function persistPulseSettingsToBridge() {
@@ -5905,6 +6854,14 @@
               </div>
             </div>
 
+            <div class="settings-row tap" id="openSubgroupsRow">
+              <div>
+                <div class="row-title">Подгруппы и преподаватели</div>
+                <div class="row-sub">${(() => { const c = detectSubgroupConflicts(rawSemesterDays); return c.length ? `Найдено предметов с подгруппами: ${c.length}` : 'Выбор преподавателя для дубликатов'; })()}</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
+
             <div class="settings-row" style="flex-direction:column;align-items:stretch;">
               <div>
                 <div class="row-title">Задержка отметки</div>
@@ -5917,6 +6874,24 @@
               </div>
             </div>
 
+          </div>
+
+          <div class="section-label"><span>Дневник и заметки</span></div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Засчитывать Б и У в дневнике</div>
+                <div class="row-sub">Считать болезнь и уважительную как посещение</div>
+              </div>
+              <button class="switch" id="setExcusedSwitch" role="switch" aria-checked="${!!state.countExcusedAsAttended}"></button>
+            </div>
+            <div class="settings-row tap" id="openNotesBackupRow">
+              <div>
+                <div class="row-title">Резервная копия заметок</div>
+                <div class="row-sub">Экспорт или перенос заметок при переустановке</div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted)"><path d="m9 18 6-6-6-6"/></svg>
+            </div>
           </div>
 
           <div class="section-label"><span>Синхронизация</span></div>
@@ -5985,7 +6960,16 @@
 
         $('accountCard').addEventListener('click', openAccountSheet);
         $('openRulesRow').addEventListener('click', openSubjectRulesSheet);
+        $('openSubgroupsRow').addEventListener('click', () => openSubgroupsSheet(false));
         $('setAutoSwitch').addEventListener('click', toggleMasterAutoCheck);
+        $('setExcusedSwitch').addEventListener('click', () => {
+          state.countExcusedAsAttended = !state.countExcusedAsAttended;
+          saveState();
+          renderDiary();
+          renderSettings();
+          showToast(state.countExcusedAsAttended ? 'Б и У засчитываются как посещение' : 'Учитываются только реальные посещения');
+        });
+        $('openNotesBackupRow').addEventListener('click', openNotesBackupSheet);
 
         container.querySelectorAll('[data-delay-chip]').forEach((btn) => {
           btn.addEventListener('click', () => {
@@ -6616,6 +7600,64 @@
         $('closeCreditsBtn').addEventListener('click', closeSheet);
       }
 
+      function openNotesBackupSheet() {
+        const jsonStr = JSON.stringify(state.dayNotes || {}, null, 2);
+        const totalNotes = Object.values(state.dayNotes || {}).reduce((acc, a) => acc + (Array.isArray(a) ? a.length : 0), 0);
+        openSheet(`
+          <div class="sheet-title">Резервная копия заметок</div>
+          <div class="sheet-sub">Сохранено заметок: ${totalNotes}. Заметки хранятся в памяти приложения и сохраняются при обычных обновлениях.</div>
+          <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button type="button" class="full-btn secondary" id="copyNotesBackupBtn" style="flex:1;height:40px;font-size:13px;">Копировать JSON</button>
+          </div>
+          <div class="field">
+            <label for="importNotesArea">Восстановить из JSON</label>
+            <textarea id="importNotesArea" placeholder='Вставьте ранее скопированный JSON заметок...'></textarea>
+          </div>
+          <button type="button" class="full-btn accent" id="applyImportNotesBtn">Импортировать заметки</button>
+        `);
+
+        $('copyNotesBackupBtn').addEventListener('click', () => copyTextSafe(jsonStr));
+        $('applyImportNotesBtn').addEventListener('click', () => {
+          const raw = $('importNotesArea').value.trim();
+          const parsed = safeParse(raw, null);
+          if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            showToast('Некорректный формат JSON', 'error');
+            return;
+          }
+          state.dayNotes = Object.assign({}, state.dayNotes || {}, parsed);
+          persistDayNotes();
+          renderToday();
+          renderSchedule();
+          closeSheet();
+          showToast('Заметки восстановлены', 'success');
+        });
+      }
+
+      /* ===== ANDROID BACK HANDLER ===== */
+      window.__pulseHandleBack = function () {
+        if ($('sheet') && $('sheet').classList.contains('open')) {
+          closeSheet();
+          return true;
+        }
+        const onboard = $('onboardOverlay');
+        if (onboard && onboard.classList.contains('open')) {
+          if (onboard.classList.contains('show-details')) {
+            onboard.classList.remove('show-details');
+            return true;
+          }
+          if (state.onboardingSeen) {
+            closeOnboarding();
+            return true;
+          }
+          return true;
+        }
+        if (state.activeTab !== 'today') {
+          switchTab('today');
+          return true;
+        }
+        return false;
+      };
+
       /* ===== NAVIGATION & GESTURES ===== */
       function updateDockIndicator(idx) {
         const ind = $('dockIndicator');
@@ -6891,31 +7933,92 @@
         renderSettings();
       });
 
-      $('quickSyncBtn').addEventListener('click', () => {
-        const btn = $('quickSyncBtn');
-        btn.classList.add('spin');
-        setTimeout(() => btn.classList.remove('spin'), 420);
+      /* ===== PULL-TO-REFRESH ===== */
+      function attachPullToRefresh(scrollEl, indicatorEl, onRefresh) {
+        if (!scrollEl || !indicatorEl) return;
+        let startX = 0, startY = 0, pulling = false, pullDist = 0;
+        const THRESHOLD = 68;
+        const textEl = indicatorEl.querySelector('.ptr-text');
+
+        scrollEl.addEventListener('touchstart', (e) => {
+          if (!e.touches || e.touches.length !== 1) return;
+          if ($('sheet').classList.contains('open') || $('onboardOverlay').classList.contains('open')) return;
+          if (scrollEl.scrollTop > 2) return;
+          startX = e.touches[0].clientX;
+          startY = e.touches[0].clientY;
+          pulling = true;
+          pullDist = 0;
+        }, { passive: true });
+
+        scrollEl.addEventListener('touchmove', (e) => {
+          if (!pulling || !e.touches || e.touches.length !== 1) return;
+          if (scrollEl.scrollTop > 2) {
+            pulling = false;
+            return;
+          }
+          const dx = e.touches[0].clientX - startX;
+          const dy = e.touches[0].clientY - startY;
+          if (dy <= 8 || Math.abs(dx) > Math.abs(dy) * 0.8) {
+            if (pullDist === 0) pulling = false;
+            return;
+          }
+          pullDist = Math.min(108, dy * 0.55);
+          indicatorEl.classList.add('pulling');
+          indicatorEl.style.height = `${Math.round(pullDist * 0.55)}px`;
+          indicatorEl.style.opacity = String(Math.min(1, pullDist / THRESHOLD).toFixed(2));
+          const ready = pullDist >= THRESHOLD;
+          indicatorEl.classList.toggle('ready', ready);
+          if (textEl) textEl.textContent = ready ? 'Отпустите для обновления' : 'Потяните для обновления';
+        }, { passive: true });
+
+        function endPull() {
+          if (!pulling) return;
+          const triggered = pullDist >= THRESHOLD;
+          pulling = false;
+          indicatorEl.classList.remove('pulling', 'ready');
+          if (triggered) {
+            indicatorEl.style.height = '38px';
+            indicatorEl.style.opacity = '1';
+            if (textEl) textEl.textContent = 'Обновление...';
+            onRefresh();
+            setTimeout(() => {
+              indicatorEl.style.height = '0px';
+              indicatorEl.style.opacity = '0';
+              if (textEl) textEl.textContent = 'Потяните для обновления';
+            }, 900);
+          } else {
+            indicatorEl.style.height = '0px';
+            indicatorEl.style.opacity = '0';
+          }
+          pullDist = 0;
+        }
+
+        scrollEl.addEventListener('touchend', endPull, { passive: true });
+        scrollEl.addEventListener('touchcancel', endPull, { passive: true });
+      }
+
+      attachPullToRefresh($('todayContent'), $('ptr-today'), () => {
         if (!requireBackendConnected()) return;
         window.AndroidBridge.syncAll();
         showToast('Синхронизация с ЛК...');
       });
 
-      $('syncMessagesBtn').addEventListener('click', () => {
-        const btn = $('syncMessagesBtn');
-        btn.classList.add('spin');
-        setTimeout(() => btn.classList.remove('spin'), 420);
+      attachPullToRefresh($('messagesContent'), $('ptr-messages'), () => {
         if (!requireBackendConnected()) return;
         window.AndroidBridge.syncMessagesNow();
         showToast('Обновление сообщений и файлов...');
       });
 
-      $('syncDiaryBtn').addEventListener('click', () => {
-        const btn = $('syncDiaryBtn');
-        btn.classList.add('spin');
-        setTimeout(() => btn.classList.remove('spin'), 420);
+      attachPullToRefresh($('diaryContent'), $('ptr-diary'), () => {
         if (!requireBackendConnected()) return;
         window.AndroidBridge.checkDiaryNow('', '', '', '');
         showToast('Обновление дневника...');
+      });
+
+      attachPullToRefresh($('settingsContent'), $('ptr-settings'), () => {
+        if (!requireBackendConnected()) return;
+        window.AndroidBridge.syncAll();
+        showToast('Синхронизация с ЛК...');
       });
 
       $('sheetBackdrop').addEventListener('click', closeSheet);

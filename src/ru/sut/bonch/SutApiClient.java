@@ -36,6 +36,8 @@ public class SutApiClient {
     public static final String MESSAGE_IN_URL = BASE_URL + "/project/cabinet/forms/message.php?type=in";
     public static final String MESSAGE_READ_URL = BASE_URL + "/project/cabinet/forms/sendto2.php";
     public static final String MESSAGE_SEND_URL = BASE_URL + "/project/cabinet/forms/message.php";
+    public static final String MESSAGE_SEND_URL = BASE_URL + "/project/cabinet/forms/message.php";
+    public static final String MESSAGE_CREATE_URL = BASE_URL + "/project/cabinet/forms/message_create_stud.php";
     public static final String GROUP_FILES_URL = BASE_URL + "/project/cabinet/forms/files_group_pr.php";
     public static final String DIARY_URL = BASE_URL + "/project/cabinet/forms/jurnal_dnevnik.php";
 

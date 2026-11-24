@@ -502,7 +502,8 @@ public class ScheduleManager {
             if (les == null) continue;
             String key = les.optString("startTime", "")
                 + "||" + les.optString("subjectTitle", "").trim().toLowerCase(Locale.ROOT)
-                + "||" + les.optString("lessonType", "").trim().toLowerCase(Locale.ROOT);
+                + "||" + les.optString("lessonType", "").trim().toLowerCase(Locale.ROOT)
+                + "||" + les.optString("teacher", "").trim().toLowerCase(Locale.ROOT);
             JSONObject existing = merged.get(key);
             if (existing == null) {
                 merged.put(key, les);

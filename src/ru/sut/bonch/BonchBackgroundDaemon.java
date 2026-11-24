@@ -173,6 +173,37 @@ public class BonchBackgroundDaemon extends Service {
             }).start();
             return active ? START_STICKY : START_NOT_STICKY;
         }
+        if ("fetch_teachers".equals(action)) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    if (login.isEmpty() || pass.isEmpty()) return;
+                    messageManager.pollMessageTeachers(apiClient, storage, login, pass);
+                    flushState();
+                }
+            }).start();
+            return active ? START_STICKY : START_NOT_STICKY;
+        }
+
+        if ("send_new_message".equals(action) && intent != null) {
+            final String adresatId = intent.getStringExtra("adresatId");
+            final String adresatName = intent.getStringExtra("adresatName");
+            final String title = intent.getStringExtra("title");
+            final String text = intent.getStringExtra("text");
+            final String filePath = intent.getStringExtra("filePath");
+            final String fileName = intent.getStringExtra("fileName");
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    messageManager.sendNewMessage(
+                        apiClient, storage, login, pass,
+                        adresatId, adresatName, title, text, filePath, fileName
+                    );
+                    flushState();
+                }
+            }).start();
+            return active ? START_STICKY : START_NOT_STICKY;
+        }
 
         if ("manual_checkin".equals(action) && intent != null) {
             final String raspId = intent.getStringExtra("raspId");

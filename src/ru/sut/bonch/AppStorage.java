@@ -36,6 +36,9 @@ public class AppStorage {
     public static final String FILE_GROUP_FILES = "group_files_v4.json";
     public static final String FILE_MESSAGES_SNAPSHOT = "messages_snapshot_v4.json";
     public static final String FILE_MUTED_SENDERS = "muted_senders_v4.json";
+    public static final String FILE_TEACHERS = "message_teachers_v4.json";
+    public static final String FILE_DAY_NOTES = "day_notes_v4.json";
+    public static final String FILE_NOTE_NOTIFIED = "note_notified_v4.json";
 
     public static final String FILE_BG_STATE = "bg_state_v4.json";
     public static final String FILE_LOGS = "app_logs_v4.json";
@@ -287,6 +290,21 @@ public class AppStorage {
             }
             writeText(FILE_MUTED_SENDERS, obj.toString());
         } catch (Exception ignored) {}
+    }
+    public JSONArray getMessageTeachers() {
+        return readJsonArray(FILE_TEACHERS);
+    }
+
+    public synchronized void saveMessageTeachers(JSONArray arr) {
+        writeText(FILE_TEACHERS, arr != null ? arr.toString() : "[]");
+    }
+
+    public String getDayNotesJson() {
+        return readText(FILE_DAY_NOTES, "{}");
+    }
+
+    public synchronized void saveDayNotesJson(String json) {
+        writeText(FILE_DAY_NOTES, (json != null && !json.trim().isEmpty()) ? json : "{}");
     }
 
     public boolean isRuleAllowed(String ruleKey) {
