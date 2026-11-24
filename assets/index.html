@@ -2606,11 +2606,16 @@
       inset: 0;
       display: flex;
       flex-direction: column;
-      padding: max(18px, env(safe-area-inset-top)) 22px max(24px, env(safe-area-inset-bottom));
+      padding: max(18px, env(safe-area-inset-top)) 22px max(36px, env(safe-area-inset-bottom));
       overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
       scrollbar-width: none;
       transition: transform 0.48s var(--spring), opacity 0.36s var(--spring);
       will-change: transform, opacity;
+    }
+
+    .onboard-page > * {
+      flex-shrink: 0;
     }
 
     .onboard-page::-webkit-scrollbar {
@@ -4100,6 +4105,7 @@
       function renderToday() {
         formatTodayHeader();
         const container = $('todayContent');
+        if (!container) return;
 
         if (!HAS_BRIDGE) {
           container.innerHTML = `
@@ -4114,7 +4120,12 @@
           return;
         }
 
-        if (!state.account.loggedIn) {
+        const hasLoadedData = state.todayClasses.length > 0
+          || Object.keys(state.semesterWeeks || {}).length > 0
+          || (Array.isArray(state.diary) && state.diary.length > 0)
+          || (Array.isArray(state.messages) && state.messages.length > 0);
+
+        if (!state.account.loggedIn && !hasLoadedData) {
           container.innerHTML = `
             <div class="empty-day anim-in" style="margin-top:26px;">
               <div class="empty-icon" style="background:var(--accent-soft);border-color:var(--accent-ring);color:var(--accent);">
@@ -4125,12 +4136,14 @@
               <button class="pill-btn primary" id="todayLoginBtn">Войти в аккаунт</button>
             </div>
           `;
-          $('todayLoginBtn').addEventListener('click', openAccountSheet);
+          const loginBtn = $('todayLoginBtn');
+          if (loginBtn) loginBtn.addEventListener('click', openAccountSheet);
           return;
         }
 
-        const autoCount = state.todayClasses.filter((c) => c.status !== 'checked' && isClassAutoActive(c)).length;
-        const checkedCount = state.todayClasses.filter((c) => c.status === 'checked').length;
+        const todayList = Array.isArray(state.todayClasses) ? state.todayClasses : [];
+        const autoCount = todayList.filter((c) => c.status !== 'checked' && isClassAutoActive(c)).length;
+        const checkedCount = todayList.filter((c) => c.status === 'checked').length;
 
         let autoDesc = state.autoCheckEnabled
           ? (state.daemonStatus || (autoCount > 0 ? `Активна · ещё ${autoCount}` : 'Все активные пары отмечены'))
@@ -4152,7 +4165,7 @@
               ${state.autoCheckEnabled ? 'Включена' : 'Включить'}
             </button>
           </div>
-          `;
+        `;
 
         const isInitialLoading = state.scanningSemester || /загрузк|проверк/i.test(state.daemonStatus || '');
         if (isInitialLoading) {
@@ -4166,6 +4179,9 @@
             </div>
           `;
         }
+
+        const todayDateStr = getTodayDateStr();
+        const todayNotes = getNotesForDate(todayDateStr);
         if (todayNotes.length) {
           html += `
             <div class="day-notes-box tap anim-in" id="todayNotesBox">
@@ -4186,11 +4202,11 @@
         html += `
           <div class="section-label">
             <span>Пары сегодня</span>
-            <span class="tabular">${checkedCount} из ${state.todayClasses.length}</span>
+            <span class="tabular">${checkedCount} из ${todayList.length}</span>
           </div>
         `;
 
-        if (!state.todayClasses.length) {
+        if (!todayList.length) {
           html += `
             <div class="empty-day anim-in" style="--d:60ms;margin-top:16px;">
               <div class="empty-icon">
@@ -4202,7 +4218,7 @@
           `;
         } else {
           html += `<div class="class-list">`;
-          state.todayClasses.forEach((cls, idx) => {
+          todayList.forEach((cls, idx) => {
             const isChecking = checkingIds.has(cls.id);
             const isChecked = cls.status === 'checked';
             const isLive = cls.status === 'live';
@@ -4265,8 +4281,10 @@
           });
         }
 
-        $('masterAutoSwitch').addEventListener('click', (e) => { e.stopPropagation(); toggleMasterAutoCheck(); });
-        $('masterAutoCard').addEventListener('click', toggleMasterAutoCheck);
+        const autoSw = $('masterAutoSwitch');
+        if (autoSw) autoSw.addEventListener('click', (e) => { e.stopPropagation(); toggleMasterAutoCheck(); });
+        const autoCard = $('masterAutoCard');
+        if (autoCard) autoCard.addEventListener('click', toggleMasterAutoCheck);
 
         container.querySelectorAll('[data-action="check-in"]').forEach((btn) => {
           btn.addEventListener('click', (e) => {
@@ -4991,13 +5009,14 @@
               const hasAtt = last && Array.isArray(last.attachments) && last.attachments.length > 0;
               const subjPref = last && last.subject && last.subject !== last.text ? `${last.subject} · ` : '';
               const previewText = last ? `${hasAtt ? '📎 ' : ''}${subjPref}${last.text || ''}` : (m.role || '');
+              const listStamp = formatMessageStamp(last && last.date, (last && last.time) || m.time, true);
               html += `
                 <div class="msg-item tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-msg="${escapeHtml(m.id)}">
                   <div class="avatar">${escapeHtml(m.initials || 'ЛК')}</div>
                   <div class="msg-body">
                     <div class="msg-row">
                       <span class="msg-name">${escapeHtml(m.sender)}</span>
-                      <span class="msg-time tabular">${escapeHtml(m.time || '')}</span>
+                      <span class="msg-time tabular">${escapeHtml(listStamp)}</span>
                     </div>
                     <div class="msg-preview">${escapeHtml(previewText)}</div>
                   </div>
@@ -5047,7 +5066,23 @@
           el.addEventListener('click', () => openFileSheet(el.dataset.openFile));
         });
       }
-
+      function formatMessageStamp(dateStr, timeStr, compact) {
+        const d = String(dateStr || '').trim();
+        const t = String(timeStr || '').trim();
+        if (d) {
+          if (compact) {
+            // "24.11.2026 14:30" -> "24.11 · 14:30"
+            const mFull = d.match(/^(\d{2}\.\d{2})\.\d{2,4}\s+(\d{1,2}:\d{2})/);
+            if (mFull) return `${mFull[1]} · ${mFull[2]}`;
+            const mDateOnly = d.match(/^(\d{2}\.\d{2})\.\d{2,4}$/);
+            if (mDateOnly) return t && t !== mDateOnly[1] ? `${mDateOnly[1]} · ${t}` : mDateOnly[1];
+          } else {
+            if (t && !d.includes(t) && /^\d{1,2}:\d{2}$/.test(t)) return `${d} · ${t}`;
+          }
+          return d;
+        }
+        return t;
+      }
       function openMessageSheet(id) {
         const msg = state.messages.find((m) => m.id === id);
         if (!msg) return;
@@ -5072,7 +5107,7 @@
           const capHtml = b.caption && b.caption !== b.text && b.caption !== b.subject
             ? `<div class="bubble-caption">${escapeHtml(b.caption)}</div>`
             : '';
-          const stamp = b.date || b.time || '';
+          const stamp = formatMessageStamp(b.date, b.time, false);
           return `<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${subjHtml}${escapeHtml(b.text)}${capHtml}${attHtml}<span class="bubble-time tabular">${escapeHtml(stamp)}</span></div>`;
         }).join('');
 
@@ -5164,12 +5199,12 @@
           if (!val && !pendingFile) return;
           const now = new Date();
           const t = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+          const dFull = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()} ${t}`;
           if (!Array.isArray(msg.thread)) msg.thread = [];
           const displayText = pendingFile
-            ? (val ? `${val}
-📎 ${pendingFile.name}` : `📎 ${pendingFile.name}`)
+            ? (val ? `${val}\n📎 ${pendingFile.name}` : `📎 ${pendingFile.name}`)
             : val;
-          msg.thread.push({ from: 'me', text: displayText, time: t });
+          msg.thread.push({ from: 'me', text: displayText, time: t, date: dFull });
           msg.time = t;
           try {
             if (pendingFile && window.AndroidBridge.sendMessageWithFile) {
@@ -6465,25 +6500,36 @@
 
       function startOnboardingCountdown() {
         clearInterval(onboardTimerId);
-        const btn = $('startAppBtn');
-        if (!btn) return;
+        const btnStart = $('startAppBtn');
+        const btnDetails = $('finishDetailsBtn');
+        const setBtns = (disabled, secs) => {
+          if (btnStart) {
+            btnStart.disabled = disabled;
+            btnStart.textContent = disabled ? `Начать (${secs})` : 'Начать';
+          }
+          if (btnDetails) {
+            btnDetails.disabled = disabled;
+            btnDetails.textContent = disabled
+              ? `Всё понятно — перейти в приложение (${secs})`
+              : 'Всё понятно — перейти в приложение';
+          }
+        };
+
         if (state.onboardingSeen) {
-          btn.disabled = false;
-          btn.textContent = 'Начать';
+          setBtns(false, 0);
           return;
         }
-        let left = 5;
-        btn.disabled = true;
-        btn.textContent = `Начать (${left})`;
+
+        let left = 10;
+        setBtns(true, left);
         onboardTimerId = setInterval(() => {
           left -= 1;
           if (left <= 0) {
             clearInterval(onboardTimerId);
             onboardTimerId = null;
-            btn.disabled = false;
-            btn.textContent = 'Начать';
+            setBtns(false, 0);
           } else {
-            btn.textContent = `Начать (${left})`;
+            setBtns(true, left);
           }
         }, 1000);
       }
