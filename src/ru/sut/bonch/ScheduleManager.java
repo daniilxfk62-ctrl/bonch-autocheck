@@ -58,6 +58,7 @@ public class ScheduleManager {
     public final Map<String, Long> plannedDelayTargetMillis = new HashMap<>();
     public final Set<String> todayRealStartTimes = new HashSet<>();
     public volatile boolean lastPollMarkedAny = false;
+    public volatile boolean pauseSemesterScan = false;
 
     private final Random random = new Random();
     private JSONArray semesterDaysArray = new JSONArray();
@@ -1268,6 +1269,12 @@ public class ScheduleManager {
                     @Override
                     public String call() {
                         try {
+                            int waitTicks = 0;
+                            while (pauseSemesterScan && waitTicks < 40) {
+                                Thread.sleep(300L);
+                                waitTicks++;
+                            }
+                            Thread.sleep(150L);
                             String payload = "week=" + weekNum;
                             String html = api.httpRequestFast("POST", SutApiClient.SCHEDULE_URL + "?" + payload, payload);
                             if (!isValidScheduleHtml(html)) {
@@ -1416,7 +1423,11 @@ public class ScheduleManager {
                             boolean done = lowerRow.contains("вы присутствуете")
                                         || lowerRow.contains("отмечен")
                                         || lowerRow.contains("присутствует")
-                                        || (!startedAt.isEmpty() && !waitingT);
+                                        || (!startedAt.isEmpty() && !waitingT)
+                                        || (todayStr.equals(curDateStr) && (completedWindowsToday.contains(startTime) || (!raspId.isEmpty() && markedRaspIdsToday.contains(raspId))));
+                            String finalCheckTime = !startedAt.isEmpty()
+                                ? startedAt
+                                : (todayStr.equals(curDateStr) && checkInTimeByStart.containsKey(startTime) ? checkInTimeByStart.get(startTime) : "");
 
                             JSONObject lesObj = new JSONObject();
                             lesObj.put("time", timeRange);
@@ -1432,7 +1443,7 @@ public class ScheduleManager {
                             lesObj.put("checked", done);
                             lesObj.put("checkedBy", done ? "auto" : "");
                             lesObj.put("waitingTeacher", waitingT && !done);
-                            lesObj.put("checkTime", startedAt);
+                            lesObj.put("checkTime", finalCheckTime);
                             lesObj.put("waitBtnTime", waitBtn);
                             weekLessonsByDate.get(curDateStr).add(lesObj);
                         }

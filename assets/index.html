@@ -25,21 +25,21 @@
       --accent-soft: rgba(124, 58, 237, 0.10);
       --accent-ring: rgba(124, 58, 237, 0.25);
 
-      /* Harmonious Apple-style Lesson Type Palette (Light) */
-      --type-lecture: #0284c7;
-      --type-lecture-bar: #38bdf8;
-      --type-lecture-soft: rgba(14, 165, 233, 0.11);
-      --type-lecture-ring: rgba(14, 165, 233, 0.28);
+      /* Distinct High-Contrast Lesson Type Palette (Light) */
+      --type-lecture: #2563eb;
+      --type-lecture-bar: #2563eb;
+      --type-lecture-soft: rgba(37, 99, 235, 0.11);
+      --type-lecture-ring: rgba(37, 99, 235, 0.28);
 
-      --type-practice: #16a34a;
-      --type-practice-bar: #4ade80;
-      --type-practice-soft: rgba(34, 197, 94, 0.12);
-      --type-practice-ring: rgba(34, 197, 94, 0.28);
+      --type-practice: #15803d;
+      --type-practice-bar: #22c55e;
+      --type-practice-soft: rgba(34, 197, 94, 0.13);
+      --type-practice-ring: rgba(34, 197, 94, 0.30);
 
       --type-lab: #dc2626;
-      --type-lab-bar: #f87171;
-      --type-lab-soft: rgba(239, 68, 68, 0.10);
-      --type-lab-ring: rgba(239, 68, 68, 0.26);
+      --type-lab-bar: #ef4444;
+      --type-lab-soft: rgba(239, 68, 68, 0.11);
+      --type-lab-ring: rgba(239, 68, 68, 0.28);
 
       --dock-bg: rgba(255, 255, 255, 0.82);
       --dock-pill: rgba(0, 0, 0, 0.06);
@@ -61,41 +61,41 @@
     }
 
     [data-theme="dark"] {
-      --bg: #070709;
-      --bg-outer: #020203;
-      --surface: #121215;
-      --surface-hover: #1b1b20;
-      --surface-elevated: #17171b;
-      --border: rgba(255, 255, 255, 0.08);
-      --border-strong: rgba(255, 255, 255, 0.15);
+      --bg: #08080c;
+      --bg-outer: #020204;
+      --surface: #15151c;
+      --surface-hover: #21212b;
+      --surface-elevated: #1d1d26;
+      --border: rgba(255, 255, 255, 0.11);
+      --border-strong: rgba(255, 255, 255, 0.20);
       --text: #f5f5f7;
-      --text-secondary: #8e8e93;
-      --text-muted: #5a5a62;
+      --text-secondary: #9a9aa4;
+      --text-muted: #686873;
       --ink: #f5f5f7;
-      --ink-text: #070709;
-      --accent: #8b5cf6;
-      --accent-soft: rgba(139, 92, 246, 0.16);
-      --accent-ring: rgba(139, 92, 246, 0.34);
+      --ink-text: #08080c;
+      --accent: #9d74ff;
+      --accent-soft: rgba(157, 116, 255, 0.18);
+      --accent-ring: rgba(157, 116, 255, 0.38);
 
-      /* Harmonious Apple-style Lesson Type Palette (Dark) */
-      --type-lecture: #38bdf8;
-      --type-lecture-bar: #38bdf8;
-      --type-lecture-soft: rgba(56, 189, 248, 0.14);
-      --type-lecture-ring: rgba(56, 189, 248, 0.32);
+      /* Distinct High-Contrast Lesson Type Palette (Dark) */
+      --type-lecture: #60a5fa;
+      --type-lecture-bar: #3b82f6;
+      --type-lecture-soft: rgba(59, 130, 246, 0.16);
+      --type-lecture-ring: rgba(59, 130, 246, 0.34);
 
       --type-practice: #4ade80;
-      --type-practice-bar: #4ade80;
-      --type-practice-soft: rgba(74, 222, 128, 0.14);
-      --type-practice-ring: rgba(74, 222, 128, 0.32);
+      --type-practice-bar: #22c55e;
+      --type-practice-soft: rgba(34, 197, 94, 0.15);
+      --type-practice-ring: rgba(34, 197, 94, 0.34);
 
       --type-lab: #f87171;
-      --type-lab-bar: #f87171;
-      --type-lab-soft: rgba(248, 113, 113, 0.14);
-      --type-lab-ring: rgba(248, 113, 113, 0.32);
+      --type-lab-bar: #ef4444;
+      --type-lab-soft: rgba(239, 68, 68, 0.15);
+      --type-lab-ring: rgba(239, 68, 68, 0.34);
 
-      --dock-bg: rgba(16, 16, 20, 0.84);
-      --dock-pill: rgba(255, 255, 255, 0.09);
-      --sheet-bg: #121216;
+      --dock-bg: rgba(22, 22, 30, 0.90);
+      --dock-pill: rgba(255, 255, 255, 0.13);
+      --sheet-bg: #13131a;
       --backdrop: rgba(0, 0, 0, 0.68);
       --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.4);
       --shadow-dock: 0 12px 36px rgba(0, 0, 0, 0.6);
@@ -255,35 +255,52 @@
       padding-bottom: 162px;
     }
 
-    /* Pull-to-Refresh Indicator */
+    /* Browser-style Circular Pull-to-Refresh */
     .ptr-indicator {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 7px;
       height: 0;
       overflow: hidden;
       opacity: 0;
-      color: var(--text-secondary);
-      font-size: 12px;
-      font-weight: 500;
-      transition: height 0.26s var(--spring), opacity 0.2s ease;
+      transition: height 0.28s var(--spring), opacity 0.2s ease;
+      pointer-events: none;
     }
 
     .ptr-indicator.pulling {
       transition: none;
     }
 
-    .ptr-indicator.ready {
+    .ptr-orb {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-strong);
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.10);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-secondary);
+      transform: scale(0.75);
+      transition: transform 0.22s var(--spring-bounce), color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .ptr-indicator.ready .ptr-orb,
+    .ptr-indicator.refreshing .ptr-orb {
       color: var(--accent);
+      border-color: var(--accent-ring);
+      transform: scale(1);
     }
 
-    .ptr-indicator .ptr-arrow {
-      transition: transform 0.22s var(--spring);
+    .ptr-ring-svg {
+      width: 20px;
+      height: 20px;
+      display: block;
     }
 
-    .ptr-indicator.ready .ptr-arrow {
-      transform: rotate(180deg);
+    .ptr-indicator.refreshing .ptr-ring-svg {
+      animation: spin 0.72s linear infinite;
     }
 
     /* Bottom Action Bar above Dock */
@@ -391,17 +408,17 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: max(14px, env(safe-area-inset-top)) 16px 8px;
+      padding: max(10px, env(safe-area-inset-top)) 16px 6px;
       flex-shrink: 0;
       background: var(--bg);
       z-index: 10;
     }
 
     .top-title {
-      font-size: 24px;
+      font-size: 21px;
       font-weight: 600;
       letter-spacing: -0.03em;
-      line-height: 1.15;
+      line-height: 1.14;
     }
 
     .top-sub {
@@ -416,8 +433,8 @@
       width: 38px;
       height: 38px;
       border-radius: 50%;
-      border: 1px solid var(--border);
-      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      background: var(--surface-elevated);
       color: var(--text);
       display: inline-flex;
       align-items: center;
@@ -451,30 +468,30 @@
       transform: scale(0.972);
     }
 
-    /* Auto-check Master Card with ECG Pulse Diagram */
+    /* Auto-check Master Card with Real Cardiogram Monitor */
     .auto-card {
       display: flex;
       flex-direction: column;
       align-items: stretch;
-      gap: 10px;
-      padding: 15px 16px 13px;
-      border-radius: 22px;
+      gap: 7px;
+      padding: 11px 14px 10px;
+      border-radius: 19px;
       background: var(--surface);
       border: 1px solid var(--border);
-      margin-bottom: 14px;
+      margin-bottom: 10px;
       transition: border-color 0.32s var(--spring), background-color 0.32s var(--spring), box-shadow 0.32s var(--spring), transform 0.22s var(--spring);
     }
 
     .auto-card.is-on {
       border-color: var(--accent-ring);
-      box-shadow: 0 8px 28px -12px var(--accent-ring);
+      box-shadow: 0 8px 26px -12px var(--accent-ring);
     }
 
     .auto-card-top {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 12px;
+      gap: 10px;
     }
 
     .auto-toggle-btn {
@@ -482,7 +499,7 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      height: 40px;
+      height: 38px;
       padding: 0 18px;
       border-radius: 999px;
       border: 1px solid transparent;
@@ -500,8 +517,8 @@
     .pulse-ecg-wrap {
       position: relative;
       width: 100%;
-      height: 30px;
-      border-radius: 11px;
+      height: 26px;
+      border-radius: 10px;
       background: var(--bg);
       border: 1px solid var(--border);
       overflow: hidden;
@@ -515,37 +532,53 @@
       display: block;
     }
 
-    .pulse-ecg-base {
+    .pulse-ecg-flat {
       fill: none;
       stroke: var(--border-strong);
-      stroke-width: 1.5;
+      stroke-width: 1.6;
       stroke-linecap: round;
-      stroke-linejoin: round;
-      opacity: 0.55;
+      opacity: 0.75;
+      transition: opacity 0.28s ease;
     }
 
-    .pulse-ecg-wave {
+    .auto-card.is-on .pulse-ecg-flat {
+      opacity: 0;
+    }
+
+    .pulse-ecg-grid {
+      stroke: var(--border);
+      stroke-width: 0.7;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+
+    .auto-card.is-on .pulse-ecg-grid {
+      opacity: 0.65;
+    }
+
+    .pulse-ecg-live {
       fill: none;
-      stroke: var(--text-muted);
-      stroke-width: 2;
+      stroke: url(#ecgGrad);
+      stroke-width: 2.1;
       stroke-linecap: round;
       stroke-linejoin: round;
-      opacity: 0.35;
-      transition: stroke 0.3s ease, opacity 0.3s ease;
+      opacity: 0;
+      transition: opacity 0.28s ease;
     }
 
-    .auto-card.is-on .pulse-ecg-wave {
-      stroke: var(--accent);
+    .auto-card.is-on .pulse-ecg-live {
       opacity: 1;
-      stroke-dasharray: 120 260;
-      stroke-dashoffset: 380;
-      animation: ecgSweep 2.1s linear infinite;
-      filter: drop-shadow(0 0 4px var(--accent-ring));
+      filter: drop-shadow(0 0 5px var(--accent-ring));
     }
 
-    @keyframes ecgSweep {
-      0% { stroke-dashoffset: 380; }
-      100% { stroke-dashoffset: 0; }
+    .pulse-ecg-dot {
+      fill: var(--accent);
+      opacity: 0;
+      filter: drop-shadow(0 0 6px var(--accent));
+    }
+
+    .auto-card.is-on .pulse-ecg-dot {
+      opacity: 1;
     }
 
     .auto-toggle-btn:active {
@@ -725,17 +758,35 @@
     .class-list {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
 
     .class-card {
       position: relative;
-      padding: 11px 13px 11px 16px;
-      border-radius: 17px;
+      padding: 8px 12px 8px 14px;
+      border-radius: 15px;
       background: var(--surface);
       border: 1px solid var(--border);
       box-shadow: var(--shadow-card);
       overflow: hidden;
+    }
+
+    .title-with-ord {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 6px;
+    }
+
+    .title-with-ord .class-name,
+    .title-with-ord .mini-title {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .ord-chip {
+      flex-shrink: 0;
+      margin-top: 1px;
     }
 
     .class-card::before {
@@ -829,11 +880,11 @@
     }
 
     .class-name {
-      font-size: 14.5px;
+      font-size: 13.5px;
       font-weight: 600;
       letter-spacing: -0.02em;
-      line-height: 1.24;
-      margin-bottom: 5px;
+      line-height: 1.2;
+      margin-bottom: 4px;
     }
 
     .class-meta-row {
@@ -844,7 +895,7 @@
     }
 
     .class-meta {
-      font-size: 12px;
+      font-size: 11.5px;
       color: var(--text-secondary);
     }
 
@@ -853,8 +904,8 @@
       align-items: center;
       justify-content: space-between;
       gap: 8px;
-      margin-top: 9px;
-      padding-top: 8px;
+      margin-top: 6px;
+      padding-top: 6px;
       border-top: 1px solid var(--border);
     }
 
@@ -862,9 +913,9 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      height: 34px;
-      padding: 0 15px;
+      gap: 5px;
+      height: 29px;
+      padding: 0 12px;
       border-radius: 999px;
       border: 1px solid transparent;
       font-family: inherit;
@@ -981,14 +1032,147 @@
       height: 32px;
       padding: 0 12px;
       border-radius: 999px;
-      border: 1px solid var(--border);
-      background: var(--surface);
+      border: 1px solid var(--border-strong);
+      background: var(--surface-elevated);
       color: var(--text);
       font-family: inherit;
       font-size: 12px;
       font-weight: 500;
       cursor: pointer;
       transition: transform 0.2s var(--spring-bounce), background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    /* Schedule Unified Bottom Pill */
+    .sched-bar {
+      justify-content: space-between;
+      padding: 5px 6px;
+      gap: 6px;
+    }
+
+    .sched-bar-nav {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.2s var(--spring-bounce), background-color 0.18s ease;
+    }
+
+    .sched-bar-nav:active {
+      transform: scale(0.86);
+    }
+
+    .sched-bar-center {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .sched-cal-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 34px;
+      padding: 0 13px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s var(--spring-bounce), background-color 0.18s ease;
+    }
+
+    .sched-cal-pill:active {
+      transform: scale(0.93);
+    }
+
+    /* Date Divider in Chat & Grouped Lists */
+    .date-divider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 10px 2px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      letter-spacing: 0.01em;
+    }
+
+    .date-divider::before,
+    .date-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Subject Hub Quick Actions */
+    .hub-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .hub-action-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 10px 6px;
+      border-radius: 15px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-elevated);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 11.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: transform 0.2s var(--spring-bounce), background-color 0.18s ease;
+    }
+
+    .hub-action-btn:active {
+      transform: scale(0.94);
+    }
+
+    .hub-next-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 13px;
+      border-radius: 15px;
+      background: var(--accent-soft);
+      border: 1px solid var(--accent-ring);
+      margin-bottom: 12px;
+    }
+
+    .hub-dates-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-height: 180px;
+      overflow-y: auto;
+      margin-bottom: 12px;
+      scrollbar-width: none;
+    }
+
+    .hub-dates-list::-webkit-scrollbar {
+      display: none;
     }
 
     .pill-btn:hover {
@@ -1009,21 +1193,24 @@
       font-weight: 600;
     }
 
-    /* Vertical Spatial Day Rail */
+    /* Vertical Spatial Day Rail (larger, floating overlay on right edge) */
     .day-rail {
       position: absolute;
-      right: 5px;
-      top: 46%;
+      right: 6px;
+      top: 48%;
       transform: translateY(-50%);
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 3px;
-      padding: 4px 2px;
+      gap: 4px;
+      padding: 5px 3px;
       border-radius: 999px;
-      background: var(--surface);
+      background: var(--dock-bg);
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
       border: 1px solid var(--border);
-      z-index: 15;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+      z-index: 18;
     }
 
     .day-rail:empty {
@@ -1032,15 +1219,15 @@
 
     .rail-pill {
       position: absolute;
-      top: 4px;
-      left: 2px;
-      width: 26px;
-      height: 26px;
+      top: 5px;
+      left: 3px;
+      width: 30px;
+      height: 30px;
       border-radius: 999px;
       background: var(--ink);
       pointer-events: none;
       z-index: 1;
-      transition: transform 0.24s var(--spring);
+      transition: transform 0.26s var(--spring);
       will-change: transform;
     }
 
@@ -1051,20 +1238,30 @@
     .rail-day {
       position: relative;
       z-index: 2;
-      width: 26px;
-      height: 26px;
+      width: 30px;
+      height: 30px;
       border-radius: 999px;
       border: none;
       background: transparent;
       color: var(--text-muted);
       font-family: inherit;
-      font-size: 10px;
+      font-size: 11px;
       font-weight: 600;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       cursor: pointer;
       transition: color 0.22s ease, transform 0.2s var(--spring-bounce);
+    }
+
+    .sched-top-tools {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      padding: max(10px, env(safe-area-inset-top)) 14px 4px;
+      flex-shrink: 0;
+      z-index: 12;
     }
 
     .rail-day:active {
@@ -1123,7 +1320,7 @@
       height: 100%;
       scroll-snap-align: start;
       scroll-snap-stop: always;
-      padding: max(12px, env(safe-area-inset-top)) 38px 158px 14px;
+      padding: 4px 14px 158px 14px;
       display: flex;
       flex-direction: column;
       overflow-y: auto;
@@ -1131,7 +1328,7 @@
     }
 
     .day-slide.full-width {
-      padding: max(12px, env(safe-area-inset-top)) 16px 158px;
+      padding: 4px 16px 158px;
     }
 
     .day-slide::-webkit-scrollbar {
@@ -1189,7 +1386,7 @@
       display: flex;
       align-items: center;
       gap: 9px;
-      padding: 10px 11px;
+      padding: 10px 44px 10px 11px;
       border-radius: 16px;
       background: var(--surface);
       border: 1px solid var(--border);
@@ -2642,7 +2839,15 @@
       height: 86dvh;
     }
 
-    .sheet.sheet-tall .sheet-scroll {
+    .sheet.sheet-fullscreen {
+      max-height: 100%;
+      height: 100%;
+      border-radius: 0;
+      padding-top: max(10px, env(safe-area-inset-top));
+    }
+
+    .sheet.sheet-tall .sheet-scroll,
+    .sheet.sheet-fullscreen .sheet-scroll {
       display: flex;
       flex-direction: column;
       flex: 1;
@@ -2650,21 +2855,26 @@
       overflow: hidden;
     }
 
-    .teacher-subjects-hint {
-      display: inline-flex;
+    .teacher-subjects-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 5px;
+    }
+
+    .teacher-subj-row {
+      display: flex;
       align-items: center;
       gap: 5px;
-      margin-top: 4px;
-      padding: 3px 9px;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      color: var(--accent);
+      flex-wrap: wrap;
       font-size: 11.5px;
-      font-weight: 500;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+      color: var(--text-secondary);
+      line-height: 1.3;
+    }
+
+    .teacher-subj-name {
+      font-weight: 600;
+      color: var(--text);
     }
 
     .field select,
@@ -3324,48 +3534,40 @@
               <h1 class="top-title">Сегодня</h1>
               <div class="top-sub tabular" id="todaySubtitle"></div>
             </div>
-            <button class="icon-btn" id="quickThemeBtn" aria-label="Сменить тему" title="Сменить тему"></button>
           </header>
 
-          <div class="ptr-indicator" id="ptr-today">
-            <svg class="ptr-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-            <span class="ptr-text">Потяните для обновления</span>
-          </div>
+          <div class="ptr-indicator" id="ptr-today"><div class="ptr-orb"><svg class="ptr-ring-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg></div></div>
           <div class="scroll-area" id="todayContent"></div>
         </section>
 
         <!-- TAB 2: РАСПИСАНИЕ (Continuous Multi-Week Vertical Snap) -->
         <section class="tab-view" id="view-schedule" aria-label="Расписание">
-          <div id="scheduleSyncBanner" style="padding:max(8px, env(safe-area-inset-top)) 14px 0;"></div>
+          <div class="sched-top-tools">
+            <button class="icon-btn sm" id="scheduleRefreshBtn" aria-label="Обновить расписание" title="Обновить расписание">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
+            </button>
+          </div>
+          <div id="scheduleSyncBanner" style="padding:0 14px;"></div>
 
           <div class="snap-wrap">
             <div class="day-feed" id="dayFeed"></div>
             <div class="day-rail" id="dayRail" aria-label="Индикатор дней недели"></div>
           </div>
 
-          <div class="bottom-bar" id="scheduleBottomBar">
-            <div class="week-nav">
-              <button class="week-btn" id="prevWeekBtn" aria-label="Предыдущая неделя">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+          <div class="bottom-bar sched-bar" id="scheduleBottomBar">
+            <button class="sched-bar-nav" id="prevWeekBtn" aria-label="Предыдущая неделя">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <div class="sched-bar-center">
+              <button class="sched-cal-pill" id="scheduleCalendarBtn" aria-label="Открыть календарь">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+                <span class="tabular" id="weekLabel">—</span>
               </button>
-              <span class="week-label tabular" id="weekLabel">—</span>
-              <button class="week-btn" id="nextWeekBtn" aria-label="Следующая неделя">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-              </button>
+              <button class="pill-btn" id="jumpTodayBtn" style="display:none;height:34px;padding:0 12px;color:var(--accent);border-color:var(--accent-ring);background:var(--accent-soft);">Сегодня</button>
             </div>
-            <div class="sched-actions" style="margin-left:auto;gap:6px;">
-              <button class="pill-btn" id="jumpTodayBtn" style="display:none;height:32px;padding:0 10px;">Сегодня</button>
-              <button class="icon-btn sm" id="scheduleCalendarBtn" aria-label="Календарь" title="Открыть календарь">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/></svg>
-              </button>
-              <button class="icon-btn sm" id="scheduleRefreshBtn" aria-label="Обновить расписание" title="Обновить расписание">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-              </button>
-              <button class="icon-btn sm" id="scheduleFilterBtn" aria-label="Фильтр занятий" title="Фильтр занятий">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
-                <span class="filter-dot" id="scheduleFilterDot" style="display:none;"></span>
-              </button>
-            </div>
+            <button class="sched-bar-nav" id="nextWeekBtn" aria-label="Следующая неделя">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
           </div>
         </section>
 
@@ -3378,10 +3580,7 @@
             </div>
           </header>
 
-          <div class="ptr-indicator" id="ptr-messages">
-            <svg class="ptr-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-            <span class="ptr-text">Потяните для обновления</span>
-          </div>
+          <div class="ptr-indicator" id="ptr-messages"><div class="ptr-orb"><svg class="ptr-ring-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg></div></div>
           <div class="scroll-area has-bottom-bar" id="messagesContent"></div>
 
           <div class="bottom-bar" id="msgBottomBar">
@@ -3407,10 +3606,7 @@
             </div>
           </header>
 
-          <div class="ptr-indicator" id="ptr-diary">
-            <svg class="ptr-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-            <span class="ptr-text">Потяните для обновления</span>
-          </div>
+          <div class="ptr-indicator" id="ptr-diary"><div class="ptr-orb"><svg class="ptr-ring-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg></div></div>
           <div class="scroll-area has-bottom-bar" id="diaryContent"></div>
 
           <div class="bottom-bar" id="diaryBottomBar">
@@ -3431,10 +3627,7 @@
             </div>
           </header>
 
-          <div class="ptr-indicator" id="ptr-settings">
-            <svg class="ptr-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-            <span class="ptr-text">Потяните для обновления</span>
-          </div>
+          <div class="ptr-indicator" id="ptr-settings"><div class="ptr-orb"><svg class="ptr-ring-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg></div></div>
           <div class="scroll-area" id="settingsContent"></div>
         </section>
       </main>
@@ -3478,7 +3671,7 @@
             <div class="onboard-top reveal reveal-d1">
               <div class="brand-pill">
                 <span class="brand-orb"></span>
-                <span>Pulse · v2.9.7</span>
+                <span>Pulse · v2.9</span>
               </div>
               <button class="icon-btn" id="onboardThemeBtn" aria-label="Сменить тему"></button>
             </div>
@@ -3633,8 +3826,8 @@
        * КОНФИГУРАЦИЯ ПРИЛОЖЕНИЯ И КРЕДИТЫ РАЗРАБОТЧИКОВ
        * Вставьте сюда реальные имена, роли и ссылки на GitHub разработчиков.
        * ===================================================================== */
-      const APP_VERSION = 'v2.9.7';
-      const APP_BUILD = '02.09.07';
+      const APP_VERSION = 'v2.9';
+      const APP_BUILD = '02.09.00';
       const DEV_SECRET_PASSWORD = 'данИИл';
       const EASTER_EGG_PASSWORD = 'Данила';
       const DEV_TAP_THRESHOLD = 5;
@@ -3700,6 +3893,8 @@
         activeGlobalDayIdx: 0,
         msgSubTab: 'personal',
         msgQuery: '',
+        groupMessagesByDate: false,
+        serverWarning: '',
         diarySubTab: 'attendance',
         countExcusedAsAttended: false,
         account: {
@@ -3767,6 +3962,7 @@
             themeMode: state.themeMode,
             scheduleFilter: state.scheduleFilter,
             msgSubTab: state.msgSubTab,
+            groupMessagesByDate: !!state.groupMessagesByDate,
             diarySubTab: state.diarySubTab,
             countExcusedAsAttended: !!state.countExcusedAsAttended,
             autoDelay: state.autoDelay,
@@ -3782,7 +3978,7 @@
       let state = loadState();
       let toastTimer = null;
       let checkingIds = new Set();
-      let lastMtimes = { days: -1, cat: -1, diary: -1, messages: -1, files: -1, profile: -1, teachers: -1, notes: -1 };
+      let lastMtimes = { days: '', cat: -1, diary: -1, messages: -1, files: -1, profile: -1, teachers: -1, notes: -1 };
       let rawSemesterDays = [];
       let lessonOrderMap = {};
       let currentWeekNum = 0;
@@ -3989,6 +4185,51 @@
         return true;
       }
 
+      function pluralPairs(n) {
+        const abs = Math.abs(Number(n) || 0);
+        const mod100 = abs % 100;
+        const mod10 = abs % 10;
+        if (mod100 >= 11 && mod100 <= 14) return `${abs} пар`;
+        if (mod10 === 1) return `${abs} пара`;
+        if (mod10 >= 2 && mod10 <= 4) return `${abs} пары`;
+        return `${abs} пар`;
+      }
+
+      function resolveFullTeacherName(shortName) {
+        const raw = String(shortName || '').trim();
+        if (!raw || raw === 'Преподаватель не указан') return raw;
+        const teachers = Array.isArray(state.messageTeachers) ? state.messageTeachers : [];
+        if (!teachers.length) return raw;
+
+        const norm = raw.toLowerCase().replace(/ё/g, 'е');
+        const parts = norm.split(/[\s.,]+/).filter(Boolean);
+        const surname = parts[0] || '';
+        if (surname.length < 2) return raw;
+        const i1 = parts[1] ? parts[1][0] : '';
+        const i2 = parts[2] ? parts[2][0] : '';
+
+        const match = teachers.find((t) => {
+          const tn = String(t.name || '').toLowerCase().replace(/ё/g, 'е');
+          const tp = tn.split(/[\s.,]+/).filter(Boolean);
+          if (!tp.length || tp[0] !== surname) return false;
+          if (i1 && tp[1] && tp[1][0] !== i1) return false;
+          if (i2 && tp[2] && tp[2][0] !== i2) return false;
+          return true;
+        });
+        return match && match.name ? match.name : raw;
+      }
+
+      function matchesChoiceValueJs(val, sNorm, tNorm, rNorm) {
+        if (val == null || val === 'ALL' || val === '') return true;
+        if (Array.isArray(val)) {
+          if (!val.length) return true;
+          return val.some((tok) => tok === 'ALL' || matchesChoiceTokenJs(tok, sNorm, tNorm, rNorm));
+        }
+        const s = String(val).trim();
+        if (!s || s === 'ALL') return true;
+        return matchesChoiceTokenJs(s, sNorm, tNorm, rNorm);
+      }
+
       function isLessonAllowedByGroupChoices(dowIdx, startTime, subject, teacher, room) {
         const choices = state.groupChoices || {};
         const sNorm = String(subject || '').trim();
@@ -3998,73 +4239,70 @@
         if (dowIdx >= 0 && startTime) {
           const slotKey = `SLOT||${dowIdx}||${startTime}`;
           if (Object.prototype.hasOwnProperty.call(choices, slotKey)) {
-            const chosenSlot = String(choices[slotKey] || '').trim();
-            if (chosenSlot && chosenSlot !== 'ALL') {
-              if (!matchesChoiceTokenJs(chosenSlot, sNorm, tNorm, rNorm)) return false;
-            }
+            if (!matchesChoiceValueJs(choices[slotKey], sNorm, tNorm, rNorm)) return false;
           }
         }
         if (sNorm && Object.prototype.hasOwnProperty.call(choices, sNorm)) {
-          const chosenSubj = String(choices[sNorm] || '').trim();
-          if (chosenSubj && chosenSubj !== 'ALL') {
-            if (!matchesChoiceTokenJs(chosenSubj, sNorm, tNorm, rNorm)) return false;
-          }
+          if (!matchesChoiceValueJs(choices[sNorm], sNorm, tNorm, rNorm)) return false;
         }
         return true;
       }
 
       function detectSubgroupConflicts(daysArr) {
         if (!Array.isArray(daysArr) || !daysArr.length) return [];
-        const subjectVariants = {}; // subject -> Map(teacherLower -> { teacher, room, count })
-        const subjectHasSameSlotDup = new Set();
+        // Собираем ТОЛЬКО те предметы и тех преподавателей, которые реально наслаиваются день в день и час в час
+        const overlapBySubj = {}; // subjLower -> { title, variants: { teacherLower -> { teacher, room, count } } }
 
         daysArr.forEach((d) => {
           const lessons = Array.isArray(d.lessons) ? d.lessons : [];
-          const bySlotAndSubj = {};
+          const bySlotAndSubj = {}; // "startTime||subjLower" -> Array<lesson>
           lessons.forEach((l) => {
             const subj = String(l.subjectTitle || '').trim();
             const teach = String(l.teacher || '').trim();
-            const room = String(l.room || '').trim();
             const st = String(l.startTime || '').trim();
             if (!subj || !st || !teach || teach === 'Преподаватель не указан') return;
-
             const k = `${st}||${subj.toLowerCase()}`;
-            if (!bySlotAndSubj[k]) bySlotAndSubj[k] = new Set();
-            bySlotAndSubj[k].add(teach.toLowerCase());
-
-            if (!subjectVariants[subj]) subjectVariants[subj] = {};
-            const tk = teach.toLowerCase();
-            if (!subjectVariants[subj][tk]) {
-              subjectVariants[subj][tk] = { teacher: teach, room, count: 0 };
-            }
-            subjectVariants[subj][tk].count += 1;
-            if (!subjectVariants[subj][tk].room && room) {
-              subjectVariants[subj][tk].room = room;
-            }
+            if (!bySlotAndSubj[k]) bySlotAndSubj[k] = [];
+            bySlotAndSubj[k].push(l);
           });
 
           Object.keys(bySlotAndSubj).forEach((k) => {
-            if (bySlotAndSubj[k].size > 1) {
-              const subjLow = k.split('||')[1];
-              subjectHasSameSlotDup.add(subjLow);
+            const group = bySlotAndSubj[k];
+            const distinctTeachers = new Set(group.map((l) => String(l.teacher || '').trim().toLowerCase()));
+            if (distinctTeachers.size < 2) return; // нет наложения в этот день и час
+
+            const subjLow = k.split('||')[1];
+            const subjTitle = String(group[0].subjectTitle || '').trim();
+            if (!overlapBySubj[subjLow]) {
+              overlapBySubj[subjLow] = { title: subjTitle, variants: {} };
             }
+            group.forEach((l) => {
+              const teach = String(l.teacher || '').trim();
+              const room = String(l.room || '').trim();
+              const tk = teach.toLowerCase();
+              if (!overlapBySubj[subjLow].variants[tk]) {
+                overlapBySubj[subjLow].variants[tk] = { teacher: teach, room, count: 0 };
+              }
+              overlapBySubj[subjLow].variants[tk].count += 1;
+              if (!overlapBySubj[subjLow].variants[tk].room && room) {
+                overlapBySubj[subjLow].variants[tk].room = room;
+              }
+            });
           });
         });
 
         const conflicts = [];
-        Object.keys(subjectVariants).forEach((subj) => {
-          if (!subjectHasSameSlotDup.has(subj.toLowerCase())) return;
-          const varMap = subjectVariants[subj];
-          const variants = Object.values(varMap).sort((a, b) => b.count - a.count);
+        Object.values(overlapBySubj).forEach((entry) => {
+          const variants = Object.values(entry.variants).sort((a, b) => b.count - a.count);
           if (variants.length < 2) return;
           conflicts.push({
-            key: subj,
-            title: subj,
-            subtitle: `Найдено преподавателей в одно время: ${variants.length}`,
+            key: entry.title,
+            title: entry.title,
+            subtitle: `Наслаиваются в одно время: ${variants.length} преп.`,
             options: variants.map((v) => ({
               token: `${v.teacher}||${v.room || ''}`,
               label: v.teacher,
-              sublabel: v.room ? `ауд. ${v.room} · ${v.count} пар` : `${v.count} пар`
+              sublabel: v.room ? `ауд. ${v.room} · ${pluralPairs(v.count)}` : pluralPairs(v.count)
             }))
           });
         });
@@ -4243,24 +4481,32 @@
           return;
         }
 
-        const draft = Object.assign({}, state.groupChoices || {});
+        const draft = {};
+        Object.keys(state.groupChoices || {}).forEach((k) => {
+          const v = state.groupChoices[k];
+          if (Array.isArray(v)) draft[k] = v.slice();
+          else if (v && v !== 'ALL') draft[k] = [String(v)];
+          else draft[k] = 'ALL';
+        });
 
         function renderSubgroupsContent() {
           const blocks = conflicts.map((c) => {
             const cur = draft[c.key] || 'ALL';
+            const isAll = cur === 'ALL' || (Array.isArray(cur) && cur.length === 0);
+            const selectedSet = new Set(Array.isArray(cur) ? cur : []);
             const optsHtml = c.options.map((o) => `
-              <button type="button" class="toggle-chip ${cur === o.token ? 'active' : ''}" data-sg-key="${escapeHtml(c.key)}" data-sg-val="${escapeHtml(o.token)}" style="height:auto;padding:7px 12px;border-radius:13px;text-align:left;">
-                <span><strong>${escapeHtml(o.label)}</strong><br/><span style="font-size:11px;opacity:0.75;">${escapeHtml(o.sublabel)}</span></span>
+              <button type="button" class="toggle-chip ${!isAll && selectedSet.has(o.token) ? 'active' : ''}" data-sg-key="${escapeHtml(c.key)}" data-sg-val="${escapeHtml(o.token)}" style="height:auto;padding:7px 12px;border-radius:13px;text-align:left;">
+                <span><strong>${escapeHtml(resolveFullTeacherName(o.label))}</strong><br/><span style="font-size:11px;opacity:0.75;">${escapeHtml(o.sublabel)}</span></span>
               </button>
             `).join('') + `
-              <button type="button" class="toggle-chip ${cur === 'ALL' ? 'active' : ''}" data-sg-key="${escapeHtml(c.key)}" data-sg-val="ALL" style="height:36px;">Показывать всех</button>
+              <button type="button" class="toggle-chip ${isAll ? 'active' : ''}" data-sg-key="${escapeHtml(c.key)}" data-sg-val="ALL" style="height:36px;">Показывать всех</button>
             `;
             return `
               <div class="rule-card">
                 <div class="rule-head" style="margin-bottom:6px;">
                   <div>
                     <div class="rule-title">${escapeHtml(c.title)}</div>
-                    <div class="row-sub">${escapeHtml(c.subtitle)}</div>
+                    <div class="row-sub">${escapeHtml(c.subtitle)} · можно выбрать нескольких</div>
                   </div>
                 </div>
                 <div class="rule-pills">${optsHtml}</div>
@@ -4270,7 +4516,7 @@
 
           openSheet(`
             <div class="sheet-title">${isAutoPrompt ? 'Выберите ваши подгруппы' : 'Подгруппы и преподаватели'}</div>
-            <div class="sheet-sub">Лишние преподаватели скроются из расписания и не будут мешать автоотметке. Поменять можно в Настройках.</div>
+            <div class="sheet-sub">Можно отметить одного или нескольких преподавателей. Лишние скроются из расписания и автоотметки.</div>
             ${blocks}
             <div style="display:flex;gap:8px;margin-top:8px;">
               <button type="button" class="full-btn secondary" id="cancelSubgroupsBtn" style="flex:1;">Позже</button>
@@ -4280,7 +4526,17 @@
 
           $('sheetContent').querySelectorAll('[data-sg-key]').forEach((btn) => {
             btn.addEventListener('click', () => {
-              draft[btn.dataset.sgKey] = btn.dataset.sgVal;
+              const k = btn.dataset.sgKey;
+              const v = btn.dataset.sgVal;
+              if (v === 'ALL') {
+                draft[k] = 'ALL';
+              } else {
+                let arr = Array.isArray(draft[k]) ? draft[k].slice() : [];
+                const idx = arr.indexOf(v);
+                if (idx >= 0) arr.splice(idx, 1);
+                else arr.push(v);
+                draft[k] = arr.length ? arr : 'ALL';
+              }
               renderSubgroupsContent();
             });
           });
@@ -4326,13 +4582,15 @@
         const prevScan = state.scanningSemester;
         const prevScanText = state.scanStatus;
 
+        const prevWarn = state.serverWarning || '';
         state.autoCheckEnabled = !!st.daemonEnabled;
         state.daemonStatus = st.status || (state.autoCheckEnabled ? 'Активно' : 'Отключено');
         state.scanningSemester = !!st.scanningSemester;
         state.scanStatus = st.scanStatus || '';
+        state.serverWarning = st.serverWarning || '';
         state.logs = Array.isArray(st.logs) ? st.logs : [];
 
-        let needToday = force || prevActive !== state.autoCheckEnabled || prevStatus !== state.daemonStatus || prevScan !== state.scanningSemester || prevScanText !== state.scanStatus;
+        let needToday = force || prevActive !== state.autoCheckEnabled || prevStatus !== state.daemonStatus || prevScan !== state.scanningSemester || prevScanText !== state.scanStatus || prevWarn !== state.serverWarning;
         let needSchedule = force;
         let needMessages = force;
         let needDiary = force;
@@ -4379,8 +4637,9 @@
           needSettings = true;
         }
 
-        if (force || st.daysMtime !== lastMtimes.days) {
-          lastMtimes.days = st.daysMtime || 0;
+        const daysKey = String(st.daysKey || st.daysMtime || 0);
+        if (force || daysKey !== lastMtimes.days) {
+          lastMtimes.days = daysKey;
           try { applySemesterDaysFromBridge(bridgeRead('getCachedSemesterDays', '[]')); } catch (e) {}
           checkingIds.clear();
           needToday = true;
@@ -4810,7 +5069,7 @@
       function closeSheet() {
         const sheet = $('sheet');
         sheet.style.transform = '';
-        sheet.classList.remove('dragging', 'sheet-tall');
+        sheet.classList.remove('dragging', 'sheet-tall', 'sheet-fullscreen');
         $('sheetBackdrop').classList.remove('open');
         sheet.classList.remove('open');
         sheet.setAttribute('aria-hidden', 'true');
@@ -4913,7 +5172,7 @@
           autoDesc = state.scanStatus;
         }
 
-        const ecgPath = 'M0,17 L52,17 L64,17 L72,11 L79,23 L88,4 L97,29 L106,14 L114,17 L172,17 L184,17 L192,12 L199,22 L208,6 L217,27 L225,15 L233,17 L280,17';
+        const ecgPath = 'M0,17 L34,17 L42,17 L47,13 L52,19 L58,2 L66,31 L73,13 L79,17 L134,17 L142,17 L147,13 L152,19 L158,3 L166,30 L173,13 L179,17 L232,17 L238,14 L244,19 L250,4 L258,29 L264,14 L270,17 L280,17';
         let html = `
           <div class="auto-card tap anim-in ${state.autoCheckEnabled ? 'is-on' : ''}" id="masterAutoCard">
             <div class="auto-card-top">
@@ -4930,12 +5189,43 @@
             </div>
             <div class="pulse-ecg-wrap" aria-hidden="true">
               <svg class="pulse-ecg-svg" viewBox="0 0 280 34" preserveAspectRatio="none">
-                <path class="pulse-ecg-base" d="${ecgPath}" />
-                <path class="pulse-ecg-wave" d="${ecgPath}" />
+                <defs>
+                  <linearGradient id="ecgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="var(--accent)" stop-opacity="0" />
+                    <stop offset="55%" stop-color="var(--accent)" stop-opacity="0.35" />
+                    <stop offset="92%" stop-color="var(--accent)" stop-opacity="1" />
+                    <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
+                  </linearGradient>
+                  <mask id="ecgSweepMask">
+                    <rect x="-120" y="0" width="120" height="34" fill="white">
+                      <animate attributeName="x" from="-120" to="280" dur="2.1s" repeatCount="indefinite" />
+                    </rect>
+                  </mask>
+                </defs>
+                <line class="pulse-ecg-grid" x1="0" y1="17" x2="280" y2="17" stroke-dasharray="3 4" />
+                <line class="pulse-ecg-flat" x1="0" y1="17" x2="280" y2="17" />
+                <path class="pulse-ecg-live" d="${ecgPath}" mask="url(#ecgSweepMask)" />
+                <circle class="pulse-ecg-dot" r="2.6">
+                  <animateMotion dur="2.1s" repeatCount="indefinite" path="${ecgPath}" />
+                </circle>
               </svg>
             </div>
           </div>
         `;
+
+        if (state.serverWarning) {
+          html += `
+            <div class="state-banner anim-in" style="border-color:var(--warn);padding:10px 12px;margin-bottom:10px;align-items:center;">
+              <div class="state-banner-icon warn" style="width:30px;height:30px;border-radius:10px;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div class="row-title" style="font-size:12.5px;">${escapeHtml(state.serverWarning)}</div>
+              </div>
+              <button type="button" class="pill-btn" id="restartDaemonBtn" style="height:28px;font-size:11px;padding:0 10px;">Перезапустить</button>
+            </div>
+          `;
+        }
 
         const isInitialLoading = state.scanningSemester || /загрузк|проверк/i.test(state.daemonStatus || '');
         if (isInitialLoading) {
@@ -5065,10 +5355,12 @@
                     ${statusBadge}
                   </div>
                 </div>
-                <div class="class-name">${escapeHtml(cls.subject)}</div>
+                <div class="title-with-ord">
+                  <div class="class-name">${escapeHtml(cls.subject)}</div>
+                  ${ordBadge ? `<span class="ord-chip">${ordBadge}</span>` : ''}
+                </div>
                 <div class="class-meta-row">
                   <span class="type-pill type-${tKey}">${escapeHtml(cls.type)}</span>
-                  ${ordBadge}
                   <span class="class-meta">${escapeHtml(cls.room)}</span>
                 </div>
                 <div class="class-footer">
@@ -5082,6 +5374,19 @@
         }
 
         container.innerHTML = html;
+        const restartBtn = $('restartDaemonBtn');
+        if (restartBtn) {
+          restartBtn.addEventListener('click', () => {
+            if (!requireBackendConnected()) return;
+            if (window.AndroidBridge.restartAutoCheck) {
+              window.AndroidBridge.restartAutoCheck();
+            } else {
+              window.AndroidBridge.setAutoCheckEnabled(true);
+            }
+            showToast('Перезапуск автоотметки...');
+          });
+        }
+
         const updBanner = $('todayUpdateBanner');
         if (updBanner) updBanner.addEventListener('click', openUpdateSheet);
 
@@ -5147,16 +5452,232 @@
         }, 2600);
       }
 
+      function findNextLessonForSubject(subjectName, afterDateStr, afterStartTime) {
+        const flat = getAllDaysFlat();
+        const subjLow = String(subjectName || '').trim().toLowerCase();
+        if (!subjLow || !flat.length) return null;
+
+        let refTs = 0;
+        if (afterDateStr) {
+          const d = parseDateStrToMidnight(afterDateStr);
+          if (d) refTs = d.getTime() + Math.max(0, parseHmToMins(afterStartTime || '00:00')) * 60000;
+        } else {
+          refTs = Date.now();
+        }
+
+        for (let i = 0; i < flat.length; i++) {
+          const day = flat[i];
+          const dt = parseDateStrToMidnight(day.dateStr);
+          if (!dt) continue;
+          const lessons = day.lessons || [];
+          for (let k = 0; k < lessons.length; k++) {
+            const l = lessons[k];
+            const ln = String(l.subject || '').trim().toLowerCase();
+            if (ln !== subjLow && !ln.includes(subjLow) && !subjLow.includes(ln)) continue;
+            const lTs = dt.getTime() + Math.max(0, parseHmToMins(l.start || '00:00')) * 60000;
+            if (lTs > refTs) {
+              return { dayIdx: i, day, lesson: l };
+            }
+          }
+        }
+        return null;
+      }
+
+      function jumpToScheduleDay(dayIdx) {
+        closeSheet();
+        switchTab('schedule');
+        requestAnimationFrame(() => scrollToGlobalDay(dayIdx, true));
+      }
+
+      function openSubjectHubSheet(subjectName, optionalTeacher, refDateStr, refStart) {
+        const subj = String(subjectName || '').trim();
+        if (!subj) return;
+        const subjLow = subj.toLowerCase();
+        const flat = getAllDaysFlat();
+
+        // Собираем даты, типы и преподавателей этого предмета
+        const allOccurrences = [];
+        const teachersSet = new Set();
+        const typesSet = new Set();
+        if (optionalTeacher && optionalTeacher !== 'Преподаватель не указан') {
+          teachersSet.add(resolveFullTeacherName(optionalTeacher));
+        }
+
+        flat.forEach((day, dayIdx) => {
+          (day.lessons || []).forEach((l) => {
+            const ln = String(l.subject || '').trim().toLowerCase();
+            if (ln !== subjLow && !ln.includes(subjLow) && !subjLow.includes(ln)) return;
+            allOccurrences.push({ dayIdx, day, lesson: l });
+            if (l.teacher && l.teacher !== 'Преподаватель не указан') {
+              teachersSet.add(resolveFullTeacherName(l.teacher));
+            }
+            if (l.type) typesSet.add(l.type);
+          });
+        });
+
+        const teachersList = Array.from(teachersSet);
+        const primaryTeacher = teachersList[0] || '';
+        const nextMatch = findNextLessonForSubject(subj, refDateStr || '', refStart || '');
+
+        // Ищем данные в дневнике
+        const diaryMatch = (state.diary || []).find((d) => {
+          const dn = String(d.subject || '').trim().toLowerCase();
+          return dn && (dn === subjLow || dn.includes(subjLow) || subjLow.includes(dn));
+        });
+        const diaryStats = diaryMatch ? getEffectiveSubjectAttendance(diaryMatch) : null;
+        const diaryGrades = diaryMatch ? getSubjectGradeEntries(diaryMatch) : [];
+        const nums = diaryGrades.map((g) => Number(g.value)).filter((n) => !Number.isNaN(n) && n >= 2 && n <= 5);
+        const avgStr = nums.length ? (nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(2) : '';
+
+        // Ищем чат с преподавателем и файлы группы
+        const matchedMsg = primaryTeacher ? (state.messages || []).find((m) => {
+          const s1 = primaryTeacher.toLowerCase().replace(/ё/g, 'е').split(/[\s.,]+/)[0];
+          const s2 = String(m.sender || '').toLowerCase().replace(/ё/g, 'е').split(/[\s.,]+/)[0];
+          return s1 && s2 && s1 === s2;
+        }) : null;
+
+        const matchedFiles = (state.groupFiles || []).filter((f) => {
+          const fn = `${f.subject || ''} ${f.name || ''}`.toLowerCase();
+          return fn.includes(subjLow.slice(0, Math.min(8, subjLow.length)));
+        });
+
+        const nextHtml = nextMatch
+          ? `<div class="hub-next-card tap" id="hubJumpNextBtn">
+              <div style="min-width:0;">
+                <div style="font-size:11px;font-weight:600;color:var(--accent);margin-bottom:2px;">Ближайшая пара</div>
+                <div class="row-title tabular" style="font-size:13.5px;">${escapeHtml(nextMatch.day.weekday)}, ${escapeHtml(nextMatch.day.num)} ${escapeHtml(nextMatch.day.month)} · ${escapeHtml(nextMatch.lesson.start)}</div>
+                <div class="row-sub">${escapeHtml(nextMatch.lesson.type)}${nextMatch.lesson.room ? ' · ' + escapeHtml(nextMatch.lesson.room) : ''}</div>
+              </div>
+              <span class="badge accent">Перейти →</span>
+            </div>`
+          : `<div class="hub-next-card" style="background:var(--surface);border-color:var(--border);">
+              <div>
+                <div style="font-size:11px;font-weight:600;color:var(--text-muted);">Расписание</div>
+                <div class="row-title" style="font-size:13px;">Пар больше нет в этом семестре</div>
+              </div>
+            </div>`;
+
+        const statsChips = [];
+        if (diaryStats) statsChips.push(`<span class="badge accent tabular">Посещ.: ${diaryStats.pct}% (${diaryStats.attended}/${diaryStats.total})</span>`);
+        if (avgStr) statsChips.push(`<span class="badge success tabular">Ср. балл: ${avgStr}</span>`);
+        if (diaryMatch && diaryMatch.credit) statsChips.push(`<span class="badge">${escapeHtml(diaryMatch.credit)}</span>`);
+        const statsHtml = statsChips.length ? `<div class="diary-kpi-chips" style="margin-bottom:10px;">${statsChips.join('')}</div>` : '';
+
+        const typesArr = Array.from(typesSet);
+        const rulesHtml = typesArr.length
+          ? `<div class="rule-pills" style="margin-bottom:12px;">${typesArr.map((t) => {
+              const on = isSubjectTypeAuto(subj, t);
+              const tKey = getTypeKey(t);
+              return `<button type="button" class="toggle-chip c-${tKey} ${on ? 'active' : ''}" data-hub-rule="${escapeHtml(t)}"><span class="color-dot dot-${tKey}"></span>Авто · ${escapeHtml(t)}</button>`;
+            }).join('')}</div>`
+          : '';
+
+        const upcomingDates = allOccurrences.filter((o) => !isDatePast(o.day.dateStr)).slice(0, 6);
+        const datesHtml = upcomingDates.length
+          ? `<div class="section-label" style="margin-bottom:6px;"><span>Ближайшие даты</span><span class="tabular">${pluralPairs(allOccurrences.length)} всего</span></div>
+             <div class="hub-dates-list">${upcomingDates.map((o) => `
+               <div class="diary-detail-row tap" data-hub-day="${o.dayIdx}" style="padding:8px 11px;">
+                 <div class="row-title tabular" style="font-size:12.5px;">${escapeHtml(o.day.weekday.slice(0, 2))}, ${escapeHtml(o.day.num)} ${escapeHtml(o.day.month)} · ${escapeHtml(o.lesson.start)}</div>
+                 <span class="type-pill type-${getTypeKey(o.lesson.type)}">${escapeHtml(o.lesson.type)}</span>
+               </div>
+             `).join('')}</div>`
+          : '';
+
+        openSheet(`
+          <div class="sheet-title" style="font-size:17px;">${escapeHtml(subj)}</div>
+          <div class="sheet-sub" style="margin-bottom:10px;">${escapeHtml(teachersList.join(', ') || 'Преподаватель не указан')}</div>
+          ${nextHtml}
+          ${statsHtml}
+          <div class="hub-actions">
+            <button type="button" class="hub-action-btn" id="hubChatBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span>${matchedMsg ? 'Чат' : 'Написать'}</span>
+            </button>
+            <button type="button" class="hub-action-btn" id="hubFilesBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              <span>Файлы${matchedFiles.length ? ' (' + matchedFiles.length + ')' : ''}</span>
+            </button>
+            <button type="button" class="hub-action-btn" id="hubDiaryBtn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>
+              <span>Дневник</span>
+            </button>
+          </div>
+          ${rulesHtml}
+          ${datesHtml}
+        `);
+
+        const jumpNext = $('hubJumpNextBtn');
+        if (jumpNext && nextMatch) {
+          jumpNext.addEventListener('click', () => jumpToScheduleDay(nextMatch.dayIdx));
+        }
+
+        $('sheetContent').querySelectorAll('[data-hub-day]').forEach((row) => {
+          row.addEventListener('click', () => jumpToScheduleDay(Number(row.dataset.hubDay)));
+        });
+
+        $('sheetContent').querySelectorAll('[data-hub-rule]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const t = btn.dataset.hubRule;
+            setSubjectTypeRule(subj, t, !isSubjectTypeAuto(subj, t));
+            syncAfterRulesChange();
+            openSubjectHubSheet(subj, optionalTeacher, refDateStr, refStart);
+          });
+        });
+
+        $('hubChatBtn').addEventListener('click', () => {
+          if (matchedMsg) {
+            openMessageSheet(matchedMsg.id);
+          } else {
+            openComposeMessageSheet(primaryTeacher);
+          }
+        });
+
+        $('hubFilesBtn').addEventListener('click', () => {
+          state.msgSubTab = 'files';
+          state.msgQuery = subj.split(' ')[0] || '';
+          saveState();
+          closeSheet();
+          switchTab('messages');
+          renderMessages();
+        });
+
+        $('hubDiaryBtn').addEventListener('click', () => {
+          if (diaryMatch) {
+            openDiaryAttendanceSheet(diaryMatch);
+          } else {
+            closeSheet();
+            switchTab('diary');
+          }
+        });
+      }
+
       function openClassSheet(id) {
         const cls = state.todayClasses.find((c) => c.id === id);
         if (!cls) return;
         const isChecked = cls.status === 'checked';
         const ruleOn = isSubjectTypeAuto(cls.subject, cls.type);
         const tKey = getTypeKey(cls.type);
+        const todayStr = getTodayDateStr();
+        const nextMatch = findNextLessonForSubject(cls.subject, todayStr, cls.start);
+
+        const nextRowHtml = nextMatch
+          ? `<div class="settings-row tap" id="sheetNextLessonRow">
+              <div>
+                <div class="row-title">Следующая пара</div>
+                <div class="row-sub tabular">${escapeHtml(nextMatch.day.weekday)}, ${escapeHtml(nextMatch.day.num)} ${escapeHtml(nextMatch.day.month)} · ${escapeHtml(nextMatch.lesson.start)} (${escapeHtml(nextMatch.lesson.type)})</div>
+              </div>
+              <span class="badge accent">Перейти →</span>
+            </div>`
+          : `<div class="settings-row">
+              <div>
+                <div class="row-title">Следующая пара</div>
+                <div class="row-sub">Это последняя пара по предмету в семестре</div>
+              </div>
+            </div>`;
 
         openSheet(`
           <div class="sheet-title">${escapeHtml(cls.subject)}</div>
-          <div class="class-meta-row" style="margin-bottom:16px;">
+          <div class="class-meta-row" style="margin-bottom:14px;">
             <span class="type-pill type-${tKey}">${escapeHtml(cls.type)}</span>
             <span class="class-meta tabular">${escapeHtml(cls.start)}${cls.end ? '–' + escapeHtml(cls.end) : ''} · ${escapeHtml(cls.room)}</span>
           </div>
@@ -5165,9 +5686,10 @@
             <div class="settings-row">
               <div>
                 <div class="row-title">Преподаватель</div>
-                <div class="row-sub">${escapeHtml(cls.teacher)}</div>
+                <div class="row-sub">${escapeHtml(resolveFullTeacherName(cls.teacher))}</div>
               </div>
             </div>
+            ${nextRowHtml}
             <div class="settings-row">
               <div>
                 <div class="row-title">Автоотметка · ${escapeHtml(cls.type)}</div>
@@ -5177,11 +5699,19 @@
             </div>
           </div>
 
-          ${isChecked
-            ? `<button class="full-btn secondary" id="sheetDoneBtn">Отмечен${cls.checkedAt ? ' в ' + escapeHtml(cls.checkedAt) : ''}</button>`
-            : `<button class="full-btn" id="sheetCheckBtn">Отметиться сейчас</button>`
-          }
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            ${isChecked
+              ? `<button class="full-btn secondary" id="sheetDoneBtn">Отмечен${cls.checkedAt ? ' в ' + escapeHtml(cls.checkedAt) : ''}</button>`
+              : `<button class="full-btn" id="sheetCheckBtn">Отметиться сейчас</button>`
+            }
+            <button class="full-btn secondary" id="sheetOpenHubBtn">Подробнее о предмете</button>
+          </div>
         `);
+
+        const nextRow = $('sheetNextLessonRow');
+        if (nextRow && nextMatch) nextRow.addEventListener('click', () => jumpToScheduleDay(nextMatch.dayIdx));
+
+        $('sheetOpenHubBtn').addEventListener('click', () => openSubjectHubSheet(cls.subject, cls.teacher, todayStr, cls.start));
 
         $('sheetClassAuto').addEventListener('click', () => {
           setSubjectTypeRule(cls.subject, cls.type, !ruleOn);
@@ -5250,7 +5780,7 @@
         const pill = $('railPill');
         if (pill) {
           pill.classList.remove('tracking');
-          pill.style.transform = `translate3d(0, ${activeInWeek * 29}px, 0)`;
+          pill.style.transform = `translate3d(0, ${activeInWeek * 34}px, 0)`;
         }
       }
 
@@ -5258,8 +5788,7 @@
         const flatDays = getAllDaysFlat();
         const feed = $('dayFeed');
 
-        const filterDot = $('scheduleFilterDot');
-        if (filterDot) filterDot.style.display = state.scheduleFilter === 'Все' ? 'none' : 'block';
+        state.scheduleFilter = 'Все';
 
         const schedBanner = $('scheduleSyncBanner');
         if (schedBanner) {
@@ -5343,10 +5872,12 @@
                     </div>
                     <div class="mini-divider bar-${tKey}"></div>
                     <div class="mini-info">
-                      <div class="mini-title">${escapeHtml(l.subject)}</div>
+                      <div class="title-with-ord">
+                        <div class="mini-title">${escapeHtml(l.subject)}</div>
+                        ${ordBadge ? `<span class="ord-chip">${ordBadge}</span>` : ''}
+                      </div>
                       <div class="mini-sub-row">
                         <span class="type-pill type-${tKey}">${escapeHtml(l.type)}</span>
-                        ${ordBadge}
                         <span class="mini-sub">${escapeHtml(l.room)}</span>
                       </div>
                       ${teacherHtml}
@@ -5364,7 +5895,7 @@
           if (nextDay) {
             const label = isWeekBoundary
               ? `Неделя ${nextDay.week} · ${nextDay.weekday}, ${nextDay.num}`
-              : `${nextDay.weekday}, ${nextDay.num} · ${nextDay.lessons.length} пар`;
+              : `${nextDay.weekday}, ${nextDay.num} · ${pluralPairs(nextDay.lessons.length)}`;
             hintHtml = `
               <div class="next-day-hint">
                 <button class="next-day-pill ${isWeekBoundary ? 'week-jump' : ''}" data-snap-to="${idx + 1}">
@@ -5416,7 +5947,7 @@
                   <button class="note-add-btn ${dayNotes.length ? 'has-notes' : ''}" data-open-notes="${escapeHtml(day.dateStr)}" data-notes-title="${escapeHtml(dayNotesTitle)}" aria-label="Заметки к дню" title="Заметки к дню">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
                   </button>
-                  ${day.isToday ? '<span class="badge accent"><span class="badge-dot"></span>Сегодня</span>' : `<span class="badge tabular">${filtered.length} пар</span>`}
+                  ${day.isToday ? '<span class="badge accent"><span class="badge-dot"></span>Сегодня</span>' : `<span class="badge tabular">${pluralPairs(filtered.length)}</span>`}
                 </div>
               </div>
               ${notesBlockHtml}
@@ -5433,7 +5964,10 @@
         feed.querySelectorAll('[data-sched-lesson]').forEach((el) => {
           el.addEventListener('click', () => {
             const l = safeParse(decodeURIComponent(el.dataset.schedLesson), null);
-            if (l) openScheduleLessonSheet(l.subject, l.type, `${l.start}–${l.end}`, l.room, l.teacher);
+            const slide = el.closest('[data-global-idx]');
+            const gIdx = slide ? Number(slide.dataset.globalIdx) : state.activeGlobalDayIdx;
+            const dayObj = flatDays[gIdx];
+            if (l) openScheduleLessonSheet(l.subject, l.type, `${l.start}–${l.end}`, l.room, l.teacher, dayObj ? dayObj.dateStr : '', l.start);
           });
         });
 
@@ -5446,13 +5980,29 @@
         requestAnimationFrame(() => scrollToGlobalDay(state.activeGlobalDayIdx, false));
       }
 
-      function openScheduleLessonSheet(subject, type, time, room, teacher) {
+      function openScheduleLessonSheet(subject, type, time, room, teacher, dateStr, startTime) {
         const ruleOn = isSubjectTypeAuto(subject, type);
         const tKey = getTypeKey(type);
+        const nextMatch = findNextLessonForSubject(subject, dateStr || '', startTime || '');
+
+        const nextRowHtml = nextMatch
+          ? `<div class="settings-row tap" id="schedNextLessonRow">
+              <div>
+                <div class="row-title">Следующая пара</div>
+                <div class="row-sub tabular">${escapeHtml(nextMatch.day.weekday)}, ${escapeHtml(nextMatch.day.num)} ${escapeHtml(nextMatch.day.month)} · ${escapeHtml(nextMatch.lesson.start)} (${escapeHtml(nextMatch.lesson.type)})</div>
+              </div>
+              <span class="badge accent">Перейти →</span>
+            </div>`
+          : `<div class="settings-row">
+              <div>
+                <div class="row-title">Следующая пара</div>
+                <div class="row-sub">Это последняя пара по предмету в семестре</div>
+              </div>
+            </div>`;
 
         openSheet(`
           <div class="sheet-title">${escapeHtml(subject)}</div>
-          <div class="class-meta-row" style="margin-bottom:16px;">
+          <div class="class-meta-row" style="margin-bottom:14px;">
             <span class="type-pill type-${tKey}">${escapeHtml(type)}</span>
             <span class="class-meta tabular">${escapeHtml(time)} · ${escapeHtml(room)}</span>
           </div>
@@ -5460,9 +6010,10 @@
             <div class="settings-row">
               <div>
                 <div class="row-title">Преподаватель</div>
-                <div class="row-sub">${escapeHtml(teacher)}</div>
+                <div class="row-sub">${escapeHtml(resolveFullTeacherName(teacher))}</div>
               </div>
             </div>
+            ${nextRowHtml}
             <div class="settings-row">
               <div>
                 <div class="row-title">Автоотметка · ${escapeHtml(type)}</div>
@@ -5471,19 +6022,42 @@
               <button class="switch" id="sheetSubjectTypeToggle" role="switch" aria-checked="${ruleOn}"></button>
             </div>
           </div>
-          <button class="full-btn secondary" id="sheetOpenAllRules">Все правила по предметам</button>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <button class="full-btn accent" id="sheetOpenSubjectHub">Всё о предмете</button>
+            <button class="full-btn secondary" id="sheetOpenAllRules">Все правила по предметам</button>
+          </div>
         `);
+
+        const nextRow = $('schedNextLessonRow');
+        if (nextRow && nextMatch) nextRow.addEventListener('click', () => jumpToScheduleDay(nextMatch.dayIdx));
+
+        $('sheetOpenSubjectHub').addEventListener('click', () => openSubjectHubSheet(subject, teacher, dateStr, startTime));
 
         $('sheetSubjectTypeToggle').addEventListener('click', () => {
           setSubjectTypeRule(subject, type, !ruleOn);
           renderSchedule();
           renderToday();
           renderSettings();
-          openScheduleLessonSheet(subject, type, time, room, teacher);
+          openScheduleLessonSheet(subject, type, time, room, teacher, dateStr, startTime);
           showToast(`${type} (${subject}): ${!ruleOn ? 'вкл' : 'выкл'}`);
         });
 
         $('sheetOpenAllRules').addEventListener('click', openSubjectRulesSheet);
+      }
+
+      let programmaticTargetIdx = -1;
+      let isFeedTouching = false;
+      let feedRafId = 0;
+      let feedTrackEndTimer = null;
+
+      function snapRailPillToCurrent() {
+        const flatDays = getAllDaysFlat();
+        const cur = flatDays[state.activeGlobalDayIdx];
+        const pEl = $('railPill');
+        if (cur && pEl) {
+          pEl.classList.remove('tracking');
+          pEl.style.transform = `translate3d(0, ${cur.dayInWeek * 34}px, 0)`;
+        }
       }
 
       function scrollToGlobalDay(idx, smooth) {
@@ -5492,26 +6066,53 @@
         if (!flatDays.length) return;
         const clamped = Math.max(0, Math.min(idx, flatDays.length - 1));
         state.activeGlobalDayIdx = clamped;
-        programmaticScrollUntil = smooth ? (Date.now() + 560) : (Date.now() + 120);
+        programmaticTargetIdx = clamped;
+        programmaticScrollUntil = smooth ? (Date.now() + 900) : (Date.now() + 140);
         clearTimeout(feedTrackEndTimer);
         const h = feed.clientHeight || 500;
         feed.scrollTo({ top: clamped * h, behavior: smooth ? 'smooth' : 'auto' });
         renderScheduleHeaderControls(flatDays);
       }
 
-      let feedRafId = 0;
-      let feedTrackEndTimer = null;
+      $('dayFeed').addEventListener('touchstart', () => {
+        isFeedTouching = true;
+        programmaticTargetIdx = -1;
+        programmaticScrollUntil = 0;
+        clearTimeout(feedTrackEndTimer);
+      }, { passive: true });
+
+      function onFeedTouchEnd() {
+        isFeedTouching = false;
+        clearTimeout(feedTrackEndTimer);
+        feedTrackEndTimer = setTimeout(() => {
+          if (!isFeedTouching && programmaticTargetIdx < 0) {
+            snapRailPillToCurrent();
+          }
+        }, 160);
+      }
+      $('dayFeed').addEventListener('touchend', onFeedTouchEnd, { passive: true });
+      $('dayFeed').addEventListener('touchcancel', onFeedTouchEnd, { passive: true });
+
       $('dayFeed').addEventListener('scroll', () => {
-        if (Date.now() < programmaticScrollUntil) return;
+        const feed = $('dayFeed');
+        const h = feed.clientHeight || 1;
+        if (programmaticTargetIdx >= 0) {
+          const dist = Math.abs(feed.scrollTop - programmaticTargetIdx * h);
+          if (dist < 2 || Date.now() > programmaticScrollUntil) {
+            programmaticTargetIdx = -1;
+            programmaticScrollUntil = 0;
+            snapRailPillToCurrent();
+          }
+          return;
+        }
         if (feedRafId) return;
         feedRafId = requestAnimationFrame(() => {
           feedRafId = 0;
-          if (Date.now() < programmaticScrollUntil) return;
-          const feed = $('dayFeed');
+          if (programmaticTargetIdx >= 0) return;
           const flatDays = getAllDaysFlat();
           if (!flatDays.length) return;
-          const h = feed.clientHeight || 1;
-          const exactIdx = feed.scrollTop / h;
+          const fh = feed.clientHeight || 1;
+          const exactIdx = feed.scrollTop / fh;
           const idx = Math.max(0, Math.min(Math.round(exactIdx), flatDays.length - 1));
           if (idx !== state.activeGlobalDayIdx) {
             state.activeGlobalDayIdx = idx;
@@ -5524,16 +6125,15 @@
             const weekDaysCount = (state.semesterWeeks[activeDay.week] || []).length;
             const relPos = Math.max(0, Math.min(exactIdx - weekStartIdx, Math.max(0, weekDaysCount - 1)));
             pill.classList.add('tracking');
-            pill.style.transform = `translate3d(0, ${relPos * 29}px, 0)`;
-            clearTimeout(feedTrackEndTimer);
-            feedTrackEndTimer = setTimeout(() => {
-              const pEl = $('railPill');
-              if (pEl) {
-                pEl.classList.remove('tracking');
-                const cur = flatDays[state.activeGlobalDayIdx];
-                if (cur) pEl.style.transform = `translate3d(0, ${cur.dayInWeek * 29}px, 0)`;
-              }
-            }, 90);
+            pill.style.transform = `translate3d(0, ${relPos * 34}px, 0)`;
+            if (!isFeedTouching) {
+              clearTimeout(feedTrackEndTimer);
+              feedTrackEndTimer = setTimeout(() => {
+                if (!isFeedTouching && programmaticTargetIdx < 0) {
+                  snapRailPillToCurrent();
+                }
+              }, 140);
+            }
           }
         });
       }, { passive: true });
@@ -5660,10 +6260,9 @@
 
                 const isAct = gIdx === state.activeGlobalDayIdx;
                 const isPast = !d.isToday && isDatePast(d.dateStr);
-                const typeSet = new Set((d.lessons || []).map((l) => getTypeKey(l.type)));
+                const lessonTypesList = (d.lessons || []).map((l) => getTypeKey(l.type)).slice(0, 5);
                 const hasNotes = getNotesForDate(d.dateStr).length > 0;
-                const dots = ['lecture', 'practice', 'lab']
-                  .filter((t) => typeSet.has(t))
+                const dots = lessonTypesList
                   .map((t) => `<span class="cal-dot dot-${t}"></span>`)
                   .join('') + (hasNotes ? '<span class="cal-dot dot-note"></span>' : '');
 
@@ -5701,21 +6300,20 @@
         }
 
         openSheet(`
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;">
             <div class="sheet-title" style="margin-bottom:0;">Календарь</div>
             <span class="badge accent tabular">${activeDay ? activeDay.week + ' нед. · ' + escapeHtml(activeDay.month) : ''}</span>
           </div>
-          <div class="sheet-sub">Выберите день для быстрого перехода</div>
           <div class="cal-header-row">
             <span>Нед</span><span>Пн</span><span>Вт</span><span>Ср</span><span>Чт</span><span>Пт</span><span>Сб</span><span style="opacity:0.5;">Вс</span>
           </div>
           <div class="cal-weeks" id="calWeeksScroll">${monthsHtml.join('')}</div>
-          <button class="full-btn secondary" id="calJumpTodayBtn" style="margin-top:8px;">${hasExactToday ? 'Перейти к сегодня' : 'Перейти к следующей неделе'}</button>
         `);
 
-        const activeRow = $('calWeeksScroll').querySelector('.is-current-week');
-        if (activeRow) {
-          requestAnimationFrame(() => activeRow.scrollIntoView({ block: 'center' }));
+        const calBox = $('calWeeksScroll');
+        const activeRow = calBox ? calBox.querySelector('.is-current-week') : null;
+        if (calBox && activeRow) {
+          calBox.scrollTop = Math.max(0, activeRow.offsetTop - calBox.clientHeight / 2 + activeRow.clientHeight / 2);
         }
 
         $('sheetContent').querySelectorAll('[data-cal-idx]').forEach((btn) => {
@@ -5725,36 +6323,28 @@
             scrollToGlobalDay(target, true);
           });
         });
-
-        const jumpToday = $('calJumpTodayBtn');
-        if (jumpToday) {
-          jumpToday.addEventListener('click', () => {
-            closeSheet();
-            scrollToGlobalDay(todayIdx, true);
-          });
-        }
       }
 
       $('scheduleCalendarBtn').addEventListener('click', openScheduleCalendarSheet);
-      $('weekLabel').addEventListener('click', openScheduleCalendarSheet);
 
-      $('prevWeekBtn').addEventListener('click', () => {
+      function jumpWeekKeepingWeekday(deltaWeek) {
         const flatDays = getAllDaysFlat();
         if (!flatDays.length) return;
-        const curWeek = (flatDays[state.activeGlobalDayIdx] || flatDays[0]).week;
-        const targetIdx = flatDays.findIndex((d) => d.week === curWeek - 1 && d.dayInWeek === 0);
+        const cur = flatDays[state.activeGlobalDayIdx] || flatDays[0];
+        const targetWeek = cur.week + deltaWeek;
+        let targetIdx = flatDays.findIndex((d) => d.week === targetWeek && d.dayInWeek === cur.dayInWeek);
+        if (targetIdx < 0) {
+          // Если в целевой неделе меньше дней, берём ближайший доступный день той же недели
+          for (let i = flatDays.length - 1; i >= 0; i--) {
+            if (flatDays[i].week === targetWeek) { targetIdx = i; break; }
+          }
+        }
         if (targetIdx >= 0) scrollToGlobalDay(targetIdx, true);
-        else showToast('Начало доступного расписания');
-      });
+        else showToast(deltaWeek < 0 ? 'Начало доступного расписания' : 'Конец доступного расписания');
+      }
 
-      $('nextWeekBtn').addEventListener('click', () => {
-        const flatDays = getAllDaysFlat();
-        if (!flatDays.length) return;
-        const curWeek = (flatDays[state.activeGlobalDayIdx] || flatDays[0]).week;
-        const targetIdx = flatDays.findIndex((d) => d.week === curWeek + 1 && d.dayInWeek === 0);
-        if (targetIdx >= 0) scrollToGlobalDay(targetIdx, true);
-        else showToast('Конец доступного расписания');
-      });
+      $('prevWeekBtn').addEventListener('click', () => jumpWeekKeepingWeekday(-1));
+      $('nextWeekBtn').addEventListener('click', () => jumpWeekKeepingWeekday(1));
 
       $('jumpTodayBtn').addEventListener('click', () => {
         scrollToGlobalDay(getTodayGlobalIdx(), true);
@@ -5809,7 +6399,7 @@
         }
       }
 
-      $('scheduleFilterBtn').addEventListener('click', openScheduleFilterSheet);
+      // Filter button removed from Schedule per user request
       $('scheduleRefreshBtn').addEventListener('click', () => {
         const btn = $('scheduleRefreshBtn');
         btn.classList.add('spin');
@@ -5874,13 +6464,24 @@
               <span>${q ? 'По запросу ничего не найдено' : (HAS_BRIDGE ? 'Нажмите обновить в правом верхнем углу' : 'Сообщения загрузятся из бэкенда ЛК')}</span>
             </div>`;
           } else {
+            let lastDateGroup = '';
             list.forEach((m, idx) => {
               const thread = Array.isArray(m.thread) ? m.thread : [];
               const last = thread[thread.length - 1];
               const hasAtt = last && Array.isArray(last.attachments) && last.attachments.length > 0;
               const subjPref = last && last.subject && last.subject !== last.text ? `${last.subject} · ` : '';
-              const previewText = last ? `${hasAtt ? '📎 ' : ''}${subjPref}${last.text || ''}` : (m.role || '');
+              const cleanRole = /(сотрудник|преподавател)/i.test(m.role || '') ? '' : (m.role || '');
+              const previewText = last ? `${hasAtt ? '📎 ' : ''}${subjPref}${last.text || ''}` : cleanRole;
               const listStamp = formatMessageStamp(last && last.date, (last && last.time) || m.time, true);
+
+              if (state.groupMessagesByDate) {
+                const dg = extractDateGroupLabel((last && last.date) || m.time);
+                if (dg && dg !== lastDateGroup) {
+                  lastDateGroup = dg;
+                  html += `<div class="date-divider">${escapeHtml(dg)}</div>`;
+                }
+              }
+
               html += `
                 <div class="msg-item tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-msg="${escapeHtml(m.id)}">
                   <div class="avatar">${escapeHtml(m.initials || 'ЛК')}</div>
@@ -5907,10 +6508,18 @@
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
               </div>
               <strong>Файлов группы пока нет</strong>
-              <span>${q ? 'По запросу ничего не найдено' : (HAS_BRIDGE ? 'Нажмите обновить для синхронизации с ЛК' : 'Файлы группы загрузятся из бэкенда ЛК')}</span>
+              <span>${q ? 'По запросу ничего не найдено' : (HAS_BRIDGE ? 'Потяните сверху вниз для синхронизации' : 'Файлы группы загрузятся из бэкенда ЛК')}</span>
             </div>`;
           } else {
+            let lastFileDate = '';
             files.forEach((f, idx) => {
+              if (state.groupMessagesByDate) {
+                const dg = extractDateGroupLabel(f.date);
+                if (dg && dg !== lastFileDate) {
+                  lastFileDate = dg;
+                  html += `<div class="date-divider">${escapeHtml(dg)}</div>`;
+                }
+              }
               html += `
                 <div class="file-item tap anim-in" style="--d:${Math.min(idx * 35, 210)}ms" data-open-file="${escapeHtml(f.id)}">
                   <div class="file-ext">${escapeHtml(f.ext || 'FILE')}</div>
@@ -5937,6 +6546,24 @@
           el.addEventListener('click', () => openFileSheet(el.dataset.openFile));
         });
       }
+      function extractDateGroupLabel(raw) {
+        const s = String(raw || '').trim();
+        const m = s.match(/(\d{2})\.(\d{2})(?:\.(\d{2,4}))?/);
+        if (!m) return '';
+        const dd = parseInt(m[1], 10);
+        const mm = parseInt(m[2], 10);
+        const now = new Date();
+        const yy = m[3] ? (m[3].length === 2 ? 2000 + parseInt(m[3], 10) : parseInt(m[3], 10)) : now.getFullYear();
+        const todayStr = `${String(now.getDate()).padStart(2, '0')}.${String(now.getMonth() + 1).padStart(2, '0')}.${now.getFullYear()}`;
+        const yest = new Date(now.getTime() - 86400000);
+        const yestStr = `${String(yest.getDate()).padStart(2, '0')}.${String(yest.getMonth() + 1).padStart(2, '0')}.${yest.getFullYear()}`;
+        const norm = `${String(dd).padStart(2, '0')}.${String(mm).padStart(2, '0')}.${yy}`;
+        if (norm === todayStr) return 'Сегодня';
+        if (norm === yestStr) return 'Вчера';
+        const mon = MONTHS_GEN[mm - 1] || '';
+        return `${dd} ${mon}${yy !== now.getFullYear() ? ' ' + yy : ''}`;
+      }
+
       function formatMessageStamp(dateStr, timeStr, compact) {
         const d = String(dateStr || '').trim();
         const t = String(timeStr || '').trim();
@@ -5954,15 +6581,15 @@
         }
         return t;
       }
-      function findSubjectsForTeacher(senderName) {
+      function findSubjectsForTeacherList(senderName) {
         const raw = String(senderName || '').trim().toLowerCase().replace(/ё/g, 'е');
-        if (!raw) return '';
-        const parts = raw.split(/[\s.]+/).filter(Boolean);
+        if (!raw) return [];
+        const parts = raw.split(/[\s.,]+/).filter(Boolean);
         const surname = parts[0] || '';
-        if (surname.length < 3) return '';
+        if (surname.length < 3) return [];
         const firstInit = parts[1] ? parts[1][0] : '';
 
-        const map = {}; // subject -> Set<type>
+        const map = {};
         const daysSource = rawSemesterDays.length ? rawSemesterDays : [];
         daysSource.forEach((d) => {
           (d.lessons || []).forEach((l) => {
@@ -5981,17 +6608,24 @@
           });
         });
 
-        const entries = Object.keys(map);
-        if (!entries.length) return '';
-        const formatted = entries.slice(0, 2).map((s) => {
-          const types = Array.from(map[s]).join(', ');
-          return types ? `${s} (${types})` : s;
-        });
-        if (entries.length > 2) formatted.push(`+${entries.length - 2}`);
-        return formatted.join(' · ');
+        return Object.keys(map).map((s) => ({
+          subject: s,
+          types: Array.from(map[s])
+        }));
       }
 
-      function openComposeMessageSheet() {
+      function renderTeacherSubjectsPillsHtml(senderName) {
+        const list = findSubjectsForTeacherList(senderName);
+        if (!list.length) return '';
+        return `<div class="teacher-subjects-wrap">${list.map((item) => `
+          <div class="teacher-subj-row tap" data-open-hub-subj="${escapeHtml(item.subject)}" data-open-hub-teacher="${escapeHtml(senderName || '')}">
+            <span class="teacher-subj-name">${escapeHtml(item.subject)}</span>
+            ${item.types.map((t) => `<span class="type-pill type-${getTypeKey(t)}">${escapeHtml(t)}</span>`).join('')}
+          </div>
+        `).join('')}</div>`;
+      }
+
+      function openComposeMessageSheet(preselectTeacherName) {
         if (!requireBackendConnected()) return;
         if (!state.messageTeachers.length && window.AndroidBridge.refreshMessageTeachers) {
           try { window.AndroidBridge.refreshMessageTeachers(); } catch (e) {}
@@ -6001,9 +6635,12 @@
 
         function renderCompose() {
           const teachers = Array.isArray(state.messageTeachers) ? state.messageTeachers : [];
-          const optionsHtml = '<option value="0">Выберите преподавателя...</option>' + teachers.map((t) =>
-            `<option value="${escapeHtml(t.id)}">${escapeHtml(t.name)}</option>`
-          ).join('');
+          const preNorm = String(preselectTeacherName || '').trim().toLowerCase().replace(/ё/g, 'е').split(/[\s.,]+/)[0] || '';
+          const optionsHtml = '<option value="0">Выберите преподавателя...</option>' + teachers.map((t) => {
+            const tSur = String(t.name || '').trim().toLowerCase().replace(/ё/g, 'е').split(/[\s.,]+/)[0] || '';
+            const selAttr = (preNorm && tSur && preNorm === tSur) ? ' selected' : '';
+            return `<option value="${escapeHtml(t.id)}"${selAttr}>${escapeHtml(t.name)}</option>`;
+          }).join('');
 
           openSheet(`
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
@@ -6055,10 +6692,7 @@
           $('newMsgTeacher').addEventListener('change', (e) => {
             const sel = e.target;
             const name = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : '';
-            const hint = sel.value !== '0' ? findSubjectsForTeacher(name) : '';
-            $('composeTeacherSubj').innerHTML = hint
-              ? `<span class="teacher-subjects-hint">Ведёт: ${escapeHtml(hint)}</span>`
-              : '';
+            $('composeTeacherSubj').innerHTML = sel.value !== '0' ? renderTeacherSubjectsPillsHtml(name) : '';
           });
 
           $('composeAttachBtn').addEventListener('click', () => $('composeFileInput').click());
@@ -6141,8 +6775,9 @@
           renderMessages();
         }
 
-        const taughtSubjects = findSubjectsForTeacher(msg.sender);
+        const taughtHtml = renderTeacherSubjectsPillsHtml(msg.sender);
 
+        let lastChatDate = '';
         const bubbles = (msg.thread || []).map((b) => {
           const atts = Array.isArray(b.attachments) ? b.attachments : [];
           const attHtml = atts.length
@@ -6156,23 +6791,31 @@
           const capHtml = b.caption && b.caption !== b.text && b.caption !== b.subject
             ? `<div class="bubble-caption">${escapeHtml(b.caption)}</div>`
             : '';
-          const stamp = formatMessageStamp(b.date, b.time, false);
+          const dateLabel = extractDateGroupLabel(b.date);
+          let dividerHtml = '';
+          if (dateLabel && dateLabel !== lastChatDate) {
+            lastChatDate = dateLabel;
+            dividerHtml = `<div class="date-divider">${escapeHtml(dateLabel)}</div>`;
+          }
+          const timeOnly = (String(b.date || '').match(/(\d{1,2}:\d{2})/) || [])[1] || b.time || '';
           const cleanBody = String(b.text || '').replace(/\n{3,}/g, '\n\n').trim();
-          return `<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${subjHtml}${escapeHtml(cleanBody)}${capHtml}${attHtml}<span class="bubble-time tabular">${escapeHtml(stamp)}</span></div>`;
+          return `${dividerHtml}<div class="bubble ${b.from === 'me' ? 'me' : ''}" style="white-space:pre-wrap;">${subjHtml}${escapeHtml(cleanBody)}${capHtml}${attHtml}<span class="bubble-time tabular">${escapeHtml(timeOnly)}</span></div>`;
         }).join('');
 
         let pendingFile = null;
 
         openSheet(`
-          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px;flex-shrink:0;">
+          <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:10px;flex-shrink:0;">
             <div style="min-width:0;flex:1;">
-              <div class="sheet-title" style="margin-bottom:2px;font-size:16.5px;">${escapeHtml(msg.sender)}</div>
-              ${taughtSubjects
-                ? `<div class="teacher-subjects-hint" title="${escapeHtml(taughtSubjects)}">Ведёт: ${escapeHtml(taughtSubjects)}</div>`
-                : `<div class="sheet-sub" style="margin-bottom:0;font-size:12px;">${escapeHtml(msg.role || 'Сообщение ЛК')}</div>`
-              }
+              <div class="sheet-title" style="margin-bottom:1px;font-size:16px;">${escapeHtml(resolveFullTeacherName(msg.sender))}</div>
+              ${taughtHtml}
             </div>
-            <button class="pill-btn" id="muteSenderBtn" style="height:30px;font-size:11.5px;padding:0 10px;flex-shrink:0;">${msg.muted ? '🔕 Выкл' : '🔔 Вкл'}</button>
+            <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+              <button class="pill-btn" id="muteSenderBtn" style="height:30px;font-size:11.5px;padding:0 10px;">${msg.muted ? '🔕 Выкл' : '🔔 Вкл'}</button>
+              <button type="button" class="icon-btn sm" id="toggleChatFullscreenBtn" aria-label="На весь экран" title="Развернуть на весь экран" style="width:30px;height:30px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+              </button>
+            </div>
           </div>
           <div class="chat-list" id="chatList">${bubbles}</div>
           <div id="pendingFileRow" style="display:none;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;margin-bottom:8px;border-radius:12px;background:var(--surface);border:1px solid var(--border);font-size:12px;">
@@ -6233,6 +6876,17 @@
           pendingFile = null;
           $('chatFileInput').value = '';
           $('pendingFileRow').style.display = 'none';
+        });
+
+        const fsBtn = $('toggleChatFullscreenBtn');
+        if (fsBtn) {
+          fsBtn.addEventListener('click', () => {
+            $('sheet').classList.toggle('sheet-fullscreen');
+          });
+        }
+
+        $('sheetContent').querySelectorAll('[data-open-hub-subj]').forEach((el) => {
+          el.addEventListener('click', () => openSubjectHubSheet(el.dataset.openHubSubj, el.dataset.openHubTeacher));
         });
 
         $('muteSenderBtn').addEventListener('click', () => {
@@ -6520,10 +7174,14 @@
             <span class="badge accent tabular">У: ${stats.excusedCount}</span>
           </div>
           ${bodyHtml}
-          <button class="full-btn secondary" id="closeDiaryAttBtn">Закрыть</button>
+          <div style="display:flex;gap:8px;">
+            <button class="full-btn secondary" id="closeDiaryAttBtn" style="flex:1;">Закрыть</button>
+            <button class="full-btn accent" id="diaryAttOpenHubBtn" style="flex:1.2;">О предмете</button>
+          </div>
         `);
 
         $('closeDiaryAttBtn').addEventListener('click', closeSheet);
+        $('diaryAttOpenHubBtn').addEventListener('click', () => openSubjectHubSheet(d.subject));
       }
 
       function openDiaryGradesSheet(d) {
@@ -6603,10 +7261,14 @@
           <div class="sheet-sub">${d.credit && d.credit !== 'Контроль' ? 'Итоговый контроль: ' + escapeHtml(d.credit) : 'Аттестация и оценки по предмету'}</div>
           ${controlsHtml}
           ${bodyHtml}
-          <button class="full-btn secondary" id="closeDiaryGradesBtn">Закрыть</button>
+          <div style="display:flex;gap:8px;">
+            <button class="full-btn secondary" id="closeDiaryGradesBtn" style="flex:1;">Закрыть</button>
+            <button class="full-btn accent" id="diaryGradesOpenHubBtn" style="flex:1.2;">О предмете</button>
+          </div>
         `);
 
         $('closeDiaryGradesBtn').addEventListener('click', closeSheet);
+        $('diaryGradesOpenHubBtn').addEventListener('click', () => openSubjectHubSheet(d.subject));
       }
 
       function renderDiary() {
@@ -6885,6 +7547,13 @@
               </div>
               <button class="switch" id="setExcusedSwitch" role="switch" aria-checked="${!!state.countExcusedAsAttended}"></button>
             </div>
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Разделять сообщения по датам</div>
+                <div class="row-sub">Показывать разделители с датой в сообщениях и файлах</div>
+              </div>
+              <button class="switch" id="setGroupMsgDateSwitch" role="switch" aria-checked="${!!state.groupMessagesByDate}"></button>
+            </div>
             <div class="settings-row tap" id="openNotesBackupRow">
               <div>
                 <div class="row-title">Резервная копия заметок</div>
@@ -6968,6 +7637,13 @@
           renderDiary();
           renderSettings();
           showToast(state.countExcusedAsAttended ? 'Б и У засчитываются как посещение' : 'Учитываются только реальные посещения');
+        });
+        $('setGroupMsgDateSwitch').addEventListener('click', () => {
+          state.groupMessagesByDate = !state.groupMessagesByDate;
+          saveState();
+          renderMessages();
+          renderSettings();
+          showToast(state.groupMessagesByDate ? 'Разделители по датам включены' : 'Разделители по датам выключены');
         });
         $('openNotesBackupRow').addEventListener('click', openNotesBackupSheet);
 
@@ -7922,26 +8598,27 @@
         else $('sheet').style.transform = '';
       });
 
-      $('quickThemeBtn').addEventListener('click', () => {
-        const btn = $('quickThemeBtn');
-        btn.classList.add('spin');
-        setTimeout(() => btn.classList.remove('spin'), 420);
-        const current = document.documentElement.getAttribute('data-theme');
-        state.themeMode = current === 'dark' ? 'light' : 'dark';
-        persistPulseSettingsToBridge();
-        applyTheme();
-        renderSettings();
-      });
+      // Theme toggle removed from Today tab; available in Settings & Onboarding
 
-      /* ===== PULL-TO-REFRESH ===== */
+      /* ===== PULL-TO-REFRESH (Browser-style Circular Orb + Live Retract) ===== */
       function attachPullToRefresh(scrollEl, indicatorEl, onRefresh) {
         if (!scrollEl || !indicatorEl) return;
-        let startX = 0, startY = 0, pulling = false, pullDist = 0;
-        const THRESHOLD = 68;
-        const textEl = indicatorEl.querySelector('.ptr-text');
+        let startX = 0, startY = 0, pulling = false, pullDist = 0, refreshing = false;
+        const THRESHOLD = 66;
+        const orbEl = indicatorEl.querySelector('.ptr-orb');
+        const svgEl = indicatorEl.querySelector('.ptr-ring-svg');
+
+        function resetIndicator() {
+          indicatorEl.classList.remove('pulling', 'ready', 'refreshing');
+          indicatorEl.style.height = '0px';
+          indicatorEl.style.opacity = '0';
+          if (svgEl) svgEl.style.transform = '';
+          if (orbEl) orbEl.style.transform = '';
+          pullDist = 0;
+        }
 
         scrollEl.addEventListener('touchstart', (e) => {
-          if (!e.touches || e.touches.length !== 1) return;
+          if (refreshing || !e.touches || e.touches.length !== 1) return;
           if ($('sheet').classList.contains('open') || $('onboardOverlay').classList.contains('open')) return;
           if (scrollEl.scrollTop > 2) return;
           startX = e.touches[0].clientX;
@@ -7951,24 +8628,36 @@
         }, { passive: true });
 
         scrollEl.addEventListener('touchmove', (e) => {
-          if (!pulling || !e.touches || e.touches.length !== 1) return;
+          if (!pulling || refreshing || !e.touches || e.touches.length !== 1) return;
           if (scrollEl.scrollTop > 2) {
             pulling = false;
+            resetIndicator();
             return;
           }
           const dx = e.touches[0].clientX - startX;
           const dy = e.touches[0].clientY - startY;
-          if (dy <= 8 || Math.abs(dx) > Math.abs(dy) * 0.8) {
-            if (pullDist === 0) pulling = false;
+
+          if (Math.abs(dx) > Math.abs(dy) * 0.9 && pullDist === 0) {
+            pulling = false;
             return;
           }
-          pullDist = Math.min(108, dy * 0.55);
+
+          if (dy <= 6) {
+            pullDist = 0;
+            indicatorEl.classList.remove('ready');
+            indicatorEl.style.height = '0px';
+            indicatorEl.style.opacity = '0';
+            return;
+          }
+
+          pullDist = Math.min(110, dy * 0.52);
+          const progress = Math.min(1, pullDist / THRESHOLD);
           indicatorEl.classList.add('pulling');
-          indicatorEl.style.height = `${Math.round(pullDist * 0.55)}px`;
-          indicatorEl.style.opacity = String(Math.min(1, pullDist / THRESHOLD).toFixed(2));
-          const ready = pullDist >= THRESHOLD;
-          indicatorEl.classList.toggle('ready', ready);
-          if (textEl) textEl.textContent = ready ? 'Отпустите для обновления' : 'Потяните для обновления';
+          indicatorEl.style.height = `${Math.round(progress * 48)}px`;
+          indicatorEl.style.opacity = String(progress.toFixed(2));
+          if (orbEl) orbEl.style.transform = `scale(${(0.72 + progress * 0.28).toFixed(3)})`;
+          if (svgEl) svgEl.style.transform = `rotate(${Math.round(progress * 270)}deg)`;
+          indicatorEl.classList.toggle('ready', pullDist >= THRESHOLD);
         }, { passive: true });
 
         function endPull() {
@@ -7977,20 +8666,20 @@
           pulling = false;
           indicatorEl.classList.remove('pulling', 'ready');
           if (triggered) {
-            indicatorEl.style.height = '38px';
+            refreshing = true;
+            indicatorEl.classList.add('refreshing');
+            indicatorEl.style.height = '48px';
             indicatorEl.style.opacity = '1';
-            if (textEl) textEl.textContent = 'Обновление...';
+            if (orbEl) orbEl.style.transform = 'scale(1)';
+            if (svgEl) svgEl.style.transform = '';
             onRefresh();
             setTimeout(() => {
-              indicatorEl.style.height = '0px';
-              indicatorEl.style.opacity = '0';
-              if (textEl) textEl.textContent = 'Потяните для обновления';
-            }, 900);
+              refreshing = false;
+              resetIndicator();
+            }, 950);
           } else {
-            indicatorEl.style.height = '0px';
-            indicatorEl.style.opacity = '0';
+            resetIndicator();
           }
-          pullDist = 0;
         }
 
         scrollEl.addEventListener('touchend', endPull, { passive: true });

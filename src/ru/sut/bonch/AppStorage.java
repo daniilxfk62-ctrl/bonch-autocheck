@@ -109,6 +109,11 @@ public class AppStorage {
         File f = new File(filesDir, fileName);
         return f.exists() ? f.lastModified() : 0L;
     }
+    public String getFileVersionKey(String fileName) {
+        File f = new File(filesDir, fileName);
+        if (!f.exists()) return "0_0";
+        return f.lastModified() + "_" + f.length();
+    }
 
     public boolean isDaemonEnabled() {
         return new File(filesDir, FILE_ENABLED_FLAG).exists();
@@ -439,7 +444,8 @@ public class AppStorage {
         boolean scanningSemester,
         String scanStatusText,
         long serviceStartMillis,
-        int todayDayIdx
+        int todayDayIdx,
+        String serverWarning
     ) {
         try {
             JSONObject obj = new JSONObject();
@@ -449,6 +455,7 @@ public class AppStorage {
             obj.put("scanStatus", scanStatusText);
             obj.put("startMillis", serviceStartMillis);
             obj.put("todayDayIdx", todayDayIdx);
+            obj.put("serverWarning", serverWarning != null ? serverWarning : "");
             obj.put("logs", getLogsArray());
             writeText(FILE_BG_STATE, obj.toString());
         } catch (Exception ignored) {}

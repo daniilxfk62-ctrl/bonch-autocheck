@@ -23,6 +23,8 @@ public class BonchBackgroundDaemon extends Service {
     private DiaryMonitor diaryMonitor;
     private MessageManager messageManager;
 
+    private volatile String serverWarning = "";
+
     private PowerManager.WakeLock wakeLock;
     private Thread workerThread;
     private final AtomicBoolean syncInProgress = new AtomicBoolean(false);
@@ -35,6 +37,19 @@ public class BonchBackgroundDaemon extends Service {
     private volatile long serviceStartMillis = 0L;
     private volatile long lastAutoSyncMillis = 0L;
 
+    
+    private void flushState() {
+        storage.saveRuntimeState(
+            active,
+            statusText,
+            scanningSemester,
+            scanStatusText,
+            serviceStartMillis,
+            scheduleManager.getTodayDayIdx(),
+            serverWarning
+        );
+    }
+    
     @Override
     public void onCreate() {
         super.onCreate();
@@ -131,7 +146,22 @@ public class BonchBackgroundDaemon extends Service {
             flushState();
             return active ? START_STICKY : START_NOT_STICKY;
         }
-
+        if ("restart_daemon".equals(action)) {
+            storage.deleteFile(AppStorage.FILE_COOKIES);
+            apiClient.invalidateSession();
+            serverWarning = "";
+            storage.addLog("🔄 Перезапуск автоотметки и сброс сессии...");
+            if (workerThread != null && workerThread.isAlive()) {
+                workerThread.interrupt();
+            }
+            if (storage.isDaemonEnabled()) {
+                if (!active || workerThread == null || !workerThread.isAlive()) {
+                    startWorkerLoop();
+                }
+            }
+            flushState();
+            return active ? START_STICKY : START_NOT_STICKY;
+        }
         if ("test_notif".equals(action)) {
             NotificationHelper.sendAlert(
                 this,
@@ -377,6 +407,9 @@ public class BonchBackgroundDaemon extends Service {
                                 }
                             }).start();
                         }
+                        if (active && workerThread != null && workerThread.isAlive()) {
+                            workerThread.interrupt();
+                        }
                     } finally {
                         syncInProgress.set(false);
                     }
@@ -526,12 +559,14 @@ public class BonchBackgroundDaemon extends Service {
                         if (!apiClient.authenticate(login, password, storage)) {
                             String authErr = apiClient.getLastAuthError();
                             if (authErr == null || authErr.isEmpty()) authErr = "нет ответа от сервера";
+                            serverWarning = "Сервер lk.sut.ru отвечает медленно — переподключаемся";
                             long retryMs = apiClient.wasLastAuthBadCredentials() ? 60000L : 15000L;
                             storage.addLog("Не удалось войти в lk.sut.ru: " + authErr + " (повтор через " + (retryMs / 1000L) + " сек)");
                             updateStatus("Ошибка входа: " + authErr);
                             sleepQuietly(retryMs);
                             continue;
                         }
+                        serverWarning = "";
                         String[] initWin = scheduleManager.getCurrentWindowState(mode, storage);
                         scheduleManager.pollCurrentWeekAndCheckIn(
                             BonchBackgroundDaemon.this, apiClient, storage, login, password, initWin != null ? initWin[0] : null
@@ -578,8 +613,9 @@ public class BonchBackgroundDaemon extends Service {
                     }
 
                     boolean busyCatchingButton = (win != null && !scheduleManager.completedWindowsToday.contains(win[0]));
+                    scheduleManager.pauseSemesterScan = busyCatchingButton;
 
-                   long autoUpdInterval = storage.getAutoUpdateIntervalMillis();
+                    long autoUpdInterval = storage.getAutoUpdateIntervalMillis();
                     boolean daytime = isDaytimeSyncWindow();
                     long effectiveDaySyncMs = autoUpdInterval > 0L ? Math.min(autoUpdInterval, 1800000L) : 0L;
 
@@ -648,6 +684,8 @@ public class BonchBackgroundDaemon extends Service {
                     scheduleManager.pollCurrentWeekAndCheckIn(
                         BonchBackgroundDaemon.this, apiClient, storage, login, password, winStart
                     );
+                    serverWarning = "";
+                    flushState();
 
                     if (scheduleManager.lastPollMarkedAny || scheduleManager.completedWindowsToday.contains(winStart)) {
                         String tMarked = scheduleManager.checkInTimeByStart.get(winStart);
@@ -696,6 +734,8 @@ public class BonchBackgroundDaemon extends Service {
         flushState();
         stopForeground(true);
         stopSelf();
+        serverWarning = "";
+        scheduleManager.pauseSemesterScan = false;
     }
 
     private boolean isDaytimeSyncWindow() {

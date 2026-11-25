@@ -169,7 +169,11 @@ public class MainActivity extends Activity {
         public String getSavedConfig() {
             return storage.getUserConfig().toString();
         }
-
+        @JavascriptInterface
+        public void restartAutoCheck() {
+            storage.setDaemonEnabled(true);
+            sendDaemonCommand("restart_daemon");
+        }
         @JavascriptInterface
         public String getProfile() {
             return storage.getProfile().toString();
@@ -259,6 +263,7 @@ public class MainActivity extends Activity {
                 state.put("authState", authSt.optString("authState", ""));
                 state.put("authError", authSt.optString("authError", ""));
                 state.put("daysMtime", storage.getFileMtime(AppStorage.FILE_SEMESTER_DAYS));
+                state.put("daysKey", storage.getFileVersionKey(AppStorage.FILE_SEMESTER_DAYS));
                 state.put("catMtime", storage.getFileMtime(AppStorage.FILE_SMART_CATALOG));
                 state.put("diaryMtime", storage.getFileMtime(AppStorage.FILE_DIARY_SUMMARY) + storage.getFileMtime(AppStorage.FILE_DIARY_ALL));
                 state.put("messagesMtime", storage.getFileMtime(AppStorage.FILE_MESSAGES));
