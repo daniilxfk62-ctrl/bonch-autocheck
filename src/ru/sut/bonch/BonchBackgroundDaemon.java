@@ -84,16 +84,6 @@ public class BonchBackgroundDaemon extends Service {
         } catch (Exception ignored) {}
     }
 
-    private void flushState() {
-        storage.saveRuntimeState(
-            active,
-            statusText,
-            scanningSemester,
-            scanStatusText,
-            serviceStartMillis,
-            scheduleManager.getTodayDayIdx()
-        );
-    }
 
     private void runParallelSecondarySync(final String login, final String pass, final boolean manualTrigger) {
         Thread diaryThread = new Thread(new Runnable() {
