@@ -329,49 +329,36 @@ public class AppStorage {
 
         if (dowIdx >= 0 && startTime != null && !startTime.isEmpty()) {
             String slotKey = "SLOT||" + dowIdx + "||" + startTime;
-            if (choices.has(slotKey)) {
-                String chosenSlot = choices.optString(slotKey, "").trim();
-                if (!chosenSlot.isEmpty() && !"ALL".equals(chosenSlot)) {
-                    if (!matchesChoiceToken(chosenSlot, sNorm, tNorm, rNorm)) {
-                        return false;
-                    }
-                }
+            if (choices.has(slotKey) && !matchesChoiceValue(choices.opt(slotKey), sNorm, tNorm, rNorm)) {
+                return false;
             }
         }
 
         if (!sNorm.isEmpty() && choices.has(sNorm)) {
-            String chosenSubj = choices.optString(sNorm, "").trim();
-            if (!chosenSubj.isEmpty() && !"ALL".equals(chosenSubj)) {
-                if (!matchesChoiceToken(chosenSubj, sNorm, tNorm, rNorm)) {
-                    return false;
-                }
+            if (!matchesChoiceValue(choices.opt(sNorm), sNorm, tNorm, rNorm)) {
+                return false;
             }
         }
 
         return true;
     }
 
-    private boolean matchesChoiceToken(String chosenToken, String sNorm, String tNorm, String rNorm) {
-        String[] parts = chosenToken.split("\\|\\|");
-        if (parts.length >= 3) {
-            String cSubj = parts[0].trim();
-            String cTeach = parts[1].trim();
-            String cRoom = ScheduleManager.formatRoomClean(parts[2].trim());
-            if (!cSubj.isEmpty() && !sNorm.isEmpty() && !cSubj.equalsIgnoreCase(sNorm)) return false;
-            if (!cTeach.isEmpty() && !tNorm.isEmpty() && !cTeach.equalsIgnoreCase(tNorm)) return false;
-            if (cTeach.isEmpty() && !cRoom.isEmpty() && !rNorm.isEmpty() && !cRoom.equalsIgnoreCase(rNorm)) return false;
-            return true;
-        } else {
-            String cTeach = parts.length > 0 ? parts[0].trim() : "";
-            String cRoom = parts.length > 1 ? ScheduleManager.formatRoomClean(parts[1].trim()) : "";
-            if (!cTeach.isEmpty() && !tNorm.isEmpty()) {
-                return cTeach.equalsIgnoreCase(tNorm);
+    private boolean matchesChoiceValue(Object val, String sNorm, String tNorm, String rNorm) {
+        if (val == null) return true;
+        if (val instanceof JSONArray) {
+            JSONArray arr = (JSONArray) val;
+            if (arr.length() == 0) return true;
+            for (int i = 0; i < arr.length(); i++) {
+                String tok = arr.optString(i, "").trim();
+                if (tok.isEmpty() || "ALL".equals(tok) || matchesChoiceToken(tok, sNorm, tNorm, rNorm)) {
+                    return true;
+                }
             }
-            if (!cRoom.isEmpty() && !rNorm.isEmpty()) {
-                return cRoom.equalsIgnoreCase(rNorm);
-            }
-            return true;
+            return false;
         }
+        String s = String.valueOf(val).trim();
+        if (s.isEmpty() || "ALL".equals(s)) return true;
+        return matchesChoiceToken(s, sNorm, tNorm, rNorm);
     }
 
     public boolean isNotifyDiaryEnabled() {

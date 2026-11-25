@@ -1230,8 +1230,10 @@ public class ScheduleManager {
                 }
             }
         } catch (Exception e) {
-            api.invalidateSession();
-            storage.addLog("Переподключение (" + e.getMessage() + ")");
+            if (!(e instanceof java.net.SocketTimeoutException)) {
+                api.invalidateSession();
+            }
+            storage.addLog("Сервер медленно отвечает (" + e.getMessage() + ")");
         }
     }
 
@@ -1255,7 +1257,7 @@ public class ScheduleManager {
             return;
         }
 
-        ExecutorService pool = Executors.newFixedThreadPool(3);
+        ExecutorService pool = Executors.newFixedThreadPool(1);
         try {
             final AtomicInteger loadedCount = new AtomicInteger(0);
             List<Future<String>> futures = new ArrayList<>();

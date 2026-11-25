@@ -65,10 +65,10 @@ public class SutApiClient {
     private static final String USER_AGENT =
         "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Mobile Safari/537.36";
 
-    private static final int DEFAULT_CONNECT_TIMEOUT_MS = 8000;
-    private static final int DEFAULT_READ_TIMEOUT_MS = 15000;
-    private static final int FAST_CONNECT_TIMEOUT_MS = 5000;
-    private static final int FAST_READ_TIMEOUT_MS = 9000;
+    private static final int DEFAULT_CONNECT_TIMEOUT_MS = 10000;
+    private static final int DEFAULT_READ_TIMEOUT_MS = 25000;
+    private static final int FAST_CONNECT_TIMEOUT_MS = 8000;
+    private static final int FAST_READ_TIMEOUT_MS = 16000;
     private static final int MAX_REDIRECTS = 5;
 
     private final Map<String, String> cookieJar = new LinkedHashMap<>();
@@ -445,7 +445,8 @@ public class SutApiClient {
                         }
                         return true;
                     } else {
-                        storage.addLog("Сохранённая сессия lk.sut.ru истекла или сброшена — выполняем повторный вход...");
+                        storage.deleteFile(AppStorage.FILE_COOKIES);
+                        storage.addLog("Сохранённая сессия lk.sut.ru истекла — выполняем свежий вход...");
                     }
                 }
             }
@@ -515,7 +516,8 @@ public class SutApiClient {
             return false;
         } catch (SocketTimeoutException ste) {
             invalidateSession();
-            lastAuthError = "Сервер lk.sut.ru слишком долго отвечает. Попробуйте снова.";
+            if (storage != null) storage.deleteFile(AppStorage.FILE_COOKIES);
+            lastAuthError = "Сервер lk.sut.ru долго отвечает — сессия сброшена, автоповтор...";
             if (storage != null) storage.addLog(lastAuthError);
             return false;
         } catch (Exception e) {
