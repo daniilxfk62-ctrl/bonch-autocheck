@@ -360,6 +360,28 @@ public class AppStorage {
         if (s.isEmpty() || "ALL".equals(s)) return true;
         return matchesChoiceToken(s, sNorm, tNorm, rNorm);
     }
+    private boolean matchesChoiceToken(String chosenToken, String sNorm, String tNorm, String rNorm) {
+        String[] parts = chosenToken.split("\\|\\|");
+        if (parts.length >= 3) {
+            String cSubj = parts[0].trim();
+            String cTeach = parts[1].trim();
+            String cRoom = ScheduleManager.formatRoomClean(parts[2].trim());
+            if (!cSubj.isEmpty() && !sNorm.isEmpty() && !cSubj.equalsIgnoreCase(sNorm)) return false;
+            if (!cTeach.isEmpty() && !tNorm.isEmpty() && !cTeach.equalsIgnoreCase(tNorm)) return false;
+            if (cTeach.isEmpty() && !cRoom.isEmpty() && !rNorm.isEmpty() && !cRoom.equalsIgnoreCase(rNorm)) return false;
+            return true;
+        } else {
+            String cTeach = parts.length > 0 ? parts[0].trim() : "";
+            String cRoom = parts.length > 1 ? ScheduleManager.formatRoomClean(parts[1].trim()) : "";
+            if (!cTeach.isEmpty() && !tNorm.isEmpty()) {
+                return cTeach.equalsIgnoreCase(tNorm);
+            }
+            if (!cRoom.isEmpty() && !rNorm.isEmpty()) {
+                return cRoom.equalsIgnoreCase(rNorm);
+            }
+            return true;
+        }
+    }
 
     public boolean isNotifyDiaryEnabled() {
         return readJson(FILE_NOTIF_PREFS, "{\"notifyDiary\":true,\"notifySkippedLessons\":true,\"notifyMessages\":true}")
