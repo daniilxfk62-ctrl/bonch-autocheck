@@ -1047,16 +1047,28 @@
     /* Schedule Unified Bottom Pill */
     .sched-bar {
       justify-content: space-between;
-      padding: 5px 6px;
-      gap: 6px;
+      padding: 0 2px;
+      gap: 8px;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border: none !important;
+      box-shadow: none !important;
+      pointer-events: none;
+    }
+    .sched-bar > *, .sched-bar button {
+      pointer-events: auto;
     }
 
     .sched-bar-nav {
-      width: 34px;
-      height: 34px;
+      width: 44px;
+      height: 44px;
       border-radius: 50%;
       border: 1px solid var(--border);
-      background: var(--surface-elevated);
+      background: var(--dock-bg);
+      backdrop-filter: blur(18px) saturate(180%);
+      -webkit-backdrop-filter: blur(18px) saturate(180%);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
       color: var(--text);
       display: inline-flex;
       align-items: center;
@@ -1083,15 +1095,18 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
-      height: 34px;
-      padding: 0 13px;
+      gap: 7px;
+      height: 44px;
+      padding: 0 16px;
       border-radius: 999px;
       border: 1px solid var(--border);
-      background: var(--surface-elevated);
+      background: var(--dock-bg);
+      backdrop-filter: blur(18px) saturate(180%);
+      -webkit-backdrop-filter: blur(18px) saturate(180%);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.14);
       color: var(--text);
       font-family: inherit;
-      font-size: 12.5px;
+      font-size: 13.5px;
       font-weight: 600;
       cursor: pointer;
       transition: transform 0.2s var(--spring-bounce), background-color 0.18s ease;
@@ -3678,16 +3693,16 @@
           </div>
 
           <div class="bottom-bar sched-bar" id="scheduleBottomBar">
-            <div style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;">
+            <div style="display:inline-flex;align-items:center;gap:8px;flex-shrink:0;">
               <button class="sched-bar-nav" id="prevWeekBtn" aria-label="Предыдущая неделя" title="Предыдущая неделя">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
               </button>
               <button class="sched-bar-nav" id="nextWeekBtn" aria-label="Следующая неделя" title="Следующая неделя">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
               </button>
             </div>
             <div class="sched-bar-center">
-              <button class="pill-btn" id="jumpTodayBtn" style="display:none;height:34px;padding:0 14px;color:var(--accent);border-color:var(--accent-ring);background:var(--accent-soft);">Сегодня</button>
+              <button class="pill-btn" id="jumpTodayBtn" style="display:none;height:44px;padding:0 18px;font-size:13.5px;font-weight:700;color:var(--accent);border-color:var(--accent-ring);background:var(--dock-bg);backdrop-filter:blur(18px) saturate(180%);-webkit-backdrop-filter:blur(18px) saturate(180%);box-shadow:0 6px 18px rgba(0, 0, 0, 0.14);">Сегодня</button>
             </div>
             <button class="sched-cal-pill" id="scheduleCalendarBtn" aria-label="Открыть календарь" style="flex-shrink:0;">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
@@ -4537,8 +4552,25 @@
           const isToday = dateStr === todayStr;
           if (isToday) foundTodayWeek = wNum;
 
-          const lessons = (Array.isArray(d.lessons) ? d.lessons : [])
-            .filter((l) => isLessonAllowedByGroupChoices(dowIdx, l.startTime || '', l.subjectTitle || '', l.teacher || '', l.room || ''))
+          const rawDayLessons = Array.isArray(d.lessons) ? d.lessons : [];
+          const parseMin = (t) => {
+            const m = String(t || '').match(/(\d{1,2}):(\d{2})/);
+            return m ? (parseInt(m[1], 10) * 60 + parseInt(m[2], 10)) : -1;
+          };
+          const lessons = rawDayLessons
+            .filter((l, lIdx) => {
+              const sA = parseMin(l.startTime);
+              const eA = parseMin(l.endTime) > sA ? parseMin(l.endTime) : (sA >= 0 ? sA + 95 : -1);
+              const hasCompetitor = rawDayLessons.some((o, oIdx) => {
+                if (oIdx === lIdx) return false;
+                const sB = parseMin(o.startTime);
+                const eB = parseMin(o.endTime) > sB ? parseMin(o.endTime) : (sB >= 0 ? sB + 95 : -1);
+                if (sA >= 0 && sB >= 0) return sA < eB && sB < eA;
+                return Boolean(l.startTime && o.startTime && l.startTime === o.startTime);
+              });
+              if (!hasCompetitor) return true;
+              return isLessonAllowedByGroupChoices(dowIdx, l.startTime || '', l.subjectTitle || '', l.teacher || '', l.room || '');
+            })
             .map((l, lIdx) => {
               const start = l.startTime || '09:00';
               const end = l.endTime || '';
@@ -5361,10 +5393,11 @@
                 <line class="pulse-ecg-grid" x1="0" y1="17" x2="280" y2="17" stroke-dasharray="3 4" />
                 <line class="pulse-ecg-flat" x1="0" y1="17" x2="280" y2="17" />
                 <path class="pulse-ecg-live" d="${ecgPath}" pathLength="1000" stroke-dasharray="280 1000" stroke-dashoffset="280">
-                  <animate attributeName="stroke-dashoffset" from="280" to="-720" dur="2.4s" repeatCount="indefinite" />
+                  <animate attributeName="stroke-dashoffset" from="280" to="-1000" dur="3.0s" repeatCount="indefinite" />
                 </path>
                 <circle class="pulse-ecg-dot" r="2.7">
-                  <animateMotion dur="2.4s" repeatCount="indefinite" path="${ecgPath}" />
+                  <animateMotion dur="3.0s" repeatCount="indefinite" path="${ecgPath}" calcMode="linear" keyTimes="0;0.78125;1" keyPoints="0;1;1" />
+                  <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.76;0.82;1" dur="3.0s" repeatCount="indefinite" />
                 </circle>
               </svg>
             </div>
