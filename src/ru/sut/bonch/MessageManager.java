@@ -190,7 +190,7 @@ public class MessageManager {
 
             Matcher trMat = trPat.matcher(sanitizedHtml);
             int fetchedDetailsCount = 0;
-            int maxDetailsPerPass = manualTrigger ? 10 : 5;
+            int maxDetailsPerPass = manualTrigger ? 60 : 25;
 
             while (trMat.find()) {
                 String trAttrs = trMat.group(1);
@@ -499,7 +499,10 @@ public class MessageManager {
             String body = "id=" + URLEncoder.encode(serverId, "UTF-8") + "&prosmotr=1";
             String resp = api.httpRequestFast("POST", url, body);
             if (resp == null || resp.trim().length() < 2) {
-                resp = api.httpRequestFast("GET", url, null);
+                resp = api.httpRequest("POST", url, body);
+            }
+            if (resp == null || resp.trim().length() < 2) {
+                resp = api.httpRequest("GET", url, null);
             }
             if (resp == null || resp.trim().length() < 2 || isAuthExpiredHtml(resp)) {
                 return det;
@@ -515,8 +518,16 @@ public class MessageManager {
                     json.optString("tema", json.optString("subject", "")));
                 det.title = cleanMessageText(rawTitle);
 
-                String annotation = json.optString("annotation", "");
-                det.text = cleanMessageText(annotation);
+                StringBuilder fullBody = new StringBuilder();
+                String[] bodyKeys = new String[]{"annotation", "text", "message", "mes", "body", "content", "otvet"};
+                for (String bk : bodyKeys) {
+                    String part = cleanMessageText(json.optString(bk, ""));
+                    if (!part.isEmpty() && fullBody.indexOf(part) < 0) {
+                        if (fullBody.length() > 0) fullBody.append("\n\n");
+                        fullBody.append(part);
+                    }
+                }
+                det.text = fullBody.toString().trim();
 
                 Object filesObj = json.opt("files");
                 if (filesObj instanceof String) {

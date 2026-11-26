@@ -161,7 +161,7 @@ public class ScheduleManager {
                             boolean checked = les.optBoolean("checked", false);
                             boolean waitT = les.optBoolean("waitingTeacher", false);
 
-                            if (!storage.isSubgroupAllowed(dowIdx, st, subj, teach, rm)) {
+                            if (hasSlotCompetitor(lessons, k) && !storage.isSubgroupAllowed(dowIdx, st, subj, teach, rm)) {
                                 continue;
                             }
 
@@ -290,7 +290,7 @@ public class ScheduleManager {
                 String subj = les.optString("subjectTitle", "").trim();
                 String teach = les.optString("teacher", "").trim();
                 String room = les.optString("room", "").trim();
-                if (!storage.isSubgroupAllowed(dowIdx, st, subj, teach, room)) continue;
+                if (hasSlotCompetitor(lessons, k) && !storage.isSubgroupAllowed(dowIdx, st, subj, teach, room)) continue;
 
                 boolean alreadyDone = les.optBoolean("checked", false) || completedWindowsToday.contains(st);
                 if (alreadyDone) continue;
@@ -392,7 +392,7 @@ public class ScheduleManager {
                 String teacher = les.optString("teacher", "");
                 String room = les.optString("room", "");
 
-                if (!storage.isSubgroupAllowed(dowIdx, st, subj, teacher, room)) continue;
+                if (hasSlotCompetitor(lessons, k) && !storage.isSubgroupAllowed(dowIdx, st, subj, teacher, room)) continue;
 
                 if (!st.isEmpty() && !storage.isRuleAllowed(rk)) {
                     String uniqueKey = todayStr + "_" + st + "_" + rk;
@@ -774,7 +774,21 @@ public class ScheduleManager {
         }
         return resultList;
     }
-
+    private boolean hasSlotCompetitor(JSONArray lessons, int idx) {
+        if (lessons == null || lessons.length() <= 1) return false;
+        JSONObject cur = lessons.optJSONObject(idx);
+        if (cur == null) return false;
+        String st = cur.optString("startTime", "").trim();
+        if (st.isEmpty()) return false;
+        for (int i = 0; i < lessons.length(); i++) {
+            if (i == idx) continue;
+            JSONObject other = lessons.optJSONObject(i);
+            if (other != null && st.equals(other.optString("startTime", "").trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
     private int calcDowIdxFromDate(Date d) {
         if (d == null) return 0;
         Calendar c = Calendar.getInstance();

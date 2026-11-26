@@ -63,6 +63,7 @@ public class MainActivity extends Activity {
                 }
             }
         });
+        webView.setFitsSystemWindows(true);
         webView.addJavascriptInterface(new WebBridge(), "AndroidBridge");
         setContentView(webView);
 

@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,11 +25,19 @@ jobs:
       - name: Compile APK from Repository Files
         id: compile
         shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: |
           set -e
           SDK_DIR="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
-          ANDROID_JAR=$(ls -d "$SDK_DIR"/platforms/android-* | sort -V | tail -n 1)/android.jar
-          BUILD_TOOLS=$(ls -d "$SDK_DIR"/build-tools/* | sort -V | tail -n 1)
+          if [ ! -f "$SDK_DIR/platforms/android-35/android.jar" ]; then
+            yes | "$SDK_DIR/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          fi
+          ANDROID_JAR="$SDK_DIR/platforms/android-35/android.jar"
+          BUILD_TOOLS=$(ls -d "$SDK_DIR"/build-tools/35.* "$SDK_DIR"/build-tools/* 2>/dev/null | sort -V | tail -n 1)
 
           APP_VER=$(grep -oP 'versionName="\K[^"]+' AndroidManifest.xml || echo "01.04.02")
           echo "version=$APP_VER" >> "$GITHUB_OUTPUT"
@@ -41,6 +49,8 @@ jobs:
           "$BUILD_TOOLS/aapt2" link -o build/unaligned.apk \
             -I "$ANDROID_JAR" \
             --manifest AndroidManifest.xml \
+            --min-sdk-version 24 \
+            --target-sdk-version 35 \
             -A assets \
             --java build/gen \
             build/res.zip
@@ -56,16 +66,17 @@ jobs:
           zip -uj build/unaligned.apk build/classes.dex
           "$BUILD_TOOLS/zipalign" -f -p 4 build/unaligned.apk build/aligned.apk
 
-          keytool -genkeypair -v \
-            -keystore build/release.keystore \
-            -storepass android -keypass android \
-            -alias bonchkey -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=BonchAutoCheck,OU=IT,O=SUT,L=SPb,S=SPb,C=RU"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "ERROR: KEYSTORE_BASE64 secret is missing!" >&2
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | tr -d '\n\r ' | base64 --decode > build/release.keystore
 
           "$BUILD_TOOLS/apksigner" sign \
             --ks build/release.keystore \
-            --ks-pass pass:android \
-            --key-pass pass:android \
+            --ks-key-alias "$KEY_ALIAS" \
+            --ks-pass "env:KEYSTORE_PASSWORD" \
+            --key-pass "env:KEY_PASSWORD" \
             --out "build/apk/BonchAutoCheck-${APP_VER}.apk" \
             build/aligned.apk
 

@@ -67,6 +67,13 @@ public class BonchBackgroundDaemon extends Service {
         storage.loadLogsFromDisk();
         scheduleManager.loadCachedFromStorage(storage);
     }
+    @Override
+    public void onTimeout(int startId, int fgsType) {
+        if (storage != null) {
+            storage.addLog("Системный таймаут dataSync (Android 15) — мягкий перезапуск сервиса");
+        }
+        stopSelf(startId);
+    }
 
     public void onScanProgress(boolean scanning, String msg) {
         this.scanningSemester = scanning;
