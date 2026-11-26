@@ -74,7 +74,6 @@ jobs:
 
           "$BUILD_TOOLS/apksigner" sign \
             --ks build/release.keystore \
-            --ks-key-alias "$KEY_ALIAS" \
             --ks-pass "env:KEYSTORE_PASSWORD" \
             --key-pass "env:KEY_PASSWORD" \
             --out "build/apk/BonchAutoCheck-${APP_VER}.apk" \
