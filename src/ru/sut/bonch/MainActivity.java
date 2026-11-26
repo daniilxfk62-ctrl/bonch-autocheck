@@ -71,7 +71,9 @@ public class MainActivity extends Activity {
         UpdateChecker.checkAsync(this, storage, false);
     }
     private void applySystemBarsTheme(final boolean isLight) {
-        runOnUiThread(() -> {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
             try {
                 android.view.Window win = getWindow();
                 int bgColor = isLight ? 0xFFFFFFFF : 0xFF08080C;
@@ -91,6 +93,7 @@ public class MainActivity extends Activity {
                     win.getDecorView().setSystemUiVisibility(flags);
                 }
             } catch (Exception ignored) {}
+            }
         });
     }
     @Override
