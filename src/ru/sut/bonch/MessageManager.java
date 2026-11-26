@@ -674,8 +674,12 @@ public class MessageManager {
                     String rowPlain = cleanHtml(trInner);
                     String dateCell = cells.size() > 2 ? cells.get(2) : rowPlain;
                     Matcher dm = datePat.matcher(dateCell);
-                    if (!dm.find()) dm = datePat.matcher(rowPlain);
-                    String dateStr = dm.find() ? dm.group(1).replace('-', '.') : "";
+                    boolean foundDm = dm.find();
+                    if (!foundDm) {
+                        dm = datePat.matcher(rowPlain);
+                        foundDm = dm.find();
+                    }
+                    String dateStr = foundDm ? dm.group(1).replace('-', '.') : "";
                     Matcher sm = sizePat.matcher(rowPlain);
                     String sizeStr = sm.find() ? sm.group(1) : "Файл ЛК";
                     String authorCell = cells.size() > 1 ? cells.get(1).trim() : "";

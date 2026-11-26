@@ -558,7 +558,7 @@
 
     .pulse-ecg-live {
       fill: none;
-      stroke: url(#ecgGrad);
+      stroke: var(--accent);
       stroke-width: 2.1;
       stroke-linecap: round;
       stroke-linejoin: round;
@@ -568,7 +568,7 @@
 
     .auto-card.is-on .pulse-ecg-live {
       opacity: 1;
-      filter: drop-shadow(0 0 5px var(--accent-ring));
+      filter: drop-shadow(0 0 4px var(--accent-ring));
     }
 
     .pulse-ecg-dot {
@@ -4312,14 +4312,20 @@
           const cTeach = parts[1].trim();
           const cRoom = parts[2].trim();
           if (cSubj && sNorm && cSubj.toLowerCase() !== sNorm.toLowerCase()) return false;
-          if (cTeach && tNorm && cTeach.toLowerCase() !== tNorm.toLowerCase()) return false;
+          if (cTeach && tNorm) {
+            const cLower = cTeach.toLowerCase();
+            const tList = tNorm.toLowerCase().split(',').map(x => x.trim()).filter(Boolean);
+            if (tNorm.toLowerCase() !== cLower && !tList.includes(cLower)) return false;
+          }
           if (!cTeach && cRoom && rNorm && cRoom.toLowerCase() !== rNorm.toLowerCase()) return false;
           return true;
         }
-        const cTeach = (parts[0] || '').trim();
-        const cRoom = (parts[1] || '').trim();
-        if (cTeach && tNorm) return cTeach.toLowerCase() === tNorm.toLowerCase();
-        if (cRoom && rNorm) return cRoom.toLowerCase() === rNorm.toLowerCase();
+        const cTeach = (parts[0] || '').trim().toLowerCase();
+        const cRoom = (parts[1] || '').trim().toLowerCase();
+        if (cTeach && tNorm) {
+          return tNorm.toLowerCase().split(',').some((p) => p.trim() === cTeach);
+        }
+        if (cRoom && rNorm) return cRoom === rNorm.toLowerCase();
         return true;
       }
 
@@ -4674,6 +4680,7 @@
               <button type="button" class="full-btn secondary" id="cancelSubgroupsBtn" style="flex:1;">Позже</button>
               <button type="button" class="full-btn accent" id="saveSubgroupsBtn" style="flex:1.5;">Сохранить</button>
             </div>
+            ${HAS_BRIDGE ? '<button type="button" class="link-btn" id="rescanSubgroupsBtn" style="width:100%;margin-top:8px;height:36px;font-size:12.5px;">Обновить расписание семестра</button>' : ''}
           `);
 
           $('sheetContent').querySelectorAll('[data-sg-key]').forEach((btn) => {
@@ -4694,6 +4701,15 @@
           });
 
           $('cancelSubgroupsBtn').addEventListener('click', closeSheet);
+          const rescanSg = $('rescanSubgroupsBtn');
+          if (rescanSg) {
+            rescanSg.addEventListener('click', () => {
+              closeSheet();
+              if (!requireBackendConnected()) return;
+              window.AndroidBridge.scanSemesterNow('', '', '', '');
+              showToast('Пересканирование семестра...');
+            });
+          }
           $('saveSubgroupsBtn').addEventListener('click', () => {
             state.groupChoices = Object.assign({}, draft);
             state.subgroupsPrompted = true;
@@ -5342,24 +5358,13 @@
             </div>
             <div class="pulse-ecg-wrap" aria-hidden="true">
               <svg class="pulse-ecg-svg" viewBox="0 0 280 34" preserveAspectRatio="none">
-                <defs>
-                  <linearGradient id="ecgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stop-color="var(--accent)" stop-opacity="0" />
-                    <stop offset="55%" stop-color="var(--accent)" stop-opacity="0.35" />
-                    <stop offset="92%" stop-color="var(--accent)" stop-opacity="1" />
-                    <stop offset="100%" stop-color="var(--accent)" stop-opacity="0" />
-                  </linearGradient>
-                  <mask id="ecgSweepMask">
-                    <rect x="-120" y="0" width="120" height="34" fill="white">
-                      <animate attributeName="x" from="-120" to="280" dur="2.1s" repeatCount="indefinite" />
-                    </rect>
-                  </mask>
-                </defs>
                 <line class="pulse-ecg-grid" x1="0" y1="17" x2="280" y2="17" stroke-dasharray="3 4" />
                 <line class="pulse-ecg-flat" x1="0" y1="17" x2="280" y2="17" />
-                <path class="pulse-ecg-live" d="${ecgPath}" mask="url(#ecgSweepMask)" />
-                <circle class="pulse-ecg-dot" r="2.6">
-                  <animateMotion dur="2.1s" repeatCount="indefinite" path="${ecgPath}" />
+                <path class="pulse-ecg-live" d="${ecgPath}" pathLength="1000" stroke-dasharray="280 1000" stroke-dashoffset="280">
+                  <animate attributeName="stroke-dashoffset" from="280" to="-720" dur="2.4s" repeatCount="indefinite" />
+                </path>
+                <circle class="pulse-ecg-dot" r="2.7">
+                  <animateMotion dur="2.4s" repeatCount="indefinite" path="${ecgPath}" />
                 </circle>
               </svg>
             </div>
