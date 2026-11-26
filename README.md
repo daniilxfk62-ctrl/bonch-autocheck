@@ -78,19 +78,10 @@
 **Как перенести заметки на другое устройство?**
 Откройте «Настройки → Резервная копия заметок», скопируйте JSON и импортируйте его на новом устройстве.
 
-## Сборка из исходников
-
-Сборка выполняется без Gradle напрямую через Android SDK build-tools (`aapt2` → `javac` → `d8` → `zipalign` → `apksigner`) с помощью workflow `.github/workflows/build.yml` на **Java 17** и **Android SDK 35**.
-
-Для автоматической подписи релизов в GitHub Actions добавьте в `Settings → Secrets and variables → Actions`:
-
-- `KEYSTORE_BASE64` — файл `.keystore` в кодировке Base64
-- `KEYSTORE_PASSWORD` — пароль хранилища
-- `KEY_PASSWORD` — пароль ключа
 
 ## Команда разработки
 
 | Разработчик | Вклад | GitHub |
 | :--- | :--- | :--- |
-| **daniilxfk62-ctrl** | Изначальный бэкенд, фоновая служба автоотметки и первый релиз | [@daniilxfk62-ctrl](https://www.google.com/search?q=https://github.com/daniilxfk62-ctrl) |
-| **g1tm4estr0** | Интерфейс, дневник, сообщения, хаб предмета и порт на iPhone | [@g1tm4estr0](https://www.google.com/search?q=https://github.com/g1tm4estr0) |
+| **daniilxfk62-ctrl** | Изначальный бэкенд, фоновая служба автоотметки и первый релиз | [@daniilxfk62-ctrl](https://github.com/daniilxfk62-ctrl) |
+| **g1tm4estr0** | Интерфейс, дневник, сообщения, хаб предмета и порт на iPhone | [@g1tm4estr0](https://github.com/g1tm4estr0) |
