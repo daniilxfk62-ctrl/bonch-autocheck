@@ -1,24 +1,13 @@
-&lt;h1 align=&quot;center&quot;&gt;Pulse&lt;/h1&gt;
+# Pulse
 
-&lt;p align=&quot;center&quot;&gt;
-  &lt;strong&gt;Пары на пульсе.&lt;/strong&gt; Минималистичный клиент ЛК СПбГУТ с фоновой автоотметкой.
-&lt;/p&gt;
+**Пары на пульсе.** Минималистичный клиент ЛК СПбГУТ с фоновой автоотметкой.
 
-&lt;p align=&quot;center&quot;&gt;
-  &lt;a href=&quot;\[suspicious link removed\]&quot;&gt;&lt;img src=&quot;https://www.google.com/search?q=https://img.shields.io/badge/version-02.09.07-7C3AED%3Fstyle%3Dflat-square&quot; alt=&quot;Version 02.09.07&quot; /&gt;&lt;/a&gt;
-  &lt;a href=&quot;\[suspicious link removed\]&quot;&gt;&lt;img src=&quot;https://www.google.com/search?q=https://img.shields.io/badge/Android-7.0%252B%2520(API%252024--35)-18181B%3Fstyle%3Dflat-square&quot; alt=&quot;Android 7.0+&quot; /&gt;&lt;/a&gt;
-  &lt;a href=&quot;#версия-для-iphone&quot;&gt;&lt;img src=&quot;https://www.google.com/search?q=https://img.shields.io/badge/iPhone%2520PWA-%D0%B2%2520%D1%80%D0%B0%D0%B7%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B5-52525B%3Fstyle%3Dflat-square&quot; alt=&quot;iPhone PWA в разработке&quot; /&gt;&lt;/a&gt;
-  &lt;a href=&quot;#приватность-и-архитектура&quot;&gt;&lt;img src=&quot;https://www.google.com/search?q=https://img.shields.io/badge/%D0%B0%D1%80%D1%85%D0%B8%D1%82%D0%B5%D0%BA%D1%82%D1%83%D1%80%D0%B0-zero--server-18181B%3Fstyle%3Dflat-square&quot; alt=&quot;Zero-Server&quot; /&gt;&lt;/a&gt;
-&lt;/p&gt;
+[Version](https://www.google.com/search?q=https://github.com/daniilxfk62-ctrl/bonch-autocheck/releases/latest)
+[Android](https://www.google.com/search?q=https://github.com/daniilxfk62-ctrl/bonch-autocheck/releases/latest)
+[](#версия-для-iphone)
+[](#приватность-и-архитектура)
 
-&lt;p align=&quot;center&quot;&gt;
-  &lt;a href=&quot;\[suspicious link removed\]&quot;&gt;Скачать APK&lt;/a&gt; &amp;nbsp;·&amp;nbsp;
-  &lt;a href=&quot;#возможности&quot;&gt;Возможности&lt;/a&gt; &amp;nbsp;·&amp;nbsp;
-  &lt;a href=&quot;#приватность-и-архитектура&quot;&gt;Приватность&lt;/a&gt; &amp;nbsp;·&amp;nbsp;
-  &lt;a href=&quot;#установка&quot;&gt;Установка&lt;/a&gt; &amp;nbsp;·&amp;nbsp;
-  &lt;a href=&quot;#версия-для-iphone&quot;&gt;iPhone&lt;/a&gt; &amp;nbsp;·&amp;nbsp;
-  &lt;a href=&quot;#частые-вопросы&quot;&gt;FAQ&lt;/a&gt;
-&lt;/p&gt;
+[Скачать APK (v02.09.07)](https://www.google.com/search?q=https://github.com/daniilxfk62-ctrl/bonch-autocheck/releases/latest) · [Возможности](#возможности) · [Приватность](#приватность-и-архитектура) · [Установка](#установка) · [iPhone](#версия-для-iphone) · [FAQ](#частые-вопросы)
 
 ---
 
@@ -50,7 +39,7 @@
 
 ## Установка
 
-1. Скачайте **`BonchAutoCheck-02.09.07.apk`** из раздела \[suspicious link removed\].
+1. Скачайте **`BonchAutoCheck-02.09.07.apk`** из раздела [Releases](https://www.google.com/search?q=https://github.com/daniilxfk62-ctrl/bonch-autocheck/releases/latest) (или запасного репозитория [g1tm4estr0/bonch-autocheck](https://www.google.com/search?q=https://github.com/g1tm4estr0/bonch-autocheck/releases/latest)).
 2. Установите приложение (поддерживается Android 7.0 и выше, целевой SDK — **Android 15 / API 35**).
 3. Выдайте разрешение на уведомления и отключите оптимизацию батареи для **Pulse**, чтобы система не останавливала фоновую службу.
 4. Войдите в аккаунт `lk.sut.ru` и выберите нужные правила по предметам и подгруппам в разделе «Настройки».
@@ -77,29 +66,21 @@
 
 ## Частые вопросы
 
-&lt;details&gt;
-&lt;summary&gt;&lt;strong&gt;Сильно ли фоновая автоотметка расходует заряд?&lt;/strong&gt;&lt;/summary&gt;
-&lt;p&gt;Нет. Служба не держит экран и не опрашивает сервер постоянно — между парами она находится в режиме ожидания и активируется только к началу выбранных занятий. С 23:00 до 07:00 фоновая синхронизация приостанавливается.&lt;/p&gt;
-&lt;/details&gt;
+**Сильно ли фоновая автоотметка расходует заряд?**
+Нет. Служба не держит экран и не опрашивает сервер постоянно — между парами она находится в режиме ожидания и активируется только к началу выбранных занятий. С 23:00 до 07:00 фоновая синхронизация приостанавливается.
 
-&lt;details&gt;
-&lt;summary&gt;&lt;strong&gt;Сбрасывается ли сессия в ЛК на компьютере?&lt;/strong&gt;&lt;/summary&gt;
-&lt;p&gt;Сайт &lt;code&gt;lk.sut.ru&lt;/code&gt; поддерживает только одну активную сессию одновременно. Pulse переиспользует сохранённые cookies, но вход в ЛК с ПК сбрасывает сессию на телефоне — при следующей проверке Pulse снова авторизуется.&lt;/p&gt;
-&lt;/details&gt;
+**Сбрасывается ли сессия в ЛК на компьютере?**
+Сайт `lk.sut.ru` поддерживает только одну активную сессию одновременно. Pulse переиспользует сохранённые cookies, но вход в ЛК с ПК сбрасывает сессию на телефоне — при следующей проверке Pulse снова авторизуется.
 
-&lt;details&gt;
-&lt;summary&gt;&lt;strong&gt;Почему при первом входе расписание загружается несколько секунд?&lt;/strong&gt;&lt;/summary&gt;
-&lt;p&gt;После первого входа приложение сканирует весь семестр, дневник, сообщения и файлы напрямую с &lt;code&gt;lk.sut.ru&lt;/code&gt;. Если сервер вуза в этот момент перегружен, повторите вход или потяните экран вниз для обновления.&lt;/p&gt;
-&lt;/details&gt;
+**Почему при первом входе расписание загружается несколько секунд?**
+После первого входа приложение сканирует весь семестр, дневник, сообщения и файлы напрямую с `lk.sut.ru`. Если сервер вуза в этот момент перегружен, повторите вход или потяните экран вниз для обновления.
 
-&lt;details&gt;
-&lt;summary&gt;&lt;strong&gt;Как перенести заметки на другое устройство?&lt;/strong&gt;&lt;/summary&gt;
-&lt;p&gt;Откройте «Настройки → Резервная копия заметок», скопируйте JSON и импортируйте его на новом устройстве.&lt;/p&gt;
-&lt;/details&gt;
+**Как перенести заметки на другое устройство?**
+Откройте «Настройки → Резервная копия заметок», скопируйте JSON и импортируйте его на новом устройстве.
 
 ## Сборка из исходников
 
-Сборка выполняется без Gradle напрямую через Android SDK build-tools (`aapt2` → `javac` → `d8` → `zipalign` → `apksigner`) с помощью workflow [.github/workflows/build.yml](https://www.google.com/search?q=.github/workflows/build.yml) на **Java 17** и **Android SDK 35**.
+Сборка выполняется без Gradle напрямую через Android SDK build-tools (`aapt2` → `javac` → `d8` → `zipalign` → `apksigner`) с помощью workflow `.github/workflows/build.yml` на **Java 17** и **Android SDK 35**.
 
 Для автоматической подписи релизов в GitHub Actions добавьте в `Settings → Secrets and variables → Actions`:
 
