@@ -3,6 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" id="metaThemeColor" content="#ffffff" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Pulse — Автоотметка</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -223,23 +225,25 @@
       flex-direction: column;
       opacity: 0;
       pointer-events: none;
-      transform: translate3d(26px, 0, 0) scale(0.985);
-      transition: opacity 0.28s var(--spring), transform 0.4s var(--spring);
+      transform: translate3d(22px, 0, 0);
+      transition: opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1), transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
       will-change: transform, opacity;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
     }
 
     .tab-view.from-left {
-      transform: translate3d(-26px, 0, 0) scale(0.985);
+      transform: translate3d(-22px, 0, 0);
     }
 
     .tab-view.from-right {
-      transform: translate3d(26px, 0, 0) scale(0.985);
+      transform: translate3d(22px, 0, 0);
     }
 
     .tab-view.active {
       opacity: 1;
       pointer-events: auto;
-      transform: translate3d(0, 0, 0) scale(1);
+      transform: translate3d(0, 0, 0);
     }
 
     .scroll-area {
@@ -5246,6 +5250,12 @@
           effective = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
         }
         document.documentElement.setAttribute('data-theme', effective);
+        const isLight = effective !== 'dark';
+        const metaTheme = $('metaThemeColor');
+        if (metaTheme) metaTheme.setAttribute('content', isLight ? '#ffffff' : '#08080c');
+        if (HAS_BRIDGE && window.AndroidBridge && typeof window.AndroidBridge.setSystemBarsTheme === 'function') {
+          try { window.AndroidBridge.setSystemBarsTheme(isLight); } catch (e) {}
+        }
         const iconSvg = effective === 'dark'
           ? '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>'
           : '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>';
@@ -8731,6 +8741,7 @@
         clearSwipeInlineStyles();
 
         const t = e.touches[0];
+        if (t.clientX < 22 || t.clientX > (window.innerWidth || 360) - 22) return;
         swipe.active = true;
         swipe.axis = null;
         swipe.startX = t.clientX;
@@ -8839,32 +8850,34 @@
         const fastFlick = Math.abs(swipe.vx) > 0.42 && Math.sign(swipe.vx) === Math.sign(offsetX);
         const shouldSwitch = hasNeighbor && (Math.abs(offsetX) > w * 0.24 || fastFlick);
 
-        const springTr = 'transform 0.36s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1)';
+        const springTr = 'transform 0.38s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
+        if (curEl) void curEl.offsetWidth;
+        if (nbEl) void nbEl.offsetWidth;
         if (ind) ind.style.transition = '';
 
         if (shouldSwitch) {
           const exitX = offsetX < 0 ? -w : w;
           if (curEl) {
             curEl.style.transition = springTr;
-            curEl.style.transform = `translate3d(${exitX}px, 0, 0) scale(0.982)`;
+            curEl.style.transform = `translate3d(${exitX}px, 0, 0)`;
             curEl.style.opacity = '0';
           }
           if (nbEl) {
             nbEl.style.transition = springTr;
-            nbEl.style.transform = 'translate3d(0, 0, 0) scale(1)';
+            nbEl.style.transform = 'translate3d(0, 0, 0)';
             nbEl.style.opacity = '1';
           }
           switchTab(TAB_ORDER[swipe.neighborIdx], true);
         } else {
           if (curEl) {
             curEl.style.transition = springTr;
-            curEl.style.transform = 'translate3d(0, 0, 0) scale(1)';
+            curEl.style.transform = 'translate3d(0, 0, 0)';
             curEl.style.opacity = '1';
           }
           if (nbEl) {
             const backX = offsetX < 0 ? w : -w;
             nbEl.style.transition = springTr;
-            nbEl.style.transform = `translate3d(${backX}px, 0, 0) scale(0.982)`;
+            nbEl.style.transform = `translate3d(${backX}px, 0, 0)`;
             nbEl.style.opacity = '0';
           }
           updateDockIndicator(swipe.curIdx);

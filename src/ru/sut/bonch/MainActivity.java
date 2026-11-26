@@ -70,7 +70,29 @@ public class MainActivity extends Activity {
         webView.loadUrl("file:///android_asset/index.html");
         UpdateChecker.checkAsync(this, storage, false);
     }
-
+    private void applySystemBarsTheme(final boolean isLight) {
+        runOnUiThread(() -> {
+            try {
+                android.view.Window win = getWindow();
+                int bgColor = isLight ? 0xFFFFFFFF : 0xFF08080C;
+                win.setStatusBarColor(bgColor);
+                win.setNavigationBarColor(bgColor);
+                if (Build.VERSION.SDK_INT >= 30) {
+                    android.view.WindowInsetsController ctrl = win.getInsetsController();
+                    if (ctrl != null) {
+                        int mask = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS
+                                 | android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS;
+                        ctrl.setSystemBarsAppearance(isLight ? mask : 0, mask);
+                    }
+                } else if (Build.VERSION.SDK_INT >= 23) {
+                    int flags = win.getDecorView().getSystemUiVisibility();
+                    if (isLight) flags |= android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                    else flags &= ~android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+                    win.getDecorView().setSystemUiVisibility(flags);
+                }
+            } catch (Exception ignored) {}
+        });
+    }
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         if (requestCode == FILE_CHOOSER_REQ_CODE) {
@@ -287,6 +309,11 @@ public class MainActivity extends Activity {
         @JavascriptInterface
         public void saveFullSettings(String login, String password, String intervalStr, String mode, String autoUpdateHours) {
             storage.saveUserConfigFull(login, password, intervalStr, mode, autoUpdateHours);
+        }
+
+        @JavascriptInterface
+        public void setSystemBarsTheme(boolean isLight) {
+            applySystemBarsTheme(isLight);
         }
 
         @JavascriptInterface
