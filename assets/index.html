@@ -585,6 +585,11 @@
       opacity: 1;
     }
 
+    .auto-card:not(.is-on) .pulse-ecg-dot,
+    .auto-card:not(.is-on) .pulse-ecg-live {
+      display: none;
+    }
+
     .auto-toggle-btn:active {
       transform: scale(0.91);
     }
@@ -1776,8 +1781,17 @@
       align-items: flex-start;
       gap: 8px;
       font-size: 13px;
-      line-height: 1.38;
+      line-height: 1.4;
       color: var(--text);
+      min-width: 0;
+    }
+
+    .day-note-text {
+      flex: 1;
+      min-width: 0;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
 
     .day-note-dot {
@@ -1789,15 +1803,87 @@
       flex-shrink: 0;
     }
 
+    .day-notes-more-btn {
+      align-self: flex-start;
+      margin-top: 2px;
+      height: 26px;
+      padding: 0 11px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface-elevated);
+      color: var(--accent);
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: transform 0.18s var(--spring-bounce), background-color 0.18s ease;
+    }
+
+    .day-notes-more-btn:active {
+      transform: scale(0.92);
+    }
+
+    .notes-sheet-list {
+      flex: 1;
+      min-height: 80px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+      padding-right: 2px;
+      scrollbar-width: none;
+    }
+
+    .notes-sheet-list::-webkit-scrollbar {
+      display: none;
+    }
+
     .note-sheet-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       justify-content: space-between;
       gap: 10px;
       padding: 11px 13px;
       border-radius: 14px;
       background: var(--surface);
       border: 1px solid var(--border);
+      transition: border-color 0.2s ease, background-color 0.2s ease;
+    }
+
+    .note-sheet-row.is-editing {
+      border-color: var(--accent-ring);
+      background: var(--accent-soft);
+    }
+
+    .note-sheet-text {
+      font-size: 13.5px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .note-edit-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface-elevated);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: transform 0.18s var(--spring-bounce), color 0.18s ease;
+    }
+
+    .note-edit-btn:active {
+      transform: scale(0.88);
     }
 
     .note-del-btn {
@@ -1812,6 +1898,142 @@
       justify-content: center;
       cursor: pointer;
       flex-shrink: 0;
+    }
+
+    .tg-note-composer {
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+
+    .tg-edit-banner {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 10px;
+      border-radius: 12px;
+      background: var(--accent-soft);
+      border-left: 3px solid var(--accent);
+    }
+
+    .tg-edit-banner-body {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .tg-edit-banner-title {
+      font-size: 11.5px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    .tg-edit-banner-preview {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .tg-note-bar {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+    }
+
+    .tg-note-input-wrap {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      padding: 9px 13px;
+      border-radius: 20px;
+      border: 1px solid var(--border-strong);
+      background: var(--surface);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .tg-note-input-wrap:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .tg-note-textarea {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 14px;
+      line-height: 1.38;
+      resize: none;
+      max-height: 110px;
+      overflow-y: auto;
+      padding: 0;
+    }
+
+    .tg-note-textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    .tg-note-counter {
+      font-size: 10.5px;
+      font-weight: 600;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      padding-bottom: 1px;
+    }
+
+    .tg-note-counter.is-over {
+      color: var(--danger);
+    }
+
+    .tg-note-chips {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .tg-note-chips .toggle-chip {
+      height: 27px;
+      padding: 0 10px;
+      font-size: 11.5px;
+    }
+
+    .note-meta-pill.pin-on {
+      background: var(--warn-soft);
+      color: var(--warn);
+    }
+
+    .accent-swatches {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .accent-swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: transform 0.2s var(--spring-bounce), box-shadow 0.2s ease;
+    }
+
+    .accent-swatch:active {
+      transform: scale(0.88);
+    }
+
+    .accent-swatch.active {
+      box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text);
     }
 
     .avatar.is-profile {
@@ -3269,6 +3491,30 @@
       pointer-events: auto;
     }
 
+    .onboard-overlay.show-features .onboard-page.page-welcome {
+      transform: translate3d(-26%, 0, 0);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .onboard-page.page-features {
+      transform: translate3d(100%, 0, 0);
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .onboard-overlay.show-features .onboard-page.page-features {
+      transform: translate3d(0, 0, 0);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .welcome-sub-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
     .onboard-page.page-welcome {
       padding: max(14px, env(safe-area-inset-top)) 18px max(16px, env(safe-area-inset-bottom));
     }
@@ -3869,10 +4115,16 @@
 
             <div class="welcome-actions reveal reveal-d6">
               <button class="full-btn" id="startAppBtn">Начать</button>
-              <button class="link-btn" id="openDetailsBtn">
-                Как это работает и разработчики
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
-              </button>
+              <div class="welcome-sub-actions">
+                <button class="link-btn" id="openFeaturesBtn">
+                  Возможности
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+                <button class="link-btn" id="openDetailsBtn">
+                  О проекте
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -3947,7 +4199,99 @@
             <div class="settings-group" id="onboardCreditsGroup"></div>
 
             <div style="margin-top:auto;padding-top:8px;">
-              <button class="full-btn" id="finishDetailsBtn">Всё понятно — перейти в приложение</button>
+              <button class="full-btn" id="finishDetailsBtn">Перейти</button>
+            </div>
+          </div>
+
+          <!-- Page 3: Features Overview -->
+          <div class="onboard-page page-features">
+            <div class="onboard-top">
+              <button class="back-pill" id="backFromFeaturesBtn">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                Назад
+              </button>
+              <span class="badge accent">Фишки</span>
+            </div>
+
+            <div style="margin-bottom:14px;">
+              <h2 class="top-title" style="margin-bottom:4px;">Возможности Pulse</h2>
+              <div class="top-sub">Всё для учёбы в одном минималистичном клиенте</div>
+            </div>
+
+            <div class="pillar-list" style="margin-bottom:16px;">
+              <div class="pillar-card">
+                <div class="pillar-icon accent">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12h4l2.5-7 4 14 2.5-7H22"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Автоотметка</div>
+                  <div class="pillar-desc">Отмечает по гибким правилам для каждого предмета и типа пар с естественной задержкой.</div>
+                </div>
+              </div>
+
+              <div class="pillar-card">
+                <div class="pillar-icon" style="background:var(--warn-soft);border-color:rgba(217,119,6,0.28);color:var(--warn);">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Заметки</div>
+                  <div class="pillar-desc">Личные заметки к любому дню, напоминания ко времени и закрепление на весь день в шторке.</div>
+                </div>
+              </div>
+
+              <div class="pillar-card">
+                <div class="pillar-icon campus">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Общая информация о предмете</div>
+                  <div class="pillar-desc">Все преподаватели, ближайшие пары, файлы, посещаемость и правила на одном экране.</div>
+                </div>
+              </div>
+
+              <div class="pillar-card">
+                <div class="pillar-icon privacy">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Чаты с преподавателями и файлы группы</div>
+                  <div class="pillar-desc">Переписка с вложениями, новые сообщения преподавателям и быстрая загрузка файлов группы.</div>
+                </div>
+              </div>
+
+              <div class="pillar-card">
+                <div class="pillar-icon accent">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="m9 9.5 2 2 4-4"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Оценки и посещаемость</div>
+                  <div class="pillar-desc">Дневник со средним баллом, деталями пропусков, аттестациями и итоговым контролем.</div>
+                </div>
+              </div>
+
+              <div class="pillar-card">
+                <div class="pillar-icon campus">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Расписание</div>
+                  <div class="pillar-desc">Плавная лента по дням с цветами типов пар, выбором подгрупп и быстрой осью дней недели.</div>
+                </div>
+              </div>
+
+              <div class="pillar-card">
+                <div class="pillar-icon privacy">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+                </div>
+                <div>
+                  <div class="pillar-title">Календарь</div>
+                  <div class="pillar-desc">Весь семестр по месяцам с цветными точками пар, заметок и мгновенным переходом на дату.</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:auto;padding-top:4px;">
+              <button class="full-btn" id="finishFeaturesBtn">Начать</button>
             </div>
           </div>
         </div>
@@ -3986,7 +4330,37 @@
       const APP_BUILD = '02.09.00';
       const DEV_SECRET_PASSWORD = 'данИИл';
       const EASTER_EGG_PASSWORD = 'Данила';
+      const IVT_BONUS_PASSWORD = 'ИВТ-2612';
       const DEV_TAP_THRESHOLD = 5;
+      const NOTE_VISIBLE_LIMIT = 5;
+      const NOTE_INLINE_EXPAND_MAX = 10;
+      const ACCENT_PRESETS = {
+        purple: {
+          name: 'Pulse',
+          light: ['#7c3aed', 'rgba(124, 58, 237, 0.10)', 'rgba(124, 58, 237, 0.25)'],
+          dark: ['#9d74ff', 'rgba(157, 116, 255, 0.18)', 'rgba(157, 116, 255, 0.38)']
+        },
+        blue: {
+          name: 'Синий',
+          light: ['#007aff', 'rgba(0, 122, 255, 0.11)', 'rgba(0, 122, 255, 0.28)'],
+          dark: ['#3898ff', 'rgba(56, 152, 255, 0.18)', 'rgba(56, 152, 255, 0.38)']
+        },
+        emerald: {
+          name: 'Изумруд',
+          light: ['#059669', 'rgba(5, 150, 105, 0.11)', 'rgba(5, 150, 105, 0.28)'],
+          dark: ['#34d399', 'rgba(52, 211, 153, 0.17)', 'rgba(52, 211, 153, 0.36)']
+        },
+        amber: {
+          name: 'Янтарь',
+          light: ['#d97706', 'rgba(217, 119, 6, 0.12)', 'rgba(217, 119, 6, 0.28)'],
+          dark: ['#fbbf24', 'rgba(251, 191, 36, 0.16)', 'rgba(251, 191, 36, 0.36)']
+        },
+        mono: {
+          name: 'Моно',
+          light: ['#18181b', 'rgba(24, 24, 27, 0.09)', 'rgba(24, 24, 27, 0.24)'],
+          dark: ['#e4e4e7', 'rgba(228, 228, 231, 0.14)', 'rgba(228, 228, 231, 0.32)']
+        }
+      };
       const PRIMARY_REPO_URL = 'https://github.com/daniilxfk62-ctrl/bonch-autocheck';
       const FALLBACK_REPO_URL = 'https://github.com/g1tm4estr0/bonch-autocheck';
       const STAR_COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000; // 30 дней
@@ -4027,6 +4401,8 @@
       const INITIAL_STATE = {
         onboardingSeen: false,
         devModeUnlocked: false,
+        ivt2612Unlocked: false,
+        accentPreset: 'purple',
         firstSeenAt: 0,
         starLastDismissedAt: 0,
         dismissedUpdateVersion: '',
@@ -4112,6 +4488,8 @@
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
             onboardingSeen: !!state.onboardingSeen,
             devModeUnlocked: !!state.devModeUnlocked,
+            ivt2612Unlocked: !!state.ivt2612Unlocked,
+            accentPreset: state.accentPreset || 'purple',
             firstSeenAt: state.firstSeenAt || Date.now(),
             starLastDismissedAt: state.starLastDismissedAt || 0,
             dismissedUpdateVersion: state.dismissedUpdateVersion || '',
@@ -4135,6 +4513,7 @@
       let state = loadState();
       let toastTimer = null;
       let checkingIds = new Set();
+      let expandedNoteDates = {};
       let lastMtimes = { days: '', cat: -1, diary: -1, messages: -1, files: -1, profile: -1, teachers: -1, notes: -1 };
       let rawSemesterDays = [];
       let lessonOrderMap = {};
@@ -4693,7 +5072,7 @@
                 <span><strong>${escapeHtml(resolveFullTeacherName(o.label))}</strong><br/><span style="font-size:11px;opacity:0.75;">${escapeHtml(o.sublabel)}</span></span>
               </button>
             `).join('') + `
-              <button type="button" class="toggle-chip ${isAll ? 'active' : ''}" data-sg-key="${escapeHtml(c.key)}" data-sg-val="ALL" style="height:36px;">Показывать всех</button>
+              <button type="button" class="toggle-chip ${isAll ? 'active' : ''}" data-sg-key="${escapeHtml(c.key)}" data-sg-val="ALL" style="height:36px;">Все</button>
             `;
             return `
               <div class="rule-card">
@@ -4990,8 +5369,19 @@
         }
       }
 
+      function getAllDayNoteLimits() {
+        return state.ivt2612Unlocked
+          ? { maxCount: 2, maxChars: 200 }
+          : { maxCount: 1, maxChars: 100 };
+      }
+
+      function countAllDayNotes(dateStr, excludeId) {
+        return getNotesForDate(dateStr).filter((n) => n && n.timeMode === 'allday' && n.id !== excludeId).length;
+      }
+
       function formatNoteTimeLabel(n) {
         if (!n) return '';
+        if (n.timeMode === 'allday') return 'Весь день';
         if (n.timeMode === 'morning') return `Утром · ${n.timeStart || '08:00'}`;
         if (n.timeMode === 'range') {
           if (n.timeStart && n.timeEnd) return `${n.timeStart}–${n.timeEnd}`;
@@ -5000,23 +5390,103 @@
         return '';
       }
 
+      function renderDayNotesBoxHtml(dateStr, notes, opts) {
+        if (!Array.isArray(notes) || !notes.length) return '';
+        const o = opts || {};
+        const total = notes.length;
+        const canInlineExpand = total > NOTE_VISIBLE_LIMIT && total <= NOTE_INLINE_EXPAND_MAX;
+        const isExpanded = canInlineExpand && !!expandedNoteDates[dateStr];
+        const visibleNotes = isExpanded ? notes : notes.slice(0, NOTE_VISIBLE_LIMIT);
+
+        let moreBtnHtml = '';
+        if (total > NOTE_VISIBLE_LIMIT) {
+          if (canInlineExpand) {
+            moreBtnHtml = `<button type="button" class="day-notes-more-btn" data-toggle-notes-expand="${escapeHtml(dateStr)}">${isExpanded ? 'Скрыть' : 'Ещё'}</button>`;
+          } else {
+            moreBtnHtml = `<button type="button" class="day-notes-more-btn" data-open-notes-modal="${escapeHtml(dateStr)}" data-notes-title="${escapeHtml(o.titleLabel || dateStr)}">Ещё</button>`;
+          }
+        }
+
+        const boxIdAttr = o.id ? ` id="${escapeHtml(o.id)}"` : '';
+        const boxDataAttr = o.id ? '' : ` data-open-notes="${escapeHtml(dateStr)}" data-notes-title="${escapeHtml(o.titleLabel || dateStr)}"`;
+
+        return `
+          <div class="day-notes-box tap${o.anim ? ' anim-in' : ''}"${boxIdAttr}${boxDataAttr}>
+            <div class="day-notes-head">
+              <span>${escapeHtml(o.heading || `Заметки (${total})`)}</span>
+              <span>${escapeHtml(o.actionLabel || 'Изменить')}</span>
+            </div>
+            ${visibleNotes.map((n) => {
+              const tl = formatNoteTimeLabel(n);
+              const badgeColor = n.timeMode === 'allday' ? 'var(--warn)' : 'var(--accent)';
+              return `
+                <div class="day-note-item">
+                  <span class="day-note-dot" style="${n.timeMode === 'allday' ? 'background:var(--warn);' : ''}"></span>
+                  <span class="day-note-text">${tl ? `<strong class="tabular" style="font-size:11.5px;color:${badgeColor};margin-right:5px;">${escapeHtml(tl)}</strong>` : ''}${escapeHtml(n.text)}</span>
+                </div>
+              `;
+            }).join('')}
+            ${moreBtnHtml}
+          </div>
+        `;
+      }
+
       function addDayNote(dateStr, text, opts) {
         const clean = String(text || '').trim();
-        if (!dateStr || !clean) return;
+        if (!dateStr || !clean) return { ok: false, error: 'Введите текст заметки' };
         const o = opts || {};
+        const mode = o.timeMode || 'none';
+        if (mode === 'allday') {
+          const lim = getAllDayNoteLimits();
+          if (countAllDayNotes(dateStr, null) >= lim.maxCount) {
+            return { ok: false, error: `Макс. ${lim.maxCount} заметка «Весь день» на дату` };
+          }
+          if (clean.length > lim.maxChars) {
+            return { ok: false, error: `Макс. ${lim.maxChars} симв. для «Весь день»` };
+          }
+        }
         if (!state.dayNotes || typeof state.dayNotes !== 'object') state.dayNotes = {};
         if (!Array.isArray(state.dayNotes[dateStr])) state.dayNotes[dateStr] = [];
         state.dayNotes[dateStr].push({
           id: 'n_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
           text: clean,
-          timeMode: o.timeMode || 'none',
-          timeStart: o.timeStart || '',
-          timeEnd: o.timeEnd || '',
-          notify: !!o.notify
+          timeMode: mode,
+          timeStart: mode === 'morning' || mode === 'range' ? (o.timeStart || '') : '',
+          timeEnd: mode === 'range' ? (o.timeEnd || '') : '',
+          notify: mode === 'allday' ? true : !!o.notify
         });
         persistDayNotes();
         renderToday();
         renderSchedule();
+        return { ok: true };
+      }
+
+      function updateDayNote(dateStr, noteId, text, opts) {
+        const clean = String(text || '').trim();
+        if (!dateStr || !noteId || !clean) return { ok: false, error: 'Введите текст заметки' };
+        const list = getNotesForDate(dateStr);
+        const item = list.find((n) => n.id === noteId);
+        if (!item) return { ok: false, error: 'Заметка не найдена' };
+        const o = opts || {};
+        const mode = o.timeMode || 'none';
+        if (mode === 'allday') {
+          const lim = getAllDayNoteLimits();
+          if (countAllDayNotes(dateStr, noteId) >= lim.maxCount) {
+            return { ok: false, error: `Макс. ${lim.maxCount} заметка «Весь день» на дату` };
+          }
+          if (clean.length > lim.maxChars) {
+            return { ok: false, error: `Макс. ${lim.maxChars} симв. для «Весь день»` };
+          }
+        }
+        item.text = clean;
+        item.timeMode = mode;
+        item.timeStart = mode === 'morning' || mode === 'range' ? (o.timeStart || '') : '';
+        item.timeEnd = mode === 'range' ? (o.timeEnd || '') : '';
+        item.notify = mode === 'allday' ? true : !!o.notify;
+        persistDayNotes();
+        renderToday();
+        renderSchedule();
+        return { ok: true };
       }
 
       function toggleDayNoteNotify(dateStr, noteId) {
@@ -5038,6 +5508,7 @@
         state.dayNotes[dateStr] = state.dayNotes[dateStr].filter((n) => n.id !== noteId);
         if (!state.dayNotes[dateStr].length) {
           delete state.dayNotes[dateStr];
+          delete expandedNoteDates[dateStr];
         }
         persistDayNotes();
         renderToday();
@@ -5050,78 +5521,172 @@
         let draftStart = '08:00';
         let draftEnd = '10:00';
         let draftNotify = false;
+        let editingNoteId = null;
+        let editingOrigText = '';
 
-        function renderSheetBody(preserveText) {
+        function autoSizeTextarea(ta) {
+          if (!ta) return;
+          ta.style.height = 'auto';
+          ta.style.height = Math.min(110, Math.max(20, ta.scrollHeight)) + 'px';
+        }
+
+        function renderSheetBody(preserveText, focusInput) {
           const notes = getNotesForDate(dateStr);
+          const lim = getAllDayNoteLimits();
+          const curText = preserveText || '';
+          const isAllDay = draftMode === 'allday';
+
           const listHtml = notes.length
-            ? `<div class="diary-detail-list">${notes.map((n) => {
+            ? `<div class="notes-sheet-list" id="notesSheetList">${notes.map((n) => {
                 const tLabel = formatNoteTimeLabel(n);
+                const isEditingRow = editingNoteId === n.id;
+                const isPin = n.timeMode === 'allday';
                 const metaHtml = (tLabel || n.notify)
-                  ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px;">
-                      ${tLabel ? `<span class="note-meta-pill tabular">${escapeHtml(tLabel)}</span>` : ''}
-                      ${n.notify ? '<span class="note-meta-pill notify-on">🔔 Уведомление</span>' : ''}
+                  ? `<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:4px;">
+                      ${tLabel ? `<span class="note-meta-pill tabular ${isPin ? 'pin-on' : ''}">${escapeHtml(tLabel)}</span>` : ''}
+                      ${n.notify ? `<span class="note-meta-pill ${isPin ? 'pin-on' : 'notify-on'}">${isPin ? '📌 В шторке' : '🔔 Пуш'}</span>` : ''}
                     </div>`
                   : '';
                 return `
-                  <div class="note-sheet-row">
+                  <div class="note-sheet-row ${isEditingRow ? 'is-editing' : ''}">
                     <div style="min-width:0;flex:1;">
-                      <div style="font-size:13.5px;line-height:1.38;word-break:break-word;">${escapeHtml(n.text)}</div>
+                      <div class="note-sheet-text">${escapeHtml(n.text)}</div>
                       ${metaHtml}
                     </div>
-                    <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-                      <button type="button" class="icon-btn sm" data-toggle-note-notify="${escapeHtml(n.id)}" aria-label="Уведомление" title="${n.notify ? 'Выключить уведомление' : 'Включить уведомление'}" style="width:28px;height:28px;${n.notify ? 'background:var(--accent-soft);border-color:var(--accent-ring);color:var(--accent);' : ''}">
+                    <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+                      <button type="button" class="note-edit-btn" data-edit-note="${escapeHtml(n.id)}" aria-label="Изменить" title="Изменить">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                      </button>
+                      <button type="button" class="icon-btn sm" data-toggle-note-notify="${escapeHtml(n.id)}" aria-label="Уведомление" title="${n.notify ? 'Выкл пуш' : 'Вкл пуш'}" style="width:28px;height:28px;${n.notify ? 'background:var(--accent-soft);border-color:var(--accent-ring);color:var(--accent);' : ''}">
                         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
                       </button>
-                      <button type="button" class="note-del-btn" data-del-note="${escapeHtml(n.id)}" aria-label="Удалить заметку">✕</button>
+                      <button type="button" class="note-del-btn" data-del-note="${escapeHtml(n.id)}" aria-label="Удалить">✕</button>
                     </div>
                   </div>
                 `;
               }).join('')}</div>`
-            : `<div class="empty-day" style="padding:14px 8px;">
+            : `<div class="notes-sheet-list" id="notesSheetList"><div class="empty-day" style="padding:18px 8px;">
                 <strong>Заметок нет</strong>
-                <span>Добавьте заметку со временем и напоминанием — она появится в расписании и календаре.</span>
-              </div>`;
+                <span>Напишите заметку ниже — она появится в расписании и календаре.</span>
+              </div></div>`;
 
           const timeInputsHtml = draftMode === 'morning'
-            ? `<div class="note-time-row"><span class="row-sub" style="margin:0;">Время утром:</span><input type="time" class="note-time-input tabular" id="noteTimeStart" value="${escapeHtml(draftStart)}" /></div>`
+            ? `<div class="note-time-row" style="margin-top:0;"><span class="row-sub" style="margin:0;">Утром:</span><input type="time" class="note-time-input tabular" id="noteTimeStart" value="${escapeHtml(draftStart)}" /></div>`
             : (draftMode === 'range'
-                ? `<div class="note-time-row">
+                ? `<div class="note-time-row" style="margin-top:0;">
                     <input type="time" class="note-time-input tabular" id="noteTimeStart" value="${escapeHtml(draftStart)}" aria-label="Начало" />
                     <span class="row-sub" style="margin:0;">—</span>
                     <input type="time" class="note-time-input tabular" id="noteTimeEnd" value="${escapeHtml(draftEnd)}" aria-label="Конец" />
                   </div>`
                 : '');
 
+          const editBannerHtml = editingNoteId
+            ? `<div class="tg-edit-banner">
+                <div class="tg-edit-banner-body">
+                  <div class="tg-edit-banner-title">Изменение</div>
+                  <div class="tg-edit-banner-preview">${escapeHtml(editingOrigText)}</div>
+                </div>
+                <button type="button" id="cancelEditNoteBtn" aria-label="Отмена" style="border:none;background:transparent;color:var(--text-secondary);font-size:15px;padding:2px 4px;cursor:pointer;">✕</button>
+              </div>`
+            : '';
+
+          const pinnedCount = countAllDayNotes(dateStr, editingNoteId);
+          const pinHintHtml = isAllDay
+            ? `<div class="row-sub" style="margin:0;font-size:11px;">Висит в шторке весь день · ${pinnedCount}/${lim.maxCount} на дату · до ${lim.maxChars} симв.${state.ivt2612Unlocked ? ' (ИВТ-2612)' : ''}</div>`
+            : '';
+
+          const counterHtml = isAllDay
+            ? `<span class="tg-note-counter tabular ${curText.trim().length > lim.maxChars ? 'is-over' : ''}" id="noteCharCounter">${curText.trim().length}/${lim.maxChars}</span>`
+            : '';
+
+          const sendIcon = editingNoteId
+            ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+            : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>';
+
           openSheet(`
-            <div class="sheet-title">Заметки</div>
-            <div class="sheet-sub">${escapeHtml(titleLabel || dateStr)}</div>
-            ${listHtml}
-            <form id="dayNoteForm" style="padding:12px;border-radius:16px;background:var(--surface);border:1px solid var(--border);">
-              <div class="field" style="margin-bottom:8px;">
-                <input type="text" id="dayNoteInput" placeholder="Текст заметки..." autocomplete="off" value="${escapeHtml(preserveText || '')}" />
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px;flex-shrink:0;">
+              <div>
+                <div class="sheet-title" style="margin-bottom:0;">Заметки</div>
+                <div class="sheet-sub" style="margin-bottom:8px;">${escapeHtml(titleLabel || dateStr)}</div>
               </div>
-              <div class="chip-group" style="margin-top:0;">
-                <button type="button" class="toggle-chip ${draftMode === 'none' ? 'active' : ''}" data-note-mode="none">Без времени</button>
+              <span class="badge tabular">${notes.length}</span>
+            </div>
+            ${listHtml}
+            <form class="tg-note-composer" id="dayNoteForm">
+              ${editBannerHtml}
+              <div class="tg-note-chips">
+                <button type="button" class="toggle-chip ${draftMode === 'none' ? 'active' : ''}" data-note-mode="none">Без</button>
                 <button type="button" class="toggle-chip ${draftMode === 'morning' ? 'active' : ''}" data-note-mode="morning">Утром</button>
                 <button type="button" class="toggle-chip ${draftMode === 'range' ? 'active' : ''}" data-note-mode="range">С — до</button>
+                <button type="button" class="toggle-chip ${draftMode === 'allday' ? 'active' : ''}" data-note-mode="allday">Весь день</button>
+                ${!isAllDay ? `<button type="button" class="toggle-chip ${draftNotify ? 'active' : ''}" id="noteNotifyToggleChip" title="Уведомление">🔔</button>` : ''}
               </div>
               ${timeInputsHtml}
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">
-                <div>
-                  <div class="row-title" style="font-size:13px;">Напомнить уведомлением</div>
-                  <div class="row-sub" style="font-size:11px;">${draftNotify ? (draftMode === 'range' ? 'В начале интервала' : 'Утром в ' + draftStart) : 'Без пуш-уведомления'}</div>
+              ${pinHintHtml}
+              <div class="tg-note-bar">
+                <div class="tg-note-input-wrap">
+                  <textarea rows="1" class="tg-note-textarea" id="dayNoteInput" placeholder="${editingNoteId ? 'Изменить заметку...' : 'Заметка...'}">${escapeHtml(curText)}</textarea>
+                  ${counterHtml}
                 </div>
-                <button type="button" class="switch" id="noteNotifySwitch" role="switch" aria-checked="${draftNotify}" style="transform:scale(0.86);transform-origin:right center;"></button>
+                <button type="submit" class="send-btn" aria-label="${editingNoteId ? 'Сохранить' : 'Добавить'}">${sendIcon}</button>
               </div>
-              <button type="submit" class="full-btn" style="height:40px;margin-top:10px;font-size:13.5px;">Добавить заметку</button>
             </form>
-          `);
+          `, { tall: true });
+
+          const ta = $('dayNoteInput');
+          autoSizeTextarea(ta);
+          if (ta) {
+            ta.addEventListener('input', () => {
+              autoSizeTextarea(ta);
+              const cc = $('noteCharCounter');
+              if (cc) {
+                const len = ta.value.trim().length;
+                cc.textContent = `${len}/${lim.maxChars}`;
+                cc.classList.toggle('is-over', len > lim.maxChars);
+              }
+            });
+            if (focusInput) {
+              setTimeout(() => {
+                ta.focus();
+                ta.selectionStart = ta.selectionEnd = ta.value.length;
+              }, 40);
+            }
+          }
+
+          $('sheetContent').querySelectorAll('[data-edit-note]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+              const target = getNotesForDate(dateStr).find((x) => x.id === btn.dataset.editNote);
+              if (!target) return;
+              editingNoteId = target.id;
+              editingOrigText = target.text;
+              draftMode = target.timeMode || 'none';
+              draftStart = target.timeStart || (draftMode === 'range' ? '09:00' : '08:00');
+              draftEnd = target.timeEnd || '10:30';
+              draftNotify = draftMode === 'allday' ? true : !!target.notify;
+              renderSheetBody(target.text, true);
+            });
+          });
+
+          const cancelEdit = $('cancelEditNoteBtn');
+          if (cancelEdit) {
+            cancelEdit.addEventListener('click', () => {
+              editingNoteId = null;
+              editingOrigText = '';
+              draftMode = 'none';
+              draftNotify = false;
+              renderSheetBody('');
+            });
+          }
 
           $('sheetContent').querySelectorAll('[data-del-note]').forEach((btn) => {
             btn.addEventListener('click', () => {
+              if (editingNoteId === btn.dataset.delNote) {
+                editingNoteId = null;
+                editingOrigText = '';
+              }
               deleteDayNote(dateStr, btn.dataset.delNote);
               renderSheetBody($('dayNoteInput') ? $('dayNoteInput').value : '');
-              showToast('Заметка удалена');
+              showToast('Удалено');
             });
           });
 
@@ -5129,25 +5694,27 @@
             btn.addEventListener('click', () => {
               toggleDayNoteNotify(dateStr, btn.dataset.toggleNoteNotify);
               renderSheetBody($('dayNoteInput') ? $('dayNoteInput').value : '');
-              showToast('Уведомление обновлено');
+              showToast('Обновлено');
             });
           });
 
           $('sheetContent').querySelectorAll('[data-note-mode]').forEach((btn) => {
             btn.addEventListener('click', () => {
-              const curTxt = $('dayNoteInput') ? $('dayNoteInput').value : '';
+              const curVal = $('dayNoteInput') ? $('dayNoteInput').value : '';
               draftMode = btn.dataset.noteMode;
               if (draftMode === 'morning') {
-                draftStart = '08:00';
+                draftStart = draftStart || '08:00';
                 draftNotify = true;
               } else if (draftMode === 'range') {
-                draftStart = '09:00';
-                draftEnd = '10:30';
+                draftStart = draftStart || '09:00';
+                draftEnd = draftEnd || '10:30';
+                draftNotify = true;
+              } else if (draftMode === 'allday') {
                 draftNotify = true;
               } else {
                 draftNotify = false;
               }
-              renderSheetBody(curTxt);
+              renderSheetBody(curVal, true);
             });
           });
 
@@ -5156,33 +5723,46 @@
           const teEl = $('noteTimeEnd');
           if (teEl) teEl.addEventListener('change', (e) => { draftEnd = e.target.value || '10:00'; });
 
-          $('noteNotifySwitch').addEventListener('click', () => {
-            const curTxt = $('dayNoteInput') ? $('dayNoteInput').value : '';
-            draftNotify = !draftNotify;
-            if (draftNotify && draftMode === 'none') {
-              draftMode = 'morning';
-              draftStart = '08:00';
-            }
-            renderSheetBody(curTxt);
-          });
+          const notifyChip = $('noteNotifyToggleChip');
+          if (notifyChip) {
+            notifyChip.addEventListener('click', () => {
+              const curVal = $('dayNoteInput') ? $('dayNoteInput').value : '';
+              draftNotify = !draftNotify;
+              if (draftNotify && draftMode === 'none') {
+                draftMode = 'morning';
+                draftStart = '08:00';
+              }
+              renderSheetBody(curVal, true);
+            });
+          }
 
           $('dayNoteForm').addEventListener('submit', (e) => {
             e.preventDefault();
             const val = $('dayNoteInput').value.trim();
             if (!val) {
-              showToast('Введите текст заметки', 'error');
+              showToast('Введите текст', 'error');
               return;
             }
-            addDayNote(dateStr, val, {
+            const payload = {
               timeMode: draftMode,
-              timeStart: draftMode === 'none' ? '' : draftStart,
+              timeStart: draftMode === 'morning' || draftMode === 'range' ? draftStart : '',
               timeEnd: draftMode === 'range' ? draftEnd : '',
-              notify: draftNotify
-            });
+              notify: draftMode === 'allday' ? true : draftNotify
+            };
+            const res = editingNoteId
+              ? updateDayNote(dateStr, editingNoteId, val, payload)
+              : addDayNote(dateStr, val, payload);
+            if (!res.ok) {
+              showToast(res.error || 'Ошибка', 'error');
+              return;
+            }
+            const wasEdit = !!editingNoteId;
+            editingNoteId = null;
+            editingOrigText = '';
             draftMode = 'none';
             draftNotify = false;
             renderSheetBody('');
-            showToast('Заметка добавлена', 'success');
+            showToast(wasEdit ? 'Сохранено' : 'Добавлено', 'success');
           });
         }
 
@@ -5251,6 +5831,11 @@
         }
         document.documentElement.setAttribute('data-theme', effective);
         const isLight = effective !== 'dark';
+        const presetKey = state.ivt2612Unlocked && ACCENT_PRESETS[state.accentPreset] ? state.accentPreset : 'purple';
+        const palette = ACCENT_PRESETS[presetKey][isLight ? 'light' : 'dark'];
+        document.documentElement.style.setProperty('--accent', palette[0]);
+        document.documentElement.style.setProperty('--accent-soft', palette[1]);
+        document.documentElement.style.setProperty('--accent-ring', palette[2]);
         const metaTheme = $('metaThemeColor');
         if (metaTheme) metaTheme.setAttribute('content', isLight ? '#ffffff' : '#08080c');
         if (HAS_BRIDGE && window.AndroidBridge && typeof window.AndroidBridge.setSystemBarsTheme === 'function') {
@@ -5402,6 +5987,7 @@
               <svg class="pulse-ecg-svg" viewBox="0 0 280 34" preserveAspectRatio="none">
                 <line class="pulse-ecg-grid" x1="0" y1="17" x2="280" y2="17" stroke-dasharray="3 4" />
                 <line class="pulse-ecg-flat" x1="0" y1="17" x2="280" y2="17" />
+                ${state.autoCheckEnabled ? `
                 <path class="pulse-ecg-live" d="${ecgPath}" pathLength="1000" stroke-dasharray="280 1000" stroke-dashoffset="280">
                   <animate attributeName="stroke-dashoffset" from="280" to="-1000" dur="3.0s" repeatCount="indefinite" />
                 </path>
@@ -5409,6 +5995,7 @@
                   <animateMotion dur="3.0s" repeatCount="indefinite" path="${ecgPath}" calcMode="linear" keyTimes="0;0.78125;1" keyPoints="0;1;1" />
                   <animate attributeName="opacity" values="0;1;1;0;0" keyTimes="0;0.03;0.76;0.82;1" dur="3.0s" repeatCount="indefinite" />
                 </circle>
+                ` : ''}
               </svg>
             </div>
           </div>
@@ -5473,23 +6060,13 @@
         const todayDateStr = getTodayDateStr();
         const todayNotes = getNotesForDate(todayDateStr);
         if (todayNotes.length) {
-          html += `
-            <div class="day-notes-box tap anim-in" id="todayNotesBox">
-              <div class="day-notes-head">
-                <span>Заметки на сегодня (${todayNotes.length})</span>
-                <span>Изменить</span>
-              </div>
-              ${todayNotes.map((n) => {
-                const tl = formatNoteTimeLabel(n);
-                return `
-                  <div class="day-note-item">
-                    <span class="day-note-dot"></span>
-                    <span>${tl ? `<strong class="tabular" style="font-size:11.5px;color:var(--accent);margin-right:5px;">${escapeHtml(tl)}</strong>` : ''}${escapeHtml(n.text)}</span>
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          `;
+          html += renderDayNotesBoxHtml(todayDateStr, todayNotes, {
+            id: 'todayNotesBox',
+            anim: true,
+            heading: `Заметки (${todayNotes.length})`,
+            actionLabel: 'Изменить',
+            titleLabel: 'Сегодня · ' + todayDateStr
+          });
         }
 
         html += `
@@ -5604,7 +6181,21 @@
         });
         const todayNotesBox = $('todayNotesBox');
         if (todayNotesBox) {
-          todayNotesBox.addEventListener('click', () => {
+          todayNotesBox.addEventListener('click', (e) => {
+            const expBtn = e.target.closest('[data-toggle-notes-expand]');
+            if (expBtn) {
+              e.stopPropagation();
+              const ds = expBtn.dataset.toggleNotesExpand;
+              expandedNoteDates[ds] = !expandedNoteDates[ds];
+              renderToday();
+              return;
+            }
+            const modBtn = e.target.closest('[data-open-notes-modal]');
+            if (modBtn) {
+              e.stopPropagation();
+              openDayNotesSheet(modBtn.dataset.openNotesModal, modBtn.dataset.notesTitle);
+              return;
+            }
             openDayNotesSheet(getTodayDateStr(), 'Сегодня · ' + getTodayDateStr());
           });
         }
@@ -5978,9 +6569,9 @@
           <div style="display:flex;flex-direction:column;gap:8px;">
             ${isChecked
               ? `<button class="full-btn secondary" id="sheetDoneBtn">Отмечен${cls.checkedAt ? ' в ' + escapeHtml(cls.checkedAt) : ''}</button>`
-              : (cls.isPast ? '' : `<button class="full-btn" id="sheetCheckBtn">Отметиться сейчас</button>`)
+              : (cls.isPast ? '' : `<button class="full-btn" id="sheetCheckBtn">Отметиться</button>`)
             }
-            <button class="full-btn secondary" id="sheetOpenHubBtn">Подробнее о предмете</button>
+            <button class="full-btn secondary" id="sheetOpenHubBtn">О предмете</button>
           </div>
         `);
 
@@ -6191,23 +6782,11 @@
 
           const dayNotes = getNotesForDate(day.dateStr);
           const dayNotesTitle = `${day.weekday}, ${day.num} ${day.month}`;
-          const notesBlockHtml = dayNotes.length
-            ? `<div class="day-notes-box tap" data-open-notes="${escapeHtml(day.dateStr)}" data-notes-title="${escapeHtml(dayNotesTitle)}">
-                <div class="day-notes-head">
-                  <span>Заметки (${dayNotes.length})</span>
-                  <span>+ Добавить</span>
-                </div>
-                ${dayNotes.map((n) => {
-                  const tl = formatNoteTimeLabel(n);
-                  return `
-                    <div class="day-note-item">
-                      <span class="day-note-dot"></span>
-                      <span>${tl ? `<strong class="tabular" style="font-size:11.5px;color:var(--accent);margin-right:5px;">${escapeHtml(tl)}</strong>` : ''}${escapeHtml(n.text)}</span>
-                    </div>
-                  `;
-                }).join('')}
-              </div>`
-            : '';
+          const notesBlockHtml = renderDayNotesBoxHtml(day.dateStr, dayNotes, {
+            heading: `Заметки (${dayNotes.length})`,
+            actionLabel: '+',
+            titleLabel: dayNotesTitle
+          });
 
           return `
             <article class="day-slide" data-global-idx="${idx}">
@@ -6244,6 +6823,22 @@
             const gIdx = slide ? Number(slide.dataset.globalIdx) : state.activeGlobalDayIdx;
             const dayObj = flatDays[gIdx];
             if (l) openScheduleLessonSheet(l.subject, l.type, `${l.start}–${l.end}`, l.room, l.teacher, dayObj ? dayObj.dateStr : '', l.start);
+          });
+        });
+
+        feed.querySelectorAll('[data-toggle-notes-expand]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const ds = btn.dataset.toggleNotesExpand;
+            expandedNoteDates[ds] = !expandedNoteDates[ds];
+            renderSchedule();
+          });
+        });
+
+        feed.querySelectorAll('[data-open-notes-modal]').forEach((btn) => {
+          btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openDayNotesSheet(btn.dataset.openNotesModal, btn.dataset.notesTitle);
           });
         });
 
@@ -6299,8 +6894,8 @@
             </div>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;">
-            <button class="full-btn accent" id="sheetOpenSubjectHub">Всё о предмете</button>
-            <button class="full-btn secondary" id="sheetOpenAllRules">Все правила по предметам</button>
+            <button class="full-btn accent" id="sheetOpenSubjectHub">О предмете</button>
+            <button class="full-btn secondary" id="sheetOpenAllRules">Правила</button>
           </div>
         `);
 
@@ -6939,7 +7534,7 @@
           openSheet(`
             <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px;">
               <div class="sheet-title" style="margin-bottom:0;">Новое сообщение</div>
-              <button type="button" class="pill-btn" id="refreshTeachersBtn" style="height:28px;font-size:11.5px;">Обновить список</button>
+              <button type="button" class="pill-btn" id="refreshTeachersBtn" style="height:28px;font-size:11.5px;">Обновить</button>
             </div>
             <div class="sheet-sub" style="margin-bottom:12px;">Преподавателям текущего семестра из расписания</div>
 
@@ -6967,7 +7562,7 @@
                 <button type="button" class="full-btn secondary" id="composeAttachBtn" style="flex:0 0 48px;padding:0;" aria-label="Прикрепить файл" title="Прикрепить файл (до 5 МБ)">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
                 </button>
-                <button type="submit" class="full-btn accent" style="flex:1;">Отправить сообщение</button>
+                <button type="submit" class="full-btn accent" style="flex:1;">Отправить</button>
               </div>
             </form>
           `);
@@ -7797,7 +8392,10 @@
                 <div class="row-sub">${acc.loggedIn ? escapeHtml((acc.group ? acc.group + ' · ' : '') + (acc.email || 'lk.sut.ru')) : 'Личный кабинет lk.sut.ru'}</div>
               </div>
             </div>
-            <span class="badge ${acc.loggedIn ? 'accent' : ''}">${acc.loggedIn ? 'Активен' : 'Вход'}</span>
+            <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;">
+              ${state.ivt2612Unlocked ? '<span class="badge accent">ИВТ-2612</span>' : ''}
+              <span class="badge ${acc.loggedIn ? 'accent' : ''}">${acc.loggedIn ? 'Активен' : 'Вход'}</span>
+            </div>
           </div>
 
           <div class="section-label"><span>Автоотметка</span></div>
@@ -7902,6 +8500,19 @@
               <button class="seg-btn ${state.themeMode === 'dark' ? 'active' : ''}" data-theme-opt="dark">Тёмная</button>
               <button class="seg-btn ${state.themeMode === 'auto' ? 'active' : ''}" data-theme-opt="auto">Авто</button>
             </div>
+            ${state.ivt2612Unlocked ? `
+            <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span class="row-title" style="font-size:13px;">Акцент</span>
+                <span class="badge accent">ИВТ-2612</span>
+              </div>
+              <div class="accent-swatches">
+                ${Object.keys(ACCENT_PRESETS).map((k) => `
+                  <button type="button" class="accent-swatch ${(state.accentPreset || 'purple') === k ? 'active' : ''}" data-accent-pick="${k}" title="${ACCENT_PRESETS[k].name}" style="background:${ACCENT_PRESETS[k].light[0]};"></button>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
           </div>
 
           ${devSectionHtml}
@@ -7967,6 +8578,16 @@
             persistPulseSettingsToBridge();
             applyTheme();
             renderSettings();
+          });
+        });
+
+        container.querySelectorAll('[data-accent-pick]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            state.accentPreset = btn.dataset.accentPick;
+            saveState();
+            applyTheme();
+            renderSettings();
+            showToast(`Акцент: ${ACCENT_PRESETS[state.accentPreset].name}`);
           });
         });
 
@@ -8059,6 +8680,12 @@
             if (grp) grp.classList.add('unlock-glow');
           } else if (val === EASTER_EGG_PASSWORD) {
             openBigDiscsEasterEggSheet();
+          } else if (val.trim().toUpperCase() === IVT_BONUS_PASSWORD) {
+            state.ivt2612Unlocked = true;
+            saveState();
+            applyTheme();
+            renderSettings();
+            openIvtBonusSheet();
           } else {
             input.classList.add('is-error');
             errEl.textContent = 'Неверный пароль. Проверьте регистр символов.';
@@ -8084,6 +8711,44 @@
           <button class="full-btn secondary" id="closeDiscsEggBtn">Закрыть</button>
         `);
         $('closeDiscsEggBtn').addEventListener('click', closeSheet);
+      }
+
+      function openIvtBonusSheet() {
+        openSheet(`
+          <div style="display:flex;flex-direction:column;align-items:center;text-align:center;padding:8px 0 12px;">
+            <div class="hero-emblem" style="width:54px;height:54px;border-radius:18px;margin-bottom:12px;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+            </div>
+            <span class="badge accent" style="margin-bottom:8px;">ИВТ-2612 · Бонус</span>
+            <div class="sheet-title" style="margin-bottom:4px;">Свои люди на пульсе</div>
+            <div class="sheet-sub" style="margin-bottom:0;">Открыты расширенные лимиты и кастомизация</div>
+          </div>
+          <div class="settings-group">
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Заметки «Весь день»</div>
+                <div class="row-sub">Лимит увеличен с 1 до 2 заметок в шторке</div>
+              </div>
+              <span class="badge accent">×2</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Длина в шторке</div>
+                <div class="row-sub">До 200 символов вместо 100</div>
+              </div>
+              <span class="badge accent">200</span>
+            </div>
+            <div class="settings-row">
+              <div>
+                <div class="row-title">Цвета акцента и бейдж</div>
+                <div class="row-sub">Выбор палитры в Настройках и значок ИВТ-2612</div>
+              </div>
+              <span class="badge success">Вкл</span>
+            </div>
+          </div>
+          <button class="full-btn accent" id="closeIvtBonusBtn">Круто</button>
+        `);
+        $('closeIvtBonusBtn').addEventListener('click', closeSheet);
       }
       function openDeveloperMenuSheet() {
         const logsArr = Array.isArray(state.logs) ? state.logs : [];
@@ -8128,10 +8793,10 @@
           <div class="log-console" id="devLogConsole">${logsHtml}</div>
 
           <div style="display:flex;flex-direction:column;gap:8px;">
-            <button class="full-btn secondary" id="devTestNotifBtn">Проверить уведомление</button>
-            <button class="full-btn secondary" id="devForceSyncBtn">Принудительная синхронизация</button>
-            <button class="full-btn secondary" id="devResetOnboardBtn">Показать приветствие заново</button>
-            <button class="full-btn danger" id="devLockBtn">Скрыть меню разработчика</button>
+            <button class="full-btn secondary" id="devTestNotifBtn">Тест пуша</button>
+            <button class="full-btn secondary" id="devForceSyncBtn">Синхронизация</button>
+            <button class="full-btn secondary" id="devResetOnboardBtn">Приветствие</button>
+            <button class="full-btn danger" id="devLockBtn">Скрыть</button>
           </div>
         `);
 
@@ -8231,9 +8896,9 @@
           <div class="sheet-title">Правила по предметам</div>
           <div class="sheet-sub">Выберите, на каких типах пар отмечаться автоматически</div>
           <div class="preset-row">
-            <button class="pill-btn" id="presetAllOn">Включить все</button>
-            <button class="pill-btn" id="presetLecturesOnly">Только лекции</button>
-            <button class="pill-btn" id="presetAllOff">Выключить все</button>
+            <button class="pill-btn" id="presetAllOn">Все вкл</button>
+            <button class="pill-btn" id="presetLecturesOnly">Лекции</button>
+            <button class="pill-btn" id="presetAllOff">Все выкл</button>
           </div>
           ${cardsHtml}
         `);
@@ -8473,9 +9138,9 @@
             <div class="sheet-sub">${escapeHtml(sourceNote)} · текущая v${escapeHtml(curVer)}</div>
             ${notesHtml}
             <div style="display:flex;flex-direction:column;gap:8px;">
-              <button class="full-btn accent" id="downloadApkBtn">Скачать обновление (APK)</button>
-              <button class="full-btn secondary" id="openReleasePageBtn">Открыть релиз на GitHub</button>
-              <button class="full-btn secondary" id="dismissUpdateBtn">Напомнить позже</button>
+              <button class="full-btn accent" id="downloadApkBtn">Скачать APK</button>
+              <button class="full-btn secondary" id="openReleasePageBtn">GitHub</button>
+              <button class="full-btn secondary" id="dismissUpdateBtn">Позже</button>
             </div>
           `);
 
@@ -8628,8 +9293,8 @@
         }
         const onboard = $('onboardOverlay');
         if (onboard && onboard.classList.contains('open')) {
-          if (onboard.classList.contains('show-details')) {
-            onboard.classList.remove('show-details');
+          if (onboard.classList.contains('show-details') || onboard.classList.contains('show-features')) {
+            onboard.classList.remove('show-details', 'show-features');
             return true;
           }
           if (state.onboardingSeen) {
@@ -9038,6 +9703,7 @@
         clearInterval(onboardTimerId);
         const btnStart = $('startAppBtn');
         const btnDetails = $('finishDetailsBtn');
+        const btnFeatures = $('finishFeaturesBtn');
         const setBtns = (disabled, secs) => {
           if (btnStart) {
             btnStart.disabled = disabled;
@@ -9045,9 +9711,11 @@
           }
           if (btnDetails) {
             btnDetails.disabled = disabled;
-            btnDetails.textContent = disabled
-              ? `Всё понятно — перейти в приложение (${secs})`
-              : 'Всё понятно — перейти в приложение';
+            btnDetails.textContent = disabled ? `Перейти (${secs})` : 'Перейти';
+          }
+          if (btnFeatures) {
+            btnFeatures.disabled = disabled;
+            btnFeatures.textContent = disabled ? `Начать (${secs})` : 'Начать';
           }
         };
 
@@ -9074,6 +9742,7 @@
         const creditsHost = $('onboardCreditsGroup');
         if (creditsHost) creditsHost.innerHTML = renderCreditsRowsHtml();
         const overlay = $('onboardOverlay');
+        overlay.classList.remove('show-features');
         overlay.classList.toggle('show-details', !!toDetails);
         overlay.classList.add('open');
         overlay.setAttribute('aria-hidden', 'false');
@@ -9084,7 +9753,7 @@
         clearInterval(onboardTimerId);
         onboardTimerId = null;
         const overlay = $('onboardOverlay');
-        overlay.classList.remove('open', 'show-details');
+        overlay.classList.remove('open', 'show-details', 'show-features');
         overlay.setAttribute('aria-hidden', 'true');
         state.onboardingSeen = true;
         saveState();
@@ -9096,7 +9765,20 @@
         else showToast('Добро пожаловать в Pulse');
       });
 
-      $('openDetailsBtn').addEventListener('click', () => $('onboardOverlay').classList.add('show-details'));
+      $('openFeaturesBtn').addEventListener('click', () => {
+        $('onboardOverlay').classList.remove('show-details');
+        $('onboardOverlay').classList.add('show-features');
+      });
+      $('backFromFeaturesBtn').addEventListener('click', () => $('onboardOverlay').classList.remove('show-features'));
+      $('finishFeaturesBtn').addEventListener('click', () => {
+        closeOnboarding();
+        if (HAS_BRIDGE && !state.account.loggedIn) openAccountSheet();
+      });
+
+      $('openDetailsBtn').addEventListener('click', () => {
+        $('onboardOverlay').classList.remove('show-features');
+        $('onboardOverlay').classList.add('show-details');
+      });
       $('backToWelcomeBtn').addEventListener('click', () => $('onboardOverlay').classList.remove('show-details'));
       $('finishDetailsBtn').addEventListener('click', () => {
         closeOnboarding();
