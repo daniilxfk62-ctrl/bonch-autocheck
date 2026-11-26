@@ -181,7 +181,7 @@ public class MessageManager {
             Pattern trPat = Pattern.compile("<tr([^>]*)>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern tdPat = Pattern.compile("<t[dh][^>]*>(.*?)</t[dh]>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern linkPat = Pattern.compile("<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-            Pattern datePat = Pattern.compile("(\\d{2}\\.\\d{2}(?:\\.\\d{2,4})?(?:\\s+\\d{1,2}:\\d{2})?|\\d{1,2}:\\d{2})");
+            Pattern datePat = Pattern.compile("(\\d{2}[-.]\\d{2}(?:[-.]\\d{2,4})?(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?|\\d{1,2}:\\d{2})");
             Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.|[А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ][а-яё]+)?)");
 
             String sanitizedHtml = stripScriptsAndStyles(html);
@@ -232,7 +232,7 @@ public class MessageManager {
                 for (int i = 0; i < cells.size(); i++) {
                     Matcher dm = datePat.matcher(cells.get(i));
                     if (dm.find()) {
-                        foundDate = dm.group(1).trim();
+                        foundDate = dm.group(1).trim().replace('-', '.');
                         dateIdx = i;
                         break;
                     }
@@ -269,6 +269,7 @@ public class MessageManager {
                         continue;
                     }
                 }
+                sender = sender.replaceAll("\\s*\\([^)]*(?:сотрудник|преподавател)[^)]*\\)", "").trim();
                 if (isGarbageMessageToken(sender)) continue;
                 if (subject.isEmpty()) subject = "Личное сообщение";
 
@@ -629,7 +630,7 @@ public class MessageManager {
             Pattern trPat = Pattern.compile("<tr([^>]*)>(.*?)</tr>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern tdPat = Pattern.compile("<td[^>]*>(.*?)</td>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
             Pattern linkPat = Pattern.compile("<a[^>]+href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-            Pattern datePat = Pattern.compile("(\\d{2}\\.\\d{2}\\.\\d{2,4})");
+            Pattern datePat = Pattern.compile("(\\d{2}[-.]\\d{2}[-.]\\d{2,4}(?:\\s+\\d{1,2}:\\d{2}(?::\\d{2})?)?)");
             Pattern sizePat = Pattern.compile("(\\d+(?:[.,]\\d+)?\\s*(?:Б|КБ|МБ|ГБ|KB|MB|GB))", Pattern.CASE_INSENSITIVE);
             Pattern fioPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.|[А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ][а-яё]+(?:\\s+[А-ЯЁ][а-яё]+)?)");
 
@@ -639,6 +640,7 @@ public class MessageManager {
                 String trAttrs = trMat.group(1);
                 String trInner = trMat.group(2);
                 String rowId = extractRowServerId(trAttrs, trInner);
+                int fileIdxInRow = 0;
 
                 Matcher lm = linkPat.matcher(trInner);
                 while (lm.find()) {
@@ -670,12 +672,15 @@ public class MessageManager {
                     }
 
                     String rowPlain = cleanHtml(trInner);
-                    Matcher dm = datePat.matcher(rowPlain);
-                    String dateStr = dm.find() ? dm.group(1) : "";
+                    String dateCell = cells.size() > 2 ? cells.get(2) : rowPlain;
+                    Matcher dm = datePat.matcher(dateCell);
+                    if (!dm.find()) dm = datePat.matcher(rowPlain);
+                    String dateStr = dm.find() ? dm.group(1).replace('-', '.') : "";
                     Matcher sm = sizePat.matcher(rowPlain);
                     String sizeStr = sm.find() ? sm.group(1) : "Файл ЛК";
+                    String authorCell = cells.size() > 1 ? cells.get(1).trim() : "";
                     Matcher fm = fioPat.matcher(rowPlain);
-                    String author = fm.find() ? fm.group(1) : "Преподаватель";
+                    String author = !authorCell.isEmpty() ? authorCell : (fm.find() ? fm.group(1) : "Преподаватель");
 
                     String subject = (cells.size() > 3 && !cells.get(3).isEmpty()) ? cells.get(3) : "Файлы группы";
                     String comment = (cells.size() > 4) ? cells.get(4) : "";
@@ -683,7 +688,8 @@ public class MessageManager {
                         comment = "";
                     }
 
-                    String fileKey = !rowId.isEmpty() ? ("file_" + rowId) : ("file_" + Math.abs(absUrl.hashCode()));
+                    fileIdxInRow++;
+                    String fileKey = !rowId.isEmpty() ? ("file_" + rowId + "_" + fileIdxInRow) : ("file_" + Math.abs(absUrl.hashCode()));
                     JSONObject fObj = new JSONObject();
                     fObj.put("id", fileKey);
                     fObj.put("serverId", rowId);

@@ -343,7 +343,10 @@ public class DiaryMonitor {
                 continue;
             }
 
-            String rowLabel = (tdTextList.get(0) + " " + tdTextList.get(1)).toLowerCase(Locale.ROOT);
+            boolean hasColspan2 = !tdAttrsList.isEmpty() && tdAttrsList.get(0).toLowerCase(Locale.ROOT).contains("colspan");
+            String rowLabel = hasColspan2
+                ? tdTextList.get(0).toLowerCase(Locale.ROOT)
+                : (tdTextList.get(0) + " " + tdTextList.get(1)).toLowerCase(Locale.ROOT);
             String controlType = detectControlType(rowLabel);
             if (!controlType.isEmpty()) {
                 boolean isAttestation = "Аттестация".equals(controlType);
@@ -352,13 +355,15 @@ public class DiaryMonitor {
                     ? (attNum.isEmpty() ? "Аттестация" : ("Аттестация " + attNum))
                     : controlType;
 
-                int maxCols = Math.min(tdTextList.size(), columns.size());
-                for (int col = 2; col < maxCols; col++) {
+                int tdOffset = hasColspan2 ? 1 : 0;
+                for (int col = 2; col < columns.size(); col++) {
+                    int tdIdx = col - tdOffset;
+                    if (tdIdx < 0 || tdIdx >= tdTextList.size()) break;
                     String subj = columns.get(col);
                     if (subj.isEmpty()) continue;
 
-                    String cellAttrs = tdAttrsList.get(col);
-                    String cellVal = tdTextList.get(col);
+                    String cellAttrs = tdAttrsList.get(tdIdx);
+                    String cellVal = tdTextList.get(tdIdx);
                     boolean hasValue = !cellVal.isEmpty();
 
                     if (!hasValue && !isControlCellApplicable(cellAttrs, isAttestation)) {
@@ -541,18 +546,14 @@ public class DiaryMonitor {
     }
 
     private static boolean isControlCellApplicable(String cellAttrs, boolean isAttestation) {
-        if (cellAttrs == null) return isAttestation;
+        if (cellAttrs == null) return false;
         String low = cellAttrs.toLowerCase(Locale.ROOT);
-        if (low.contains("disabled") || low.contains("background:#ccc") || low.contains("background:#ddd")
-            || low.contains("background: #ccc") || low.contains("background: #ddd")
-            || low.contains("background-color:#ccc") || low.contains("background-color:#ddd")
+        if (low.contains("#ebebeb") || low.contains("spanoutputclose")
+            || low.contains("disabled") || low.contains("#ccc") || low.contains("#ddd")
             || low.contains("background:gray") || low.contains("background:silver")) {
             return false;
         }
-        if (low.contains("title=") || low.contains("onclick=") || low.contains("rasp=") || low.contains("id=")) {
-            return true;
-        }
-        return isAttestation;
+        return true;
     }
 
     private static String extractAttestationNum(String rowLabel) {

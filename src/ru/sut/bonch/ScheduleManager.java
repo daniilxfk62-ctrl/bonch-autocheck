@@ -605,7 +605,7 @@ public class ScheduleManager {
         }
 
         Pattern boldPat = Pattern.compile("<(b|strong)[^>]*>(.*?)</\\1>", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-        Pattern fioShortPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ]\\.)");
+        Pattern fioShortPat = Pattern.compile("([А-ЯЁ][а-яё\\-]+\\s+[А-ЯЁ]\\.\\s*[А-ЯЁ](?:\\.?-[А-ЯЁ])?\\.)");
         Pattern fioFullPat = Pattern.compile("([А-ЯЁ][а-яё\\-]{2,}\\s+[А-ЯЁ][а-яё]{2,}\\s+[А-ЯЁ][а-яё]{2,}(?:вич|вна|ична))");
         Pattern roomHintPat = Pattern.compile("(?i)(?:;\\s*[^\\s;]+/\\d+|[БбBb]22|\\b\\d{2,4}[а-яa-z]?\\b\\s*(?:;|/)|ауд\\.|каб\\.|дистанционно|спорт|зал)");
 

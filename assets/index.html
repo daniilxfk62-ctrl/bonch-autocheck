@@ -3670,12 +3670,7 @@
 
         <!-- TAB 2: РАСПИСАНИЕ (Continuous Multi-Week Vertical Snap) -->
         <section class="tab-view" id="view-schedule" aria-label="Расписание">
-          <div class="sched-top-tools">
-            <button class="icon-btn sm" id="scheduleRefreshBtn" aria-label="Обновить расписание" title="Обновить расписание">
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>
-            </button>
-          </div>
-          <div id="scheduleSyncBanner" style="padding:0 14px;"></div>
+          <div id="scheduleSyncBanner" style="padding:max(8px, env(safe-area-inset-top)) 14px 0;"></div>
 
           <div class="snap-wrap">
             <div class="day-feed" id="dayFeed"></div>
@@ -3683,18 +3678,20 @@
           </div>
 
           <div class="bottom-bar sched-bar" id="scheduleBottomBar">
-            <button class="sched-bar-nav" id="prevWeekBtn" aria-label="Предыдущая неделя" title="Предыдущая неделя">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
-            </button>
-            <div class="sched-bar-center">
-              <button class="sched-cal-pill" id="scheduleCalendarBtn" aria-label="Открыть календарь">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
-                <span class="tabular" id="weekLabel">—</span>
+            <div style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;">
+              <button class="sched-bar-nav" id="prevWeekBtn" aria-label="Предыдущая неделя" title="Предыдущая неделя">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>
               </button>
-              <button class="pill-btn" id="jumpTodayBtn" style="display:none;height:34px;padding:0 12px;color:var(--accent);border-color:var(--accent-ring);background:var(--accent-soft);">Сегодня</button>
+              <button class="sched-bar-nav" id="nextWeekBtn" aria-label="Следующая неделя" title="Следующая неделя">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+              </button>
             </div>
-            <button class="sched-bar-nav" id="nextWeekBtn" aria-label="Следующая неделя" title="Следующая неделя">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            <div class="sched-bar-center">
+              <button class="pill-btn" id="jumpTodayBtn" style="display:none;height:34px;padding:0 14px;color:var(--accent);border-color:var(--accent-ring);background:var(--accent-soft);">Сегодня</button>
+            </div>
+            <button class="sched-cal-pill" id="scheduleCalendarBtn" aria-label="Открыть календарь" style="flex-shrink:0;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></svg>
+              <span class="tabular" id="weekLabel">—</span>
             </button>
           </div>
         </section>
@@ -3835,7 +3832,7 @@
                 </div>
                 <div>
                   <div class="pillar-title">Без своего сервера — всё у тебя</div>
-                  <div class="pillar-desc">Логин и пароль не уходят на сторонние серверы и хранятся только на телефоне. Поэтому для автоотметки нужен интернет на устройстве.</div>
+                  <div class="pillar-desc">Данные хранятся только на телефоне. <strong>Для автоотметки обязательно нужен интернет</strong> — без сети она не сработает, а скорость отметки зависит от работы сайта <strong>lk.sut.ru</strong>.</div>
                 </div>
               </div>
 
@@ -4391,42 +4388,56 @@
 
       function detectSubgroupConflicts(daysArr) {
         if (!Array.isArray(daysArr) || !daysArr.length) return [];
-        // Собираем ТОЛЬКО те предметы и тех преподавателей, которые реально наслаиваются день в день и час в час
+        // Собираем ТОЛЬКО те предметы и тех преподавателей, чьи пары реально пересекаются по времени в один день
         const overlapBySubj = {}; // subjLower -> { title, variants: { teacherLower -> { teacher, room, count } } }
 
         daysArr.forEach((d) => {
           const lessons = Array.isArray(d.lessons) ? d.lessons : [];
-          const bySlotAndSubj = {}; // "startTime||subjLower" -> Array<lesson>
+          // Разворачиваем на случай склеенных через запятую преподавателей и группируем по предмету в рамках дня
+          const bySubj = {};
           lessons.forEach((l) => {
             const subj = String(l.subjectTitle || '').trim();
-            const teach = String(l.teacher || '').trim();
-            const st = String(l.startTime || '').trim();
-            if (!subj || !st || !teach || teach === 'Преподаватель не указан') return;
-            const k = `${st}||${subj.toLowerCase()}`;
-            if (!bySlotAndSubj[k]) bySlotAndSubj[k] = [];
-            bySlotAndSubj[k].push(l);
+            const rawTeach = String(l.teacher || '').trim();
+            const sMin = parseHmToMins(l.startTime);
+            const eMin = parseHmToMins(l.endTime) > 0 ? parseHmToMins(l.endTime) : (sMin >= 0 ? sMin + 95 : -1);
+            if (!subj || sMin < 0 || !rawTeach || rawTeach === 'Преподаватель не указан') return;
+            const subjLow = subj.toLowerCase();
+            if (!bySubj[subjLow]) bySubj[subjLow] = { title: subj, items: [] };
+            rawTeach.split(',').forEach((tPart) => {
+              const tClean = tPart.trim();
+              if (!tClean) return;
+              bySubj[subjLow].items.push({ teacher: tClean, room: String(l.room || '').trim(), sMin, eMin });
+            });
           });
 
-          Object.keys(bySlotAndSubj).forEach((k) => {
-            const group = bySlotAndSubj[k];
-            const distinctTeachers = new Set(group.map((l) => String(l.teacher || '').trim().toLowerCase()));
-            if (distinctTeachers.size < 2) return; // нет наложения в этот день и час
-
-            const subjLow = k.split('||')[1];
-            const subjTitle = String(group[0].subjectTitle || '').trim();
-            if (!overlapBySubj[subjLow]) {
-              overlapBySubj[subjLow] = { title: subjTitle, variants: {} };
+          Object.keys(bySubj).forEach((subjLow) => {
+            const items = bySubj[subjLow].items;
+            if (items.length < 2) return;
+            // Проверяем попарное пересечение по времени в этот день
+            const overlappedInDay = new Set();
+            for (let i = 0; i < items.length; i++) {
+              for (let j = i + 1; j < items.length; j++) {
+                const a = items[i], b = items[j];
+                if (a.teacher.toLowerCase() === b.teacher.toLowerCase()) continue;
+                if (a.sMin < b.eMin && b.sMin < a.eMin) {
+                  overlappedInDay.add(i);
+                  overlappedInDay.add(j);
+                }
+              }
             }
-            group.forEach((l) => {
-              const teach = String(l.teacher || '').trim();
-              const room = String(l.room || '').trim();
-              const tk = teach.toLowerCase();
+            if (!overlappedInDay.size) return;
+            if (!overlapBySubj[subjLow]) {
+              overlapBySubj[subjLow] = { title: bySubj[subjLow].title, variants: {} };
+            }
+            overlappedInDay.forEach((idx) => {
+              const it = items[idx];
+              const tk = it.teacher.toLowerCase();
               if (!overlapBySubj[subjLow].variants[tk]) {
-                overlapBySubj[subjLow].variants[tk] = { teacher: teach, room, count: 0 };
+                overlapBySubj[subjLow].variants[tk] = { teacher: it.teacher, room: it.room, count: 0 };
               }
               overlapBySubj[subjLow].variants[tk].count += 1;
-              if (!overlapBySubj[subjLow].variants[tk].room && room) {
-                overlapBySubj[subjLow].variants[tk].room = room;
+              if (!overlapBySubj[subjLow].variants[tk].room && it.room) {
+                overlapBySubj[subjLow].variants[tk].room = it.room;
               }
             });
           });
@@ -6617,14 +6628,7 @@
       }
 
       // Filter button removed from Schedule per user request
-      $('scheduleRefreshBtn').addEventListener('click', () => {
-        const btn = $('scheduleRefreshBtn');
-        btn.classList.add('spin');
-        setTimeout(() => btn.classList.remove('spin'), 420);
-        if (!requireBackendConnected()) return;
-        window.AndroidBridge.syncAll();
-        showToast('Обновление расписания...');
-      });
+      // Schedule auto-updates in background
 
       /* ===== RENDER TAB 3: MESSAGES & GROUP FILES ===== */
       function updateSegmentPill(indicatorId, index) {
@@ -6787,7 +6791,7 @@
         const s = String(raw || '').trim() || String(fallbackTime || '').trim();
         if (!s) return 'Недавно';
         if (/^недавно$/i.test(s)) return 'Недавно';
-        const m = s.match(/(\d{1,2})\.(\d{2})(?:\.(\d{2,4}))?/);
+        const m = s.match(/(\d{1,2})[-.](\d{2})(?:[-.](\d{2,4}))?/);
         if (!m) {
           if (/^\d{1,2}:\d{2}$/.test(s)) return 'Сегодня';
           return s;
