@@ -9,8 +9,18 @@ const PAIR_SLOTS = {
   7: ['20:00', '21:35']
 };
 
+// Поддержка обычных и двойных инициалов (например, "Бритаева О.Х.-М.", "Петров-Водкин К.С.")
+const TEACHER_FIO_RE = /([А-ЯЁA-Z][а-яёa-z-]+(?:-[А-ЯЁA-Z][а-яёa-z-]+)?\s+[А-ЯЁA-Z]\.(?:\s*[А-ЯЁA-Z]\.(?:-[А-ЯЁA-Z]\.)?)?)/;
+
 function cleanText(el) {
   return (el ? el.textContent || '' : '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function extractTeacherName(raw) {
+  const s = String(raw || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  const m = s.match(TEACHER_FIO_RE);
+  return m ? m[1].trim() : s;
 }
 
 function normalizeLessonType(raw) {
@@ -45,6 +55,58 @@ function formatDate(d) {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`;
 }
 
+export function normalizeTeacherChoices(choiceVal) {
+  if (!choiceVal) return [];
+  if (Array.isArray(choiceVal)) {
+    return choiceVal
+      .flatMap((v) => String(v || '').split(','))
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  }
+  return String(choiceVal)
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/**
+ * Проверяет, подходит ли пара под выбор подгруппы/преподавателей.
+ * Одиночная пара (без наслоения других пар в этот день и время) никогда не отфильтровывается.
+ */
+export function filterDayLessonsForSubgroup(lessons, groupChoices) {
+  if (!Array.isArray(lessons) || !lessons.length) return [];
+  if (!groupChoices || typeof groupChoices !== 'object') return lessons;
+
+  // Группируем по времени начала, чтобы выявлять наслоенные пары
+  const byTime = new Map();
+  lessons.forEach((l) => {
+    const key = l.startTime || '';
+    if (!byTime.has(key)) byTime.set(key, []);
+    byTime.get(key).push(l);
+  });
+
+  const result = [];
+  byTime.forEach((slotLessons) => {
+    // Одиночную пару в этом слоте не отфильтровываем
+    if (slotLessons.length <= 1) {
+      result.push(slotLessons[0]);
+      return;
+    }
+
+    const kept = slotLessons.filter((l) => {
+      const allowed = normalizeTeacherChoices(groupChoices[l.subjectTitle]);
+      if (!allowed.length) return true;
+      const teacherLow = String(l.teacher || '').toLowerCase();
+      return allowed.some((choice) => teacherLow.includes(choice) || choice.includes(teacherLow));
+    });
+
+    // Если фильтр совпал хотя бы с одной парой в слоте — оставляем их, иначе все
+    result.push(...(kept.length ? kept : slotLessons));
+  });
+
+  return result;
+}
+
 function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
   if (!html) return [];
   const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -57,6 +119,7 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
   }
 
   const daysByDate = new Map();
+  const seenLessonKeys = new Set();
   let currentDateStr = '';
 
   const rows = Array.from(doc.querySelectorAll('tr'));
@@ -65,7 +128,6 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
     const dateMatch = rowText.match(/(\d{2}\.\d{2}\.\d{4})/);
     const cells = Array.from(tr.querySelectorAll('td, th'));
 
-    // Строка-заголовок дня недели с датой
     if (dateMatch && cells.length <= 2) {
       currentDateStr = dateMatch[1];
       if (!daysByDate.has(currentDateStr)) {
@@ -82,11 +144,7 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
     }
 
     if (cells.length < 3) return;
-
-    // Иногда дата указана прямо в первой ячейке строки
-    if (dateMatch && !currentDateStr) {
-      currentDateStr = dateMatch[1];
-    }
+    if (dateMatch && !currentDateStr) currentDateStr = dateMatch[1];
     if (!currentDateStr) return;
 
     if (!daysByDate.has(currentDateStr)) {
@@ -107,7 +165,6 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
 
     const [startTime, endTime] = extractTimeRange(timeCellText);
 
-    // Ячейка предмета и типа занятия
     const subjCell = cells[1];
     const boldEl = subjCell.querySelector('b, strong');
     const smallEl = subjCell.querySelector('small, i, span');
@@ -118,12 +175,10 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
 
     if (!typeRaw && cells.length >= 5) {
       const c2 = cleanText(cells[2]);
-      if (/лекц|практ|лаб|семин/i.test(c2)) {
-        typeRaw = c2;
-      }
+      if (/лекц|практ|лаб|семин/i.test(c2)) typeRaw = c2;
     }
     if (!typeRaw) {
-      const paren = subjRaw.match(/\(([^)]*(?:лекц|практ|лаб|семин)[^)]*)\)/i);
+      const paren = subjRaw.match(/\(([^)]*(?:лекц\vert{}практ\vert{}лаб\vert{}семин)[^)]*)\)/i);
       if (paren) {
         typeRaw = paren[1];
         subjectTitle = subjectTitle.replace(paren[0], '').trim();
@@ -132,28 +187,40 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
 
     const lessonType = normalizeLessonType(typeRaw || subjRaw);
 
-    // Аудитория в lk.sut.ru обычно в 4-й <td> ("404; Б22/1"), корпус матчится по "; <корпус>/<номер>"
     let room = '—';
     let teacher = 'Преподаватель не указан';
     const roomCandidate = cells[3] ? cleanText(cells[3]) : '';
     const thirdCandidate = cells[2] ? cleanText(cells[2]) : '';
+    const fifthCandidate = cells[4] ? cleanText(cells[4]) : '';
 
     if (/;\s*[^\s;]+\/\d+/.test(roomCandidate) || /\d{2,4}/.test(roomCandidate)) {
       room = roomCandidate;
       if (thirdCandidate && !/лекц|практ|лаб|семин/i.test(thirdCandidate)) {
-        teacher = thirdCandidate;
-      } else if (cells[4]) {
-        teacher = cleanText(cells[4]) || teacher;
+        teacher = extractTeacherName(thirdCandidate) || teacher;
+      } else if (fifthCandidate) {
+        teacher = extractTeacherName(fifthCandidate) || teacher;
       }
     } else if (/;\s*[^\s;]+\/\d+/.test(thirdCandidate)) {
       room = thirdCandidate;
-      if (roomCandidate) teacher = roomCandidate;
+      if (roomCandidate) teacher = extractTeacherName(roomCandidate) || teacher;
     } else {
       if (roomCandidate) room = roomCandidate;
-      if (thirdCandidate && !/лекц|практ|лаб|семин/i.test(thirdCandidate)) teacher = thirdCandidate;
+      if (thirdCandidate && !/лекц|практ|лаб|семин/i.test(thirdCandidate)) {
+        teacher = extractTeacherName(thirdCandidate) || teacher;
+      }
     }
 
-    // Извлекаем open_zan(raspId, weekId) и статус отметки
+    // Если ФИО не нашлось в основной колонке — пробуем извлечь по регулярке из всей строки
+    if (teacher === 'Преподаватель не указан') {
+      const fioFromRow = rowText.match(TEACHER_FIO_RE);
+      if (fioFromRow) teacher = fioFromRow[1].trim();
+    }
+
+    // Дедупликация: не склеиваем пары в одно время, если у них разные преподаватели
+    const dedupKey = `${currentDateStr}|${startTime}|${subjectTitle.toLowerCase()}|${lessonType}|${teacher.toLowerCase()}`;
+    if (seenLessonKeys.has(dedupKey)) return;
+    seenLessonKeys.add(dedupKey);
+
     const rowHtml = tr.innerHTML || '';
     const openZan = rowHtml.match(/open_zan\(\s*(\d+)\s*,\s*(\d+)\s*\)/);
     const raspId = openZan ? openZan[1] : '';
@@ -165,7 +232,6 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
     let checkTime = '';
     let checkedBy = '';
 
-    // Совмещаем с локальной историей фоновых отметок из Pulse/state.json
     const ckKey = `${currentDateStr}|${startTime}`;
     if (checkinMap.has(ckKey)) {
       const ck = checkinMap.get(ckKey);
@@ -190,7 +256,6 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
     });
   });
 
-  // Достраиваем полную 6-дневную учебную неделю (Пн–Сб), чтобы в вертикальной ленте не было дыр
   const parsedList = Array.from(daysByDate.values());
   if (!parsedList.length) return [];
 
@@ -220,7 +285,7 @@ function parseSingleWeekHtml(html, forcedWeekNum, checkinMap) {
   return fullWeek;
 }
 
-export function parseScheduleHtml(singleHtml, scheduleWeeks = [], checkins = []) {
+export function parseScheduleHtml(singleHtml, scheduleWeeks = [], checkins = [], groupChoices = null) {
   const checkinMap = new Map();
   (Array.isArray(checkins) ? checkins : []).forEach((c) => {
     if (c && c.dateStr && c.startTime) {
@@ -246,11 +311,20 @@ export function parseScheduleHtml(singleHtml, scheduleWeeks = [], checkins = [])
     });
   });
 
-  return Array.from(allDaysByDate.values()).sort((a, b) => {
-    const pa = a.dateStr.split('.').reverse().join('');
-    const pb = b.dateStr.split('.').reverse().join('');
-    return pa.localeCompare(pb);
-  });
+  return Array.from(allDaysByDate.values())
+    .map((d) => {
+      if (groupChoices && Object.keys(groupChoices).length) {
+        return Object.assign({}, d, {
+          lessons: filterDayLessonsForSubgroup(d.lessons, groupChoices)
+        });
+      }
+      return d;
+    })
+    .sort((a, b) => {
+      const pa = a.dateStr.split('.').reverse().join('');
+      const pb = b.dateStr.split('.').reverse().join('');
+      return pa.localeCompare(pb);
+    });
 }
 
 export function buildSmartCatalog(days) {

@@ -22,6 +22,8 @@
     "diary": "https://lk.sut.ru/cabinet/project/cabinet/forms/jurnal_dnevnik.php",
     "messages": "https://lk.sut.ru/cabinet/project/cabinet/forms/message.php?type=in",
     "messageView": "https://lk.sut.ru/cabinet/project/cabinet/forms/sendto2.php",
+    "messageCreate": "https://lk.sut.ru/cabinet/project/cabinet/forms/message_create_stud.php",
+    "messageSend": "https://lk.sut.ru/cabinet/project/cabinet/forms/message.php",
     "groupFiles": "https://lk.sut.ru/cabinet/project/cabinet/forms/files_group_pr.php"
   },
   "regex": {

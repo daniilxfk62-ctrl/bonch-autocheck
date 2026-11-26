@@ -23,7 +23,7 @@ function extractIsoFromText(text) {
   const s = String(text || '');
   const iso = s.match(/(\d{4}-\d{2}-\d{2})/);
   if (iso) return iso[1];
-  const dmy = s.match(/(\d{2})\.(\d{2})\.(\d{4})/);
+  const dmy = s.match(/(\d{2})[.-](\d{2})[.-](\d{4})/);
   if (dmy) return `${dmy[3]}-${dmy[2]}-${dmy[1]}`;
   return '';
 }
@@ -41,20 +41,35 @@ function extractAttestationNum(rowLabel) {
   return m ? m[1] : '';
 }
 
-function isControlCellApplicable(td, isAttestation) {
-  const style = (td.getAttribute('style') || '').toLowerCase();
+/**
+ * Проверка серой/неактивной ячейки контроля в jurnal_dnevnik.php:
+ * серые ячейки имеют background-color:#ebebeb или onclick='spanOutputclose()'.
+ * Активные (белые) ячейки имеют title='' (или title с датой) и не имеют серого фона.
+ */
+function isGrayInactiveControlCell(td) {
+  const styleNoSpace = (td.getAttribute('style') || '').toLowerCase().replace(/\s+/g, '');
+  const onclickLow = (td.getAttribute('onclick') || '').toLowerCase();
   if (
     td.hasAttribute('disabled') ||
-    style.includes('#ccc') ||
-    style.includes('#ddd') ||
-    style.includes('gray') ||
-    style.includes('silver')
+    styleNoSpace.includes('#ebebeb') ||
+    styleNoSpace.includes('rgb(235,235,235)') ||
+    styleNoSpace.includes('#ccc') ||
+    styleNoSpace.includes('#ddd') ||
+    styleNoSpace.includes('background:gray') ||
+    styleNoSpace.includes('background-color:gray') ||
+    styleNoSpace.includes('background:silver') ||
+    onclickLow.includes('spanoutputclose')
   ) {
-    return false;
-  }
-  if (td.hasAttribute('title') || td.hasAttribute('onclick') || td.hasAttribute('rasp') || td.hasAttribute('id')) {
     return true;
   }
+  return false;
+}
+
+function isControlCellApplicable(td, isAttestation) {
+  if (isGrayInactiveControlCell(td)) return false;
+  // Белые ячейки контроля в lk.sut.ru имеют атрибут title (включая пустой title='')
+  if (td.hasAttribute('title')) return true;
+  if (td.hasAttribute('onclick') || td.hasAttribute('rasp') || td.hasAttribute('id')) return true;
   return isAttestation;
 }
 
@@ -88,86 +103,98 @@ export function parseDiaryHtml(html) {
   const rows = Array.from(table.querySelectorAll('tr'));
   if (!rows.length) return [];
 
-  // Находим строку заголовков предметов
+  // Разворачиваем заголовок с учётом возможного colspan
   const headerRow = rows.find((tr) => tr.querySelectorAll('th').length >= 3) || rows[0];
-  const columns = Array.from(headerRow.querySelectorAll('th, td')).map((c) => cleanText(c));
+  const columns = [];
+  Array.from(headerRow.querySelectorAll('th, td')).forEach((cell) => {
+    const label = cleanText(cell);
+    const span = Math.max(1, parseInt(cell.getAttribute('colspan') || '1', 10));
+    for (let s = 0; s < span; s++) columns.push(label);
+  });
+
   const bySubject = new Map();
 
   rows.forEach((tr) => {
     if (tr === headerRow) return;
     const tds = Array.from(tr.querySelectorAll('td'));
-    if (tds.length < 3) return;
+    if (tds.length < 2) return;
 
     const date1 = (tr.getAttribute('date1') || '').trim();
-    const maxCols = Math.min(tds.length, columns.length);
 
-    // 1. Обычные строки занятий с атрибутом date1="YYYY-MM-DD"
+    // 1. Строки занятий (date1="YYYY-MM-DD")
     if (date1) {
       const shortDate = formatIsoShort(date1);
       const [dow, dowFull] = parseIsoDow(date1);
 
-      for (let col = 2; col < maxCols; col++) {
-        const subj = columns[col];
-        if (!subj) continue;
+      let colIdx = 0;
+      for (let i = 0; i < tds.length; i++) {
+        const td = tds[i];
+        const span = Math.max(1, parseInt(td.getAttribute('colspan') || '1', 10));
+        if (colIdx >= 2 && colIdx < columns.length) {
+          const subj = columns[colIdx];
+          if (subj) {
+            const hasRasp = td.hasAttribute('rasp') && td.getAttribute('rasp') !== '';
+            const cellVal = cleanText(td);
+            if (hasRasp || cellVal) {
+              const st = getOrCreateSubject(bySubject, subj);
+              const upper = cellVal.toUpperCase();
 
-        const td = tds[col];
-        const hasRasp = td.hasAttribute('rasp') && td.getAttribute('rasp') !== '';
-        const cellVal = cleanText(td);
-        if (!hasRasp && !cellVal) continue;
+              let status = 'present';
+              let absenceVal = '';
+              if (/(^|\s)Н($|\s|\/|,)/.test(upper)) {
+                status = 'absent';
+                absenceVal = 'Н';
+              } else if (/(^|\s)Б($|\s|\/|,)/.test(upper)) {
+                status = 'sick';
+                absenceVal = 'Б';
+                st.excusedCount += 1;
+              } else if (/(^|\s)У($|\s|\/|,)/.test(upper)) {
+                status = 'excused';
+                absenceVal = 'У';
+                st.excusedCount += 1;
+              }
 
-        const st = getOrCreateSubject(bySubject, subj);
-        const upper = cellVal.toUpperCase();
+              st.total += 1;
+              if (status === 'present') st.attended += 1;
+              st.history.push(status === 'present');
+              st.sessions.push({
+                date: shortDate,
+                dateIso: date1,
+                dow,
+                dowFull,
+                status,
+                value: absenceVal
+              });
 
-        let status = 'present';
-        let absenceVal = '';
-        if (/(^|\s)Н($|\s|\/|,)/.test(upper)) {
-          status = 'absent';
-          absenceVal = 'Н';
-        } else if (/(^|\s)Б($|\s|\/|,)/.test(upper)) {
-          status = 'sick';
-          absenceVal = 'Б';
-          st.excusedCount += 1;
-        } else if (/(^|\s)У($|\s|\/|,)/.test(upper)) {
-          status = 'excused';
-          absenceVal = 'У';
-          st.excusedCount += 1;
+              const gradeMatches = cellVal.match(/\b[2-5]\b/g);
+              if (gradeMatches) {
+                gradeMatches.forEach((g) => {
+                  st.grades.push(g);
+                  st.gradeEntries.push({
+                    value: g,
+                    display: g,
+                    date: shortDate,
+                    dateIso: date1,
+                    dow,
+                    dowFull,
+                    kind: 'lesson',
+                    label: 'Занятие'
+                  });
+                });
+              }
+            }
+          }
         }
-
-        st.total += 1;
-        if (status === 'present') st.attended += 1;
-        st.history.push(status === 'present');
-        st.sessions.push({
-          date: shortDate,
-          dateIso: date1,
-          dow,
-          dowFull,
-          status,
-          value: absenceVal
-        });
-
-        // Извлекаем числовые оценки (2..5) за занятие
-        const gradeMatches = cellVal.match(/\b[2-5]\b/g);
-        if (gradeMatches) {
-          gradeMatches.forEach((g) => {
-            st.grades.push(g);
-            st.gradeEntries.push({
-              value: g,
-              display: g,
-              date: shortDate,
-              dateIso: date1,
-              dow,
-              dowFull,
-              kind: 'lesson',
-              label: 'Занятие'
-            });
-          });
-        }
+        colIdx += span;
       }
       return;
     }
 
-    // 2. Нижние строки контроля: Аттестация, Зачёт, Зачёт с оценкой, Экзамен
-    const rowLabel = `${cleanText(tds[0])} ${cleanText(tds[1])}`.toLowerCase();
+    // 2. Нижние 4 строки контроля (с учётом <td colspan="2"> в первой ячейке!)
+    const firstSpan = Math.max(1, parseInt(tds[0].getAttribute('colspan') || '1', 10));
+    const rowLabel = firstSpan >= 2
+      ? cleanText(tds[0]).toLowerCase()
+      : `${cleanText(tds[0])} ${cleanText(tds[1])}`.toLowerCase();
     const controlType = detectControlType(rowLabel);
     if (!controlType) return;
 
@@ -177,73 +204,80 @@ export function parseDiaryHtml(html) {
       ? (attNum ? `Аттестация ${attNum}` : 'Аттестация')
       : controlType;
 
-    for (let col = 2; col < maxCols; col++) {
-      const subj = columns[col];
-      if (!subj) continue;
+    // Точное сопоставление колонок с учётом colspan
+    let colIdx = 0;
+    for (let i = 0; i < tds.length; i++) {
+      const td = tds[i];
+      const span = Math.max(1, parseInt(td.getAttribute('colspan') || '1', 10));
 
-      const td = tds[col];
-      const cellVal = cleanText(td);
-      const hasValue = cellVal.length > 0;
-      if (!hasValue && !isControlCellApplicable(td, isAttestation)) continue;
+      if (colIdx >= 2 && colIdx < columns.length) {
+        const subj = columns[colIdx];
+        if (subj && !isGrayInactiveControlCell(td)) {
+          const cellVal = cleanText(td);
+          const hasValue = cellVal.length > 0;
+          if (hasValue || isControlCellApplicable(td, isAttestation)) {
+            const st = getOrCreateSubject(bySubject, subj);
+            if (!isAttestation) st.credit = controlType;
 
-      const st = getOrCreateSubject(bySubject, subj);
-      if (!isAttestation) st.credit = controlType;
+            const rawTitle = (td.getAttribute('title') || '').trim();
+            const ctrlDateIso = extractIsoFromText(rawTitle);
+            const ctrlShortDate = ctrlDateIso ? formatIsoShort(ctrlDateIso) : rawTitle;
+            const [dow, dowFull] = parseIsoDow(ctrlDateIso);
 
-      const rawTitle = (td.getAttribute('title') || '').trim();
-      const ctrlDateIso = extractIsoFromText(rawTitle);
-      const ctrlShortDate = ctrlDateIso ? formatIsoShort(ctrlDateIso) : rawTitle;
-      const [dow, dowFull] = parseIsoDow(ctrlDateIso);
+            let normVal = '';
+            let passedState = '';
 
-      let normVal = '';
-      let passedState = '';
+            if (hasValue) {
+              const lowVal = cellVal.toLowerCase();
+              if (isAttestation) {
+                if (lowVal.includes('не аттест') || lowVal.includes('неаттест') || lowVal.includes('не зач') || lowVal.includes('незач') || lowVal === '2') {
+                  normVal = 'Неаттестован';
+                  passedState = 'false';
+                } else if (lowVal.includes('аттест') || lowVal.includes('зач')) {
+                  normVal = 'Аттестован';
+                  passedState = 'true';
+                } else {
+                  normVal = cellVal;
+                }
+              } else if (controlType === 'Зачёт') {
+                if (lowVal.includes('не зач') || lowVal.includes('незач')) {
+                  normVal = 'Незачёт';
+                  passedState = 'false';
+                } else if (lowVal.includes('зач')) {
+                  normVal = 'Зачёт';
+                  passedState = 'true';
+                } else {
+                  normVal = cellVal;
+                }
+              } else {
+                const gm = cellVal.match(/\b([2-5])\b/);
+                if (gm) {
+                  normVal = gm[1];
+                  passedState = normVal === '2' ? 'false' : 'true';
+                } else if (lowVal.includes('незач') || lowVal.includes('не зач') || lowVal.includes('неяв')) {
+                  normVal = cellVal;
+                  passedState = 'false';
+                } else {
+                  normVal = cellVal;
+                }
+              }
+            }
 
-      if (hasValue) {
-        const lowVal = cellVal.toLowerCase();
-        if (isAttestation) {
-          if (lowVal.includes('не аттест') || lowVal.includes('неаттест') || lowVal.includes('не зач') || lowVal.includes('незач') || lowVal === '2') {
-            normVal = 'Неаттестован';
-            passedState = 'false';
-          } else if (lowVal.includes('аттест') || lowVal.includes('зач')) {
-            normVal = 'Аттестован';
-            passedState = 'true';
-          } else {
-            normVal = cellVal;
-          }
-        } else if (controlType === 'Зачёт') {
-          if (lowVal.includes('не зач') || lowVal.includes('незач')) {
-            normVal = 'Незачёт';
-            passedState = 'false';
-          } else if (lowVal.includes('зач')) {
-            normVal = 'Зачёт';
-            passedState = 'true';
-          } else {
-            normVal = cellVal;
-          }
-        } else {
-          const gm = cellVal.match(/\b([2-5])\b/);
-          if (gm) {
-            normVal = gm[1];
-            passedState = normVal === '2' ? 'false' : 'true';
-          } else if (lowVal.includes('незач') || lowVal.includes('не зач') || lowVal.includes('неяв')) {
-            normVal = cellVal;
-            passedState = 'false';
-          } else {
-            normVal = cellVal;
+            st.controls.push({
+              type: controlType,
+              label: controlLabel,
+              value: normVal,
+              rawValue: cellVal,
+              passed: passedState,
+              date: ctrlShortDate,
+              dateIso: ctrlDateIso,
+              dow,
+              dowFull
+            });
           }
         }
       }
-
-      st.controls.push({
-        type: controlType,
-        label: controlLabel,
-        value: normVal,
-        rawValue: cellVal,
-        passed: passedState,
-        date: ctrlShortDate,
-        dateIso: ctrlDateIso,
-        dow,
-        dowFull
-      });
+      colIdx += span;
     }
   });
 

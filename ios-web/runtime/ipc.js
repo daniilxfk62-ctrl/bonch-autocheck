@@ -1,7 +1,11 @@
 import { getSync, setSync, touchMtime, appendLog } from './storage.js';
 import { parseScheduleHtml, buildSmartCatalog } from '../parsers/schedule.parser.js';
 import { parseDiaryHtml } from '../parsers/diary.parser.js';
-import { parseMessagesHtml, parseGroupFilesHtml } from '../parsers/messages.parser.js';
+import {
+  parseMessagesHtml,
+  parseGroupFilesHtml,
+  parseMessageTeachersHtml
+} from '../parsers/messages.parser.js';
 
 const DEFAULT_PREFIX = 'PULSE_SYNC_V1:';
 
@@ -21,7 +25,6 @@ async function decodePayloadString(rawText, prefix = DEFAULT_PREFIX) {
   const trimmed = String(rawText || '').trim();
   if (!trimmed) return null;
 
-  // Поддержка сырого JSON (для локальной отладки)
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     return JSON.parse(trimmed);
   }
@@ -36,8 +39,6 @@ async function decodePayloadString(rawText, prefix = DEFAULT_PREFIX) {
   }
 
   const bytes = base64ToBytes(encoded);
-
-  // Проверяем Gzip magic header (0x1f 0x8b); если несжатый Base64 — читаем напрямую
   const isGzip = bytes.length >= 2 && bytes[0] === 0x1f && bytes[1] === 0x8b;
   if (isGzip && typeof DecompressionStream !== 'undefined') {
     const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
@@ -56,6 +57,13 @@ export function applySyncPayload(payload) {
 
   const updated = [];
 
+  // Предупреждение о медленном ответе или ошибке lk.sut.ru
+  if (typeof payload.serverWarning === 'string') {
+    setSync('serverWarning', payload.serverWarning);
+  } else {
+    setSync('serverWarning', '');
+  }
+
   if (payload.profile && typeof payload.profile === 'object') {
     const prev = getSync('profile', {});
     const merged = {
@@ -73,9 +81,10 @@ export function applySyncPayload(payload) {
 
   const html = payload.html || {};
   const checkins = Array.isArray(payload.checkins) ? payload.checkins : [];
+  const groupChoices = getSync('groupChoices', {});
 
   if (html.schedule || (Array.isArray(html.scheduleWeeks) && html.scheduleWeeks.length)) {
-    const days = parseScheduleHtml(html.schedule || '', html.scheduleWeeks || [], checkins);
+    const days = parseScheduleHtml(html.schedule || '', html.scheduleWeeks || [], checkins, groupChoices);
     if (days.length) {
       setSync('semesterDays', days);
       touchMtime('days');
@@ -103,9 +112,22 @@ export function applySyncPayload(payload) {
     updated.push(`дневник (${payload.diary.length})`);
   }
 
+  // Объединяем кэш уже загруженных тел сообщений (sendto2.php) с новыми из Shortcut
+  const bodiesCache = Object.assign({}, getSync('messageBodiesCache', {}));
+  let incomingBodies = html.messageBodies;
+  if (typeof incomingBodies === 'string' && incomingBodies.trim().startsWith('{')) {
+    try { incomingBodies = JSON.parse(incomingBodies); } catch (e) { incomingBodies = null; }
+  }
+  if (incomingBodies && typeof incomingBodies === 'object') {
+    Object.keys(incomingBodies).forEach((id) => {
+      if (incomingBodies[id]) bodiesCache[String(id)] = incomingBodies[id];
+    });
+    setSync('messageBodiesCache', bodiesCache);
+  }
+
   if (html.messages) {
     const prevMsgs = getSync('messages', []);
-    const messages = parseMessagesHtml(html.messages, html.messageBodies || {}, prevMsgs);
+    const messages = parseMessagesHtml(html.messages, bodiesCache, prevMsgs);
     setSync('messages', messages);
     touchMtime('messages');
     updated.push(`сообщения (${messages.length})`);
@@ -113,6 +135,20 @@ export function applySyncPayload(payload) {
     setSync('messages', payload.messages);
     touchMtime('messages');
     updated.push(`сообщения (${payload.messages.length})`);
+  }
+
+  // Список преподавателей из message_create_stud.php (<select name="adresat">)
+  if (html.messageCreate) {
+    const teachers = parseMessageTeachersHtml(html.messageCreate);
+    if (teachers.length) {
+      setSync('messageTeachers', teachers);
+      touchMtime('teachers');
+      updated.push(`преподаватели (${teachers.length})`);
+    }
+  } else if (Array.isArray(payload.messageTeachers)) {
+    setSync('messageTeachers', payload.messageTeachers);
+    touchMtime('teachers');
+    updated.push(`преподаватели (${payload.messageTeachers.length})`);
   }
 
   if (html.groupFiles) {
@@ -135,7 +171,6 @@ export function applySyncPayload(payload) {
     setSync('config', cfg);
   }
 
-  // Если пришли реальные данные, считаем профиль подключённым
   if (updated.length && !getSync('profile', {}).loggedIn) {
     const prev = getSync('profile', {});
     setSync('profile', Object.assign({}, prev, { loggedIn: true, name: prev.name || 'Аккаунт ЛК СПбГУТ' }));
@@ -151,7 +186,6 @@ export async function importFromHash(prefix = DEFAULT_PREFIX) {
   if (!hash.startsWith('#p=')) return { ok: false, skipped: true };
 
   const rawParam = decodeURIComponent(hash.slice(3));
-  // Сразу очищаем URL, чтобы длинный хэш не оставался в истории
   try {
     history.replaceState(null, '', window.location.pathname + window.location.search);
   } catch (e) {}
@@ -184,7 +218,6 @@ export async function importFromClipboard(prefix = DEFAULT_PREFIX) {
 
   const res = applySyncPayload(payload);
 
-  // Аккуратно очищаем буфер обмена после успешного импорта
   try {
     if (navigator.clipboard.writeText) {
       await navigator.clipboard.writeText('');

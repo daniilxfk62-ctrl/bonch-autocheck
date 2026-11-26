@@ -1,4 +1,12 @@
-import { initStorage, getSync, setSync, touchMtime, appendLog, clearAccountData } from './storage.js';
+import {
+  initStorage,
+  getSync,
+  setSync,
+  touchMtime,
+  appendLog,
+  clearAccountData,
+  normalizeGroupChoices
+} from './storage.js';
 import { importFromHash, importFromClipboard } from './ipc.js';
 
 let remoteConfig = {
@@ -86,9 +94,18 @@ function triggerUiRefresh() {
   }
 }
 
+function getKnownMessageIds() {
+  const cache = getSync('messageBodiesCache', {});
+  return Object.keys(cache).slice(-120);
+}
+
 function launchShortcut(mode, extra = {}) {
   const name = encodeURIComponent(remoteConfig.shortcutName || 'Pulse AutoCheck');
-  const payload = encodeURIComponent(JSON.stringify(Object.assign({ mode }, extra)));
+  const body = Object.assign({ mode }, extra);
+  if (mode === 'sync') {
+    body.knownIds = getKnownMessageIds();
+  }
+  const payload = encodeURIComponent(JSON.stringify(body));
   runtimeStatus = 'Запуск Apple-команды… После завершения вернитесь в Pulse и нажмите «Принять данные»';
   appendLog(`Запуск Apple-команды (mode=${mode})`);
   triggerUiRefresh();
@@ -104,6 +121,8 @@ function buildBridgeObject() {
       const cfg = getSync('config', {});
       const mtimes = getSync('mtimes', {});
       const prof = getSync('profile', {});
+      const days = getSync('semesterDays', []);
+      const daysMtime = mtimes.days || 0;
       return JSON.stringify({
         daemonEnabled: !!cfg.daemonEnabled,
         status: runtimeStatus,
@@ -114,10 +133,15 @@ function buildBridgeObject() {
         authError: '',
         profileMtime: mtimes.profile || 0,
         catMtime: mtimes.cat || 0,
-        daysMtime: mtimes.days || 0,
+        daysMtime,
+        daysKey: `${daysMtime}_${Array.isArray(days) ? days.length : 0}`,
         messagesMtime: mtimes.messages || 0,
         filesMtime: mtimes.files || 0,
-        diaryMtime: mtimes.diary || 0
+        diaryMtime: mtimes.diary || 0,
+        dayNotes: getSync('dayNotes', {}),
+        messageTeachers: getSync('messageTeachers', []),
+        serverWarning: getSync('serverWarning', ''),
+        groupChoices: getSync('groupChoices', {})
       });
     },
 
@@ -139,6 +163,32 @@ function buildBridgeObject() {
         setSync('smartRules', JSON.parse(jsonStr || '{}'));
         appendLog('Правила автоотметки сохранены локально');
       } catch (e) {}
+    },
+
+    getGroupChoices() {
+      return JSON.stringify(getSync('groupChoices', {}));
+    },
+
+    saveGroupChoices(jsonStr) {
+      try {
+        const normalized = normalizeGroupChoices(JSON.parse(jsonStr || '{}'));
+        setSync('groupChoices', normalized);
+        touchMtime('days');
+        appendLog('Выбор подгрупп и преподавателей сохранён');
+        triggerUiRefresh();
+      } catch (e) {}
+    },
+
+    saveDayNotes(jsonStr) {
+      try {
+        const parsed = typeof jsonStr === 'string' ? JSON.parse(jsonStr || '{}') : (jsonStr || {});
+        if (parsed && typeof parsed === 'object') {
+          setSync('dayNotes', parsed);
+          appendLog('Заметки по дням сохранены локально (без системных будильников iOS)');
+        }
+      } catch (e) {
+        appendLog('Ошибка сохранения заметок: ' + e.message);
+      }
     },
 
     getProfile() {
@@ -191,6 +241,14 @@ function buildBridgeObject() {
       appendLog(`Автоотметка iOS: ${enabled ? 'ON' : 'OFF'}`);
     },
 
+    restartAutoCheck() {
+      setSync('serverWarning', '');
+      runtimeStatus = 'Повторный запуск проверки…';
+      appendLog('Сброс serverWarning и перезапуск автоотметки');
+      triggerUiRefresh();
+      launchShortcut('auto');
+    },
+
     savePulseSettings(autoDelay, antiKick, themeMode) {
       const cfg = Object.assign({}, getSync('config', {}), {
         autoDelay: autoDelay || 'random',
@@ -205,7 +263,7 @@ function buildBridgeObject() {
     },
 
     scanSemesterNow() {
-      launchShortcut('sync', { scope: 'schedule' });
+      launchShortcut('sync', { scope: 'schedule', fullScan: true });
     },
 
     syncAll() {
@@ -214,6 +272,10 @@ function buildBridgeObject() {
 
     syncMessagesNow() {
       launchShortcut('sync', { scope: 'messages' });
+    },
+
+    refreshMessageTeachers() {
+      launchShortcut('sync', { scope: 'teachers' });
     },
 
     checkDiaryNow() {
@@ -242,11 +304,39 @@ function buildBridgeObject() {
     },
 
     sendMessage(msgId, text) {
-      launchShortcut('reply', { msgId, text });
+      launchShortcut('send_msg', {
+        idinfo: String(msgId || '').replace(/^sender_/, ''),
+        adresat: '',
+        title: '',
+        text: text || ''
+      });
     },
 
-    sendMessageWithFile(msgId, text) {
-      launchShortcut('reply', { msgId, text });
+    sendMessageWithFile(msgId, text, fileName) {
+      appendLog(fileName ? `Отправка вложения (${fileName}) на iOS пока не поддерживается — отправляем текст` : 'Отправка ответа');
+      launchShortcut('send_msg', {
+        idinfo: String(msgId || '').replace(/^sender_/, ''),
+        adresat: '',
+        title: '',
+        text: text || ''
+      });
+    },
+
+    sendNewMessage(adresatId, title, text, fileName, _base64) {
+      if (!adresatId || (!text && !title)) {
+        appendLog('sendNewMessage: не указан получатель или текст');
+        return false;
+      }
+      if (fileName) {
+        appendLog(`Вложение "${fileName}" на iOS пока нужно прикрепить вручную в ЛК; отправляем текст письма`);
+      }
+      launchShortcut('send_msg', {
+        idinfo: '0',
+        adresat: String(adresatId),
+        title: String(title || ''),
+        text: String(text || '')
+      });
+      return true;
     },
 
     downloadGroupFile(url) {
@@ -271,7 +361,6 @@ function buildBridgeObject() {
       launchShortcut('test_notif');
     },
 
-    // iOS-специфичные методы для UI
     async importFromClipboard() {
       const res = await importFromClipboard(remoteConfig.ipcPrefix);
       if (res.ok) {
